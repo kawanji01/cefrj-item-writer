@@ -30,6 +30,23 @@ from build_normalized import (
 
 CEFR_VALUES = ("A1", "A2", "B1", "B2")
 CEFRJ_VALUES = tuple(CEFRJ_RANK)
+POS_VALUE_ORDER = (
+    "noun",
+    "verb",
+    "adjective",
+    "adverb",
+    "pronoun",
+    "preposition",
+    "determiner",
+    "conjunction",
+    "number",
+    "modal auxiliary",
+    "be-verb",
+    "interjection",
+    "do-verb",
+    "have-verb",
+    "infinitive-to",
+)
 GP_ID_PATTERN = re.compile(r"^gp:[0-9]+(?:-[0-9]+)?$")
 CONTEXT_REQUIRED_VALUES = {"前文が肯定平叙", "前文が否定平叙"}
 
@@ -187,7 +204,7 @@ def parse_limit(value: Any) -> int:
 def lex_matches(args: argparse.Namespace, lexicon: dict[str, Any]) -> dict[str, Any]:
     limit = parse_limit(args.limit)
     if args.pos is not None and args.pos not in POS_VALUES:
-        raise input_value_failure("pos", args.pos, "Wordlist pos 15種")
+        raise input_value_failure("pos", args.pos, "|".join(POS_VALUE_ORDER))
     if args.level is not None and args.level not in CEFR_VALUES:
         raise input_value_failure("level", args.level, "A1|A2|B1|B2")
 

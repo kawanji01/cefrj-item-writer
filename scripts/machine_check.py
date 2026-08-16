@@ -11,7 +11,7 @@ import traceback
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,8 @@ NUMERIC_PATTERNS = (
 )
 JAPANESE_PATTERN = re.compile(r"[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]")
 SYMBOL_ONLY_PATTERN = re.compile(r"^[^\w]+$", re.UNICODE)
+JSON_NUMBER_PATTERN = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
+NONSTANDARD_JSON_CONSTANTS = ("-Infinity", "Infinity", "NaN")
 GENERATION_VALUES = ("gen1", "gen2", "gen3")
 VOCAB_FORMATS = {
     "vocab_mcq_en2ja",
@@ -139,6 +141,71 @@ def normalized_comparison(value: str) -> str:
     return " ".join(nfc(value).strip().lower().split())
 
 
+def answer_equivalent_key(value: str) -> str:
+    return value.strip().lower()
+
+
+def validate_json_number_tokens(text: str) -> None:
+    """標準外定数とPythonで表現不能なJSON数値を位置付きで拒否する。"""
+
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        character = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            index += 1
+            continue
+        if character == '"':
+            in_string = True
+            index += 1
+            continue
+
+        constant = next(
+            (value for value in NONSTANDARD_JSON_CONSTANTS if text.startswith(value, index)),
+            None,
+        )
+        if constant is not None:
+            raise json.JSONDecodeError(
+                f"標準JSONではない数値定数です: {constant}", text, index
+            )
+
+        if character == "-" or character.isdigit():
+            match = JSON_NUMBER_PATTERN.match(text, index)
+            if match is not None:
+                token = match.group(0)
+                try:
+                    if "." in token or "e" in token.lower():
+                        value = float(token)
+                        if value == float("inf") or value == float("-inf"):
+                            raise ValueError("finite float required")
+                    else:
+                        int(token)
+                except ValueError as exc:
+                    raise json.JSONDecodeError(
+                        f"有限値として表現できないJSON数値です: {token}", text, index
+                    ) from exc
+                index = match.end()
+                continue
+        index += 1
+
+
+def strict_candidate_json_loads(text: str) -> Any:
+    validate_json_number_tokens(text)
+    try:
+        return strict_json_loads(text)
+    except json.JSONDecodeError:
+        raise
+    except ValueError as exc:
+        raise json.JSONDecodeError(str(exc), text, 0) from exc
+
+
 def make_parser() -> MachineArgumentParser:
     parser = MachineArgumentParser(description="候補問題1問を決定的に機械検査します。")
     parser.add_argument("--candidate", required=True, help="candidate JSONのパス。-はstdin。")
@@ -195,13 +262,15 @@ def parse_candidate(path_text: str) -> dict[str, Any]:
                 remedy=REMEDIES["E-INPUT-02"],
             ) from exc
     try:
-        document = strict_json_loads(text)
-    except (json.JSONDecodeError, ValueError) as exc:
-        detail: dict[str, Any] = {"error": str(exc), "source": source_name}
-        position = "位置情報を取得できません"
-        if isinstance(exc, json.JSONDecodeError):
-            detail.update({"column": exc.colno, "line": exc.lineno})
-            position = f"{exc.lineno}行{exc.colno}列"
+        document = strict_candidate_json_loads(text)
+    except json.JSONDecodeError as exc:
+        detail: dict[str, Any] = {
+            "column": exc.colno,
+            "error": str(exc),
+            "line": exc.lineno,
+            "source": source_name,
+        }
+        position = f"{exc.lineno}行{exc.colno}列"
         raise CliFailure(
             "E-INPUT-03",
             f"E-INPUT-03 candidate JSONをパースできません: {source_name}（{position}）。",
@@ -741,8 +810,8 @@ def check_vocab_target(
                 "対象英文中の実際の表層形をtarget_surfaceへ記録してください。",
             )
         )
-    if candidate["format"] == "vocab_mcq_ja2en" and target_entry is not None:
-        if body["target_surface"] != target_entry["headword"]:
+    if candidate["format"] == "vocab_mcq_ja2en":
+        if target_entry is not None and body["target_surface"] != target_entry["headword"]:
             violations.append(
                 violation(
                     "V-TGT-02",
@@ -804,6 +873,16 @@ def check_distractor_anchors(
     body = candidate["body"]
     choices = body["choices"]
     requested_level = candidate["level"]["value"]
+    distractors = [choice for choice in choices if not choice["is_correct"]]
+    same_pos_pool_count: int | None = None
+    if target_entry is not None:
+        same_pos_pool_count = sum(
+            1
+            for entry in lexicon_by_id.values()
+            if entry["id"] != target_entry["id"]
+            and entry["level"] == requested_level
+            and entry["pos"] == target_entry["pos"]
+        )
     for index, choice in enumerate(choices):
         anchor = choice["anchor"]
         entry = lexicon_by_id.get(anchor["entry_id"])
@@ -843,16 +922,36 @@ def check_distractor_anchors(
                         actual_level=anchor["level"],
                     )
                 )
+    if body["pos_pool_relaxed"] and target_entry is not None:
+        cross_pos_used = any(
+            (entry := lexicon_by_id.get(choice["anchor"]["entry_id"])) is not None
+            and choice["anchor"]["pos"] == entry["pos"]
+            and entry["pos"] != target_entry["pos"]
+            for choice in distractors
+        )
+        if same_pos_pool_count is not None and (
+            same_pos_pool_count >= 3 or not cross_pos_used
+        ):
+            violations.append(
+                violation(
+                    "V-DIS-02",
+                    "body.pos_pool_relaxed",
+                    f"同レベル・同品詞候補数={same_pos_pool_count}、異品詞誤答使用={cross_pos_used}、緩和=trueです。",
+                    "同レベル・同品詞候補が3語未満で互換品詞の誤答を実際に使う場合だけtrueにしてください。",
+                    expected_level=requested_level,
+                    actual_level=requested_level,
+                )
+            )
     anchor_ids = [choice["anchor"]["entry_id"] for choice in choices]
     correct_ids = [choice["anchor"]["entry_id"] for choice in choices if choice["is_correct"]]
+    target_ref = candidate["target"]["ref"]
     identity_bad = len(set(anchor_ids)) != len(anchor_ids)
-    if target_entry is not None:
-        identity_bad = identity_bad or correct_ids != [target_entry["id"]]
-        identity_bad = identity_bad or any(
-            choice["anchor"]["entry_id"] == target_entry["id"]
-            for choice in choices
-            if not choice["is_correct"]
-        )
+    identity_bad = identity_bad or correct_ids != [target_ref]
+    identity_bad = identity_bad or any(
+        choice["anchor"]["entry_id"] == target_ref
+        for choice in choices
+        if not choice["is_correct"]
+    )
     if identity_bad:
         violations.append(
             violation(
@@ -889,15 +988,15 @@ def check_form_specific(candidate: dict[str, Any], violations: list[dict[str, An
                 )
             )
     if fmt in {"grammar_cloze", "grammar_rewrite"}:
-        answer = normalized_comparison(body["answer"])
-        equivalents = [normalized_comparison(value) for value in body["answer_equivalents"]]
+        answer = answer_equivalent_key(body["answer"])
+        equivalents = [answer_equivalent_key(value) for value in body["answer_equivalents"]]
         if answer in equivalents or len(set(equivalents)) != len(equivalents):
             violations.append(
                 violation(
                     "V-CLZ-02",
                     "body.answer_equivalents",
-                    f"正規化answer={answer!r}、正規化同値表記={equivalents}です。",
-                    "answer自身と正規化重複をanswer_equivalentsから除いてください。",
+                    f"前後空白除去・小文字化後のanswer={answer!r}、同値表記={equivalents}です。",
+                    "answer自身と前後空白除去・大文字小文字無視で重複する値をanswer_equivalentsから除いてください。",
                 )
             )
     if fmt == "grammar_cloze":
@@ -1025,7 +1124,7 @@ def machine_check(
     report = {
         "data_version": resources["meta"]["data_version"],
         "format": candidate["format"],
-        "generated_at": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "generation": generation,
         "level": candidate["level"],
         "question_id": candidate["question_id"],

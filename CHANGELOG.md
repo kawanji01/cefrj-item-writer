@@ -10,6 +10,38 @@
 - 正常JSON・定義済みエラーJSONを正準形UTF-8で出力し、`machine_check.py` は検査結果がfailでも終了コード0、定義済み停止は終了コード1、内部例外は2とした。監査ファイルは書き込まない。
 - PLN-05で承認されたM2D-01〜M2D-08を `DECISIONS.md` へ記録し、`IMPLEMENTATION_PLAN.md` と影響する設計文書を承認内容どおりに改訂した。`schemas/` は変更していない。
 
+### R1レビュー修正
+
+- `pos_pool_relaxed=true` を、対象自身を除く同レベル・同品詞プールが3語未満で、実在する誤答アンカーに対象と異なる互換品詞を実際に使用した場合だけ許可し、不要・未実施の緩和記録を `V-DIS-02` とするよう修正した。
+- `machine_check.py` のUTC生成をPython 3.10でもimport可能な `datetime.timezone.utc` へ変更し、要求版未満では前提検査が両CLIとも `E-ENV-01` を返せるよう修正した。
+- 語彙ターゲットがlexiconに存在しなくても、空欄置換結果と `sentence_complete` の不一致、および正解・誤答アンカーIDと宣言 `target.ref` の不一致を独立して列挙するよう修正した。
+- `answer` / `answer_equivalents` の重複比較を、MC-24-2どおり前後空白除去・大文字小文字無視だけに限定し、内部空白とNFC/NFDの差を同一視しないよう修正した。MC-26の書き換え比較は従来のNFC・trim・小文字化・連続空白正規化を維持した。
+- `lookup.py lex --pos` の `E-INPUT-04` で、受取値とWordlist品詞15値を決定的順序でmessage・detailへ列挙するよう修正した。
+- candidate JSONの非標準定数、有限floatへ変換不能な数値、巨大整数を文字列外で走査し、構文エラーと同様に対象・行・列を持つ `E-INPUT-03` として停止するよう修正した。
+
+### R1修正後の再検証（4/4 pass）
+
+1. 機械検査マトリクス（CI-MCH-01〜15）
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... machine_check関数と実CLIへ手元候補を投入し、全15条件・machine_reportスキーマ・generated_at除外後の正準バイト一致を検証 ... PY`。
+   - 結果: 15/15 pass。CI-MCH-11は緩和なし同品詞・正当な緩和が違反なし、フラグなし品詞不一致・不要な緩和フラグが `V-DIS-02` となった。
+2. 照会マトリクス（CI-LKP-01〜04）
+   - コマンド: 同上のinline Pythonから `.venv/bin/python scripts/lookup.py` をsubprocess実行。
+   - 結果: 4/4 pass。`abandon`、`Tokyo`、`watch`、`gp:13`、`gp:1-1` の件数・属性・継承を再確認した。
+3. machine_reportスキーマ適合
+   - コマンド: 上記CI-MCH各出力を `jsonschema` で `schemas/machine_report.schema.json` へ直接検証。
+   - 結果: 全出力がスキーマ1.0.0に適合した。
+4. 決定性
+   - コマンド: 同一candidateを2回検査し、`generated_at` を除去して正準JSONのUTF-8バイト列を比較。
+   - 結果: バイト一致した。
+
+### R1追加回帰確認
+
+- R1-01〜R1-04: 品詞緩和5条件、欠落ターゲットと独立違反の併存、同値表記の内部空白・前後空白・大小文字・NFC/NFD各条件をinline Pythonで検証し、全期待値に一致した。不要な緩和と正当な緩和は実CLIでも再確認し、出力はmachine_reportスキーマに適合した。
+- R1-02: `uv run --no-project --python 3.10`（CPython 3.10.18）で `lookup.py` と `machine_check.py` を実行し、双方がstdout空・終了コード1・`E-ENV-01`、検出3.10.18・要求`>=3.11`・具体的remedyを返した。
+- R1-05: `.venv/bin/python scripts/lookup.py lex --pos bogus` がstdout空・終了コード1・`E-INPUT-04`となり、message・detailに受取値、15許容値、具体的remedyを含むことを確認した。
+- R1-06: JSON構文不正、`NaN`、`Infinity`、`1e400`、5,000桁整数をstdin・ファイルの両経路で実CLIへ投入し、全10条件がstdout空・終了コード1・`E-INPUT-03`、対象・2行8列・具体的remedyを返すことを確認した。
+- `.venv/bin/python scripts/doctor.py` は12 pass / 0 fail・stderr空、`.venv/bin/python -m py_compile scripts/lookup.py scripts/machine_check.py`、`git diff --check` はpassした。`docs/`、`schemas/`、`DECISIONS.md`、`IMPLEMENTATION_PLAN.md` にR1修正差分がないことを確認した。
+
 ### M2 DoD実行記録（4/4 pass）
 
 1. 機械検査マトリクス（CI-MCH-01〜15）
