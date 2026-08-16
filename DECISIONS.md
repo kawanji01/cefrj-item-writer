@@ -724,9 +724,9 @@
 
 ---
 
-## 4. M1実装開始時の承認決定（M1D-01〜M1D-10）
+## 4. M1実装・レビュー時の承認決定（M1D-01〜M1D-17）
 
-2026-08-16、PLN-05に基づく実装前確認で発見した次の10件について、作問者が推奨案を一括承認した。
+2026-08-16、PLN-05に基づく実装前確認とR1〜R10コードレビューで発見した次の17件について、作問者が推奨案を承認した。
 
 ### M1D-01 Wordlist件数不変条件の訂正
 - **決定**: `ALL_sep` 由来entriesは7,988件、`(headword, pos)` ユニーク数も7,988件、原本`ALL`データ行数は7,801件とする。原本実測では重複0、併記グループ179件である。
@@ -777,3 +777,38 @@
 - **決定**: lexicon entryの`group_ids`は`group_id`辞書順とする。groupの`member_ids`はALL行内のvariant出現順を維持する。
 - **理由**: 原本に2グループ所属の`check-in:noun`が存在するため、原本行順に依存しない決定的順序を固定する必要がある。
 - **影響先**: `docs/cefrj-validation-spec.md`、`scripts/build_normalized.py`。
+
+### M1D-11 原本版の入力元と更新忘れの停止コード
+- **決定**: `sources.json` の各原本要素に `version_label` を追加し、`data_version` はwordlist・grammar_profileの各`version_label`と正規化パイプライン版から構築する。`--accept-source-change`時、チェックサムが変わった原本の`version_label`が既存metaから変わっていなければE-DATA-02で拒否する。`version_label`の欠落・書式不正はE-DATA-01とする。本決定はM1D-04のキー構成を5キーへ更新する。
+- **理由**: 原本ごとの版更新忘れを検出し、既存のチェックサム不一致エラー体系を維持したまま同一`data_version`で異なる原本内容を受理する経路を閉じるため。
+- **影響先**: `docs/architecture.md`、`docs/cefrj-validation-spec.md`、`data/source/sources.json`、`scripts/build_normalized.py`。
+
+### M1D-12 正規化パイプラインsemverの版上げ規則
+- **決定**: norm版は、既存の正規化仕様への実装適合修正でパッチ、後方互換な変換対象・機能の追加でマイナー、正規化結果の意味を非互換に変更する場合およびMC-16指定の変更でメジャーを上げる。R1・R2で行った既存仕様への適合修正はパッチとして`1.0.0`から`1.0.1`へ更新する。
+- **理由**: VER-04は変換規則変更時のsemver更新のみを定め、上げ幅を定義していなかったため。今回はスキーマや意図された正規化仕様の拡張ではなく、NRM-10・VER-04・M1D-11への適合修正である。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`、`data/normalized/`、`CHANGELOG.md`。
+
+### M1D-13 現在の入力・パイプライン版に対する正規化陳腐化コード
+- **決定**: 現在の`sources.json.version_label` 2値と実行中の正規化パイプライン版から期待値を導出し、metaの原本版・パイプライン版、およびmeta・lexicon・grammarの`data_version`と照合する。不一致はE-DATA-04とし、messageに不一致フィールドごとの期待値・実測値を列挙する。doctorのD09でこの検査を行う。
+- **理由**: FR-35が正規化陳腐化の拒否を要求する一方、既存E-DATA目録には現在値との不一致条件がなかったため。正規化成果物の再ビルドで解消するデータ不整合としてE-DATA-04を拡張するのが最小かつ既存remedyと整合する。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`、`scripts/doctor.py`。
+
+### M1D-14 部分破損metaの安全な再生成境界
+- **決定**: 既存metaがNRM-29不適合でも、固定された2原本の`role`・`file`・64桁SHA-256を安全根拠として取得でき、実原本と一致する場合は通常ビルドで3ファイルを再生成する。SHA-256不一致時はE-DATA-02を維持し、`--accept-source-change`は旧`version_label`も有効かつ現在値へ更新済みの場合だけ許可する。安全根拠を取得できない場合は初回ビルド扱いにせず、E-DATA-04でコミット済みmetaのgit復元を案内する。`--diff`は既存metaの完全なNRM-29適合を要求する。
+- **理由**: 再ビルドremedyの自己ループを解消しつつ、meta削除による原本変更防止の迂回を許さないため。再生成判断に使う信頼範囲を原本同一性に必要な最小フィールドへ限定した。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`、`scripts/doctor.py`。
+
+### M1D-15 正規化3ファイル全欠落時の初回ビルド判定
+- **決定**: 正規化3ファイルが全て欠落していても、対象metaパスがGit `HEAD`に存在する場合はコミット済みセットの全削除と判定し、初回ビルド扱いにせずgit復元手順付きE-DATA-04で停止する。Git `HEAD`に対象metaが存在しない空のカスタム出力先、または履歴上まだmetaが存在しない状態だけを真の初回ビルドとして許可する。
+- **理由**: 空の新規出力先を維持したまま、コミット済み3ファイルの同時削除による原本変更ガードの迂回を閉じるため。既存のgit復元運用と同じ履歴を安全境界に用いる。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`。
+
+### M1D-16 Git HEAD照会不能時の停止コード
+- **決定**: 正規化3ファイル全欠落時、Gitの起動不能、リポジトリ判定不能、または`HEAD`の欠落・破損により履歴を安全に照会できない場合は、初回ビルド扱いにせずE-ENV-04で停止する。remedyでは`git --version`と`git rev-parse --verify HEAD`の確認、およびGitまたはリポジトリの復旧を案内する。有効な`HEAD`を照会でき、対象metaが存在しない場合だけ初回ビルドを許可する。対象metaが`HEAD`に存在する場合はM1D-15どおりE-DATA-04とする。
+- **理由**: Git照会不能を対象meta不在と同一視するfail-openを閉じ、コミット済み正規化セットの全削除による原本変更ガード迂回を、Git環境の状態にかかわらず防止するため。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`。
+
+### M1D-17 正規化3成果物の協調置換と復元
+- **決定**: 通常ビルドでは、lexicon・grammar・metaの各最終パスは欠落または通常ファイルの場合だけ書込みを許可し、それ以外は最初の書込み前にE-ENV-05で停止する。3つの一時ファイルを同一出力ディレクトリ内へ全て作成してflush・fsyncした後に確定し、2件目以降を含む確定途中の失敗時は、確定済みファイルを全て更新前の内容または欠落状態へ戻してE-ENV-05・終了コード1とする。復元自体に失敗した場合もE-ENV-05とし、失敗パスをdetailへ列挙する。
+- **理由**: 予測可能な最終パス不正を処理前に拒否し、複数ファイル確定中のI/O失敗で異なるdata_versionの正規化成果物が混在することを防ぐため。
+- **影響先**: `scripts/build_normalized.py`、M1正規化ビルド。

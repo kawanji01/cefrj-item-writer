@@ -172,7 +172,7 @@
 | `data/source/CEFR-J Grammar Profile full 20200220.xlsx` | `data/normalized/grammar.json` |
 | `data/source/sources.json`（原本URL・ダウンロード日の手動維持ファイル。NRM-29。更新手順は `docs/architecture.md` OPS-01、欠落・不正の検出は同 E-DATA-01 が正） | `data/normalized/meta.json` |
 
-`sources.json` は `{"sources": [<wordlist>, <grammar_profile>]}` とし、配列順を `wordlist` → `grammar_profile` に固定する。各要素は `role` / `file` / `url` / `download_date` の4キーのみを持ち、`role` と `file` は NRM-29 の `sources[]` と同じ固定値、`url` は `http://` または `https://` で始まる文字列、`download_date` は `YYYY-MM-DD` とする。`build_normalized.py` は `download_date` を `meta.json` の `retrieved_date` に転記する。
+`sources.json` は `{"sources": [<wordlist>, <grammar_profile>]}` とし、配列順を `wordlist` → `grammar_profile` に固定する。各要素は `role` / `file` / `version_label` / `url` / `download_date` の5キーのみを持ち、`role` と `file` は NRM-29 の `sources[]` と同じ固定値、`version_label` は `^[0-9A-Za-z.\-]+$`、`url` は `http://` または `https://` で始まる文字列、`download_date` は `YYYY-MM-DD` とする。`build_normalized.py` は `version_label` を `meta.json` の同名フィールドへ、`download_date` を `retrieved_date` へ転記し、`data_version` を両原本の`version_label`と正規化パイプライン版から構築する。
 
 **NRM-02（決定性）** 同一入力（xlsxのSHA-256・`sources.json`・パイプライン版・spaCyモデル版が同一）からの出力はバイト一致しなければならない。出力にビルド時刻・乱数・環境依存値を含めてはならない。
 
@@ -320,6 +320,8 @@
 ```
 
 SHA-256は原本xlsxファイル全体に対して計算した小文字16進64桁でなければならない。meta.json は引用文（citation）を保持しない。引用文の組み立ては `docs/json-output-spec.md` ATT-02（`finalize_set.py` が `version_label` / `url` / `retrieved_date` からテンプレートで決定的に組み立てる）が正である。`set.json` への転記規則は `docs/json-output-spec.md` ATT-01・FIN-02 が正である。
+
+`data_version` は `wl<wordlist.version_label>+gp<grammar_profile.version_label>+norm<pipeline_version>` として構築し、meta内の3値と常に整合しなければならない。
 
 `data/normalized/` の「出典ヘッダー付き」とは、`lexicon.json` / `grammar.json` の `data_version` と、同一ディレクトリの `meta.json.sources` を一体として出典追跡できる状態をいう。lexicon / grammar のスキーマに出典フィールドを追加してはならない。
 

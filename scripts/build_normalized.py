@@ -8,8 +8,10 @@ import hashlib
 import importlib
 import importlib.metadata
 import json
+import math
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -24,8 +26,7 @@ WORDLIST_FILE = "CEFR-J Wordlist Ver1.6.xlsx"
 GRAMMAR_FILE = "CEFR-J Grammar Profile full 20200220.xlsx"
 SOURCE_FILE_NAMES = (WORDLIST_FILE, GRAMMAR_FILE)
 NORMALIZED_FILE_NAMES = ("lexicon.json", "grammar.json", "meta.json")
-DATA_VERSION = "wl1.6+gp20200220+norm1.0.0"
-PIPELINE_VERSION = "1.0.0"
+PIPELINE_VERSION = "1.0.2"
 SCHEMA_VERSION = "1.0.0"
 MODEL_NAME = "en_core_web_sm"
 MODEL_VERSION = "3.8.0"
@@ -85,6 +86,11 @@ LEVEL_PATTERN = re.compile(
 ID_PATTERN = re.compile(r"^[0-9]+(?:-[0-9]+)?$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+VERSION_LABEL_PATTERN = re.compile(r"^[0-9A-Za-z.\-]+$")
+SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+DATA_VERSION_PATTERN = re.compile(
+    r"^wl[0-9A-Za-z.\-]+\+gp[0-9A-Za-z.\-]+\+norm\d+\.\d+\.\d+$"
+)
 
 UNASSIGNED_PARENT_IDS = {
     "36",
@@ -113,7 +119,7 @@ WORDLIST_HEADERS = (
     "CoreInventory 2",
     "Threshold",
 )
-ITEM_HEADERS_EXACT = {
+ITEM_HEADERS_EXACT = (
     "ID",
     "文法項目",
     "文タイプ(不問のものは空欄)",
@@ -121,7 +127,7 @@ ITEM_HEADERS_EXACT = {
     "Grammatical Item",
     "備考",
     "パターン略記",
-}
+)
 TEACHER_HEADERS = (
     "ID",
     "文法項目",
@@ -144,10 +150,11 @@ REMEDIES = {
     "E-ENV-02": "リポジトリルートで python scripts/setup.py を再実行してください。",
     "E-ENV-03": "リポジトリルートで python scripts/setup.py を再実行し、en_core_web_sm 3.8.0を取得してください。",
     "E-ENV-04": "リポジトリルートに移動してください。ファイル欠落時は git status で確認し git checkout で復元してください。",
-    "E-DATA-01": "原本2ファイルを固定名でdata/source/に配置し、sources.jsonに入手URLとダウンロード日を記入してください。",
-    "E-DATA-02": "意図的な原本更新は python scripts/build_normalized.py --diff で確認後、python scripts/build_normalized.py --accept-source-change を実行してください。意図しない場合は正しい原本を配置し直してください。",
+    "E-ENV-05": "出力ディレクトリの権限と空き容量を確認してください。",
+    "E-DATA-01": "原本2ファイルを固定名でdata/source/に配置し、sources.jsonに原本版・入手URL・ダウンロード日を記入してください。",
+    "E-DATA-02": "意図的な原本更新はsources.jsonの対応するversion_labelも更新し、python scripts/build_normalized.py --diff で確認後、python scripts/build_normalized.py --accept-source-change を実行してください。意図しない場合は正しい原本を配置し直してください。",
     "E-DATA-03": "git checkoutで復元するか、python scripts/build_normalized.py を実行してください。",
-    "E-DATA-04": "python scripts/build_normalized.py で再ビルドしてください。再発時は正規化パイプラインの不具合として報告してください。",
+    "E-DATA-04": "python scripts/build_normalized.py で再ビルドしてください。同じE-DATA-04で停止する場合は git checkout -- data/normalized/meta.json でコミット済みmetaを復元してから再ビルドしてください。再発時は正規化パイプラインの不具合として報告してください。",
     "E-DATA-05": "git checkoutで設定を復元し、M3以降は python scripts/validate.py --schema config_limits --file data/config/limits.json で違反箇所を確認してください。",
     "E-DATA-06": "原本の版がWordlist Ver1.6とGrammar Profile full 20200220に一致するか確認してください。新版へ移行する場合はdocs/architecture.md OPS-01に従ってください。",
     "E-INPUT-01": "python scripts/build_normalized.py --help の日本語ヘルプを参照して引数を修正してください。",
@@ -216,14 +223,43 @@ def canonical_json_text(value: Any) -> str:
     ) + "\n"
 
 
-def emit_json(value: Any, stream: Any = sys.stdout) -> None:
-    stream.write(canonical_json_text(value))
+def emit_json(value: Any, stream: Any = None) -> None:
+    if stream is None:
+        stream = sys.stdout
+    payload = canonical_json_text(value).encode("utf-8")
+    binary_stream = getattr(stream, "buffer", None)
+    if binary_stream is not None:
+        binary_stream.write(payload)
+        return
+    try:
+        stream.write(payload)
+    except TypeError:
+        stream.write(payload.decode("utf-8"))
+
+
+def reject_nonstandard_json_constant(token: str) -> None:
+    raise ValueError(f"標準JSONではない数値定数です: {token}")
+
+
+def parse_finite_json_float(token: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        raise ValueError(f"有限値として表現できないJSON数値です: {token}")
+    return value
+
+
+def strict_json_loads(text: str) -> Any:
+    return json.loads(
+        text,
+        parse_constant=reject_nonstandard_json_constant,
+        parse_float=parse_finite_json_float,
+    )
 
 
 def load_json_file(path: Path, error_code: str = "E-DATA-04") -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return strict_json_loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise CliFailure(
             error_code,
             f"{error_code} JSONを読み取れません: {path}",
@@ -342,8 +378,8 @@ def require_basic_environment(repo_root: Path) -> None:
             missing.append(f"schemas/{schema_name}")
             continue
         try:
-            json.loads(schema_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+            strict_json_loads(schema_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
             missing.append(f"schemas/{schema_name}（破損）")
     if missing:
         raise CliFailure(
@@ -401,7 +437,7 @@ def validate_sources_document(document: Any, path: Path) -> list[dict[str, str]]
             problems.append(f"sources[{index}]がオブジェクトではありません")
             continue
         source = sources[index]
-        if set(source) != {"role", "file", "url", "download_date"}:
+        if set(source) != {"role", "file", "version_label", "url", "download_date"}:
             problems.append(f"sources[{index}]のキーが不正です")
             continue
         if source.get("role") != role:
@@ -414,6 +450,11 @@ def validate_sources_document(document: Any, path: Path) -> list[dict[str, str]]
         download_date = source.get("download_date")
         if not isinstance(download_date, str) or not DATE_PATTERN.fullmatch(download_date):
             problems.append(f"sources[{index}].download_dateはYYYY-MM-DDでなければなりません")
+        version_label = source.get("version_label")
+        if not isinstance(version_label, str) or not VERSION_LABEL_PATTERN.fullmatch(version_label):
+            problems.append(
+                f"sources[{index}].version_labelは英数字・ピリオド・ハイフンでなければなりません"
+            )
         if not problems or all(not problem.startswith(f"sources[{index}]") for problem in problems):
             validated.append(
                 {
@@ -421,6 +462,7 @@ def validate_sources_document(document: Any, path: Path) -> list[dict[str, str]]
                     "file": file_name,
                     "role": role,
                     "url": url,
+                    "version_label": version_label,
                 }
             )
 
@@ -452,18 +494,484 @@ def source_checksums(source_dir: Path) -> dict[str, str]:
     return {name: sha256_file(source_dir / name) for name in SOURCE_FILE_NAMES}
 
 
-def existing_meta_checksums(meta_path: Path) -> dict[str, str] | None:
-    if not meta_path.exists():
-        return None
-    meta = load_json_file(meta_path, "E-DATA-04")
+def compose_data_version(
+    wordlist_version: str,
+    grammar_version: str,
+    pipeline_version: str,
+) -> str:
+    return f"wl{wordlist_version}+gp{grammar_version}+norm{pipeline_version}"
+
+
+def source_data_version(sources: list[dict[str, str]]) -> str:
+    versions = {source["role"]: source["version_label"] for source in sources}
+    return compose_data_version(
+        versions["wordlist"],
+        versions["grammar_profile"],
+        PIPELINE_VERSION,
+    )
+
+
+def existing_meta_restore_remedy(meta_path: Path) -> str:
     try:
-        return {source["file"]: source["sha256"] for source in meta["sources"]}
-    except (KeyError, TypeError) as exc:
+        display_path = meta_path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        display_path = str(meta_path)
+    return (
+        f"git checkout -- {display_path} でコミット済みmetaを復元してから、"
+        "python scripts/build_normalized.py を再実行してください。"
+    )
+
+
+def existing_meta_safety_sources(meta: Any) -> list[dict[str, str | None]] | None:
+    if not isinstance(meta, dict):
+        return None
+    sources = meta.get("sources")
+    expected = (("wordlist", WORDLIST_FILE), ("grammar_profile", GRAMMAR_FILE))
+    if not isinstance(sources, list) or len(sources) != len(expected):
+        return None
+    safe_sources: list[dict[str, str | None]] = []
+    for index, (role, file_name) in enumerate(expected):
+        source = sources[index]
+        if not isinstance(source, dict):
+            return None
+        if source.get("role") != role or source.get("file") != file_name:
+            return None
+        sha256 = source.get("sha256")
+        if not isinstance(sha256, str) or not SHA256_PATTERN.fullmatch(sha256):
+            return None
+        version_label = source.get("version_label")
+        safe_sources.append(
+            {
+                "file": file_name,
+                "role": role,
+                "sha256": sha256,
+                "version_label": (
+                    version_label
+                    if isinstance(version_label, str)
+                    and VERSION_LABEL_PATTERN.fullmatch(version_label)
+                    else None
+                ),
+            }
+        )
+    return safe_sources
+
+
+def git_head_query_failure(
+    path: Path,
+    command: list[str],
+    *,
+    error: str,
+    returncode: int | None,
+) -> CliFailure:
+    rendered_command = json.dumps(command, ensure_ascii=False)
+    rendered_error = error.replace("\r", " ").replace("\n", "; ")
+    if returncode is None:
+        failure_description = (
+            f"コマンド={rendered_command}、OSエラー={rendered_error}"
+        )
+    else:
+        failure_description = (
+            f"コマンド={rendered_command}、終了コード={returncode}、"
+            f"stderr={rendered_error}"
+        )
+    return CliFailure(
+        "E-ENV-04",
+        "E-ENV-04 Git HEADを照会できないため初回ビルド判定を安全に"
+        f"行えません: {path} ({failure_description})",
+        detail={
+            "command": command,
+            "error": error,
+            "path": str(path),
+            "returncode": returncode,
+        },
+        remedy=(
+            "git --version と git rev-parse --verify HEAD を確認し、Gitまたは"
+            "リポジトリを復旧してから再実行してください。"
+        ),
+    )
+
+
+def git_query_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    for name in (
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_GRAFT_FILE",
+        "GIT_INDEX_FILE",
+        "GIT_INTERNAL_SUPER_PREFIX",
+        "GIT_NAMESPACE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_PREFIX",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_SHALLOW_FILE",
+        "GIT_WORK_TREE",
+    ):
+        environment.pop(name, None)
+    environment["LC_ALL"] = "C"
+    environment["LANG"] = "C"
+    return environment
+
+
+def run_git_head_query(
+    path: Path,
+    command: list[str],
+    *,
+    cwd: Path,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            env=git_query_environment(),
+        )
+    except OSError as exc:
+        raise git_head_query_failure(
+            path,
+            command,
+            error=str(exc),
+            returncode=None,
+        ) from exc
+    if result.returncode != 0:
+        error = result.stderr.strip().replace("\r", " ").replace("\n", "; ")
+        raise git_head_query_failure(
+            path,
+            command,
+            error=error or "Gitコマンドが非0終了しました",
+            returncode=result.returncode,
+        )
+    return result
+
+
+def run_git_repository_query(path: Path, directory: Path) -> str | None:
+    command = [
+        "git",
+        "-C",
+        str(directory),
+        "rev-parse",
+        "--show-toplevel",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            env=git_query_environment(),
+        )
+    except OSError as exc:
+        raise git_head_query_failure(
+            path,
+            command,
+            error=str(exc),
+            returncode=None,
+        ) from exc
+    if result.returncode != 0:
+        error = result.stderr.strip().replace("\r", " ").replace("\n", "; ")
+        if "not a git repository" in error:
+            return None
+        raise git_head_query_failure(
+            path,
+            command,
+            error=error or "Gitコマンドが非0終了しました",
+            returncode=result.returncode,
+        )
+    root_text = result.stdout.rstrip("\r\n")
+    if not root_text:
+        raise git_head_query_failure(
+            path,
+            command,
+            error="Gitリポジトリルートが空です",
+            returncode=0,
+        )
+    return root_text
+
+
+def alternate_ascii_case(name: str) -> str | None:
+    for index, character in enumerate(name):
+        if "a" <= character <= "z":
+            return name[:index] + character.upper() + name[index + 1 :]
+        if "A" <= character <= "Z":
+            return name[:index] + character.lower() + name[index + 1 :]
+    return None
+
+
+def filesystem_is_case_insensitive(git_root: Path, *, target_path: Path) -> bool:
+    try:
+        candidates = [git_root, *sorted(git_root.iterdir(), key=lambda path: path.name)]
+        for candidate in candidates:
+            alternate_name = alternate_ascii_case(candidate.name)
+            if alternate_name is None:
+                continue
+            alternate_path = candidate.with_name(alternate_name)
+            try:
+                return candidate.samefile(alternate_path)
+            except FileNotFoundError:
+                return False
+    except OSError as exc:
+        raise CliFailure(
+            "E-ENV-04",
+            "E-ENV-04 Git追跡パスとの大小文字同一性をファイルシステム上で"
+            f"確認できません: {target_path} (OSエラー={exc})",
+            detail={"error": str(exc), "path": str(target_path)},
+            remedy=(
+                "リポジトリと親ディレクトリの読み取り権限を確認し、"
+                "Gitまたはリポジトリを復旧してから再実行してください。"
+            ),
+        ) from exc
+    raise CliFailure(
+        "E-ENV-04",
+        "E-ENV-04 Git追跡パスとの大小文字同一性を判定できる既存パスが"
+        f"ありません: {target_path}",
+        detail={"path": str(target_path)},
+        remedy="Gitリポジトリの作業ツリーを復旧してから再実行してください。",
+    )
+
+
+def git_relative_path(
+    candidate_path: Path,
+    git_root: Path,
+    *,
+    case_insensitive: bool,
+) -> str | None:
+    try:
+        return candidate_path.relative_to(git_root).as_posix()
+    except ValueError:
+        if not case_insensitive:
+            return None
+    root_parts = git_root.parts
+    target_parts = candidate_path.parts
+    if len(target_parts) < len(root_parts):
+        return None
+    if any(
+        target_part.casefold() != root_part.casefold()
+        for target_part, root_part in zip(target_parts, root_parts)
+    ):
+        return None
+    return Path(*target_parts[len(root_parts) :]).as_posix()
+
+
+def nearest_git_repository(
+    path: Path,
+    candidate_path: Path,
+) -> tuple[Path, str, bool] | None:
+    directory = candidate_path.parent
+    while True:
+        try:
+            is_directory = directory.is_dir()
+        except OSError as exc:
+            raise CliFailure(
+                "E-ENV-04",
+                "E-ENV-04 Gitリポジトリ探索用のディレクトリを確認できません: "
+                f"{directory} ({exc})",
+                detail={"error": str(exc), "path": str(directory)},
+                remedy=(
+                    "出力先と親ディレクトリの読み取り権限を確認し、Gitまたは"
+                    "リポジトリを復旧してから再実行してください。"
+                ),
+            ) from exc
+        if is_directory:
+            root_text = run_git_repository_query(path, directory)
+            if root_text is not None:
+                try:
+                    git_root = Path(root_text).resolve()
+                except (OSError, RuntimeError) as exc:
+                    raise CliFailure(
+                        "E-ENV-04",
+                        "E-ENV-04 Gitリポジトリルートを安全に解決できません: "
+                        f"{root_text} ({exc})",
+                        detail={"error": str(exc), "path": root_text},
+                        remedy=(
+                            "Gitリポジトリの作業ツリーを復旧してから"
+                            "再実行してください。"
+                        ),
+                    ) from exc
+                case_insensitive = filesystem_is_case_insensitive(
+                    git_root,
+                    target_path=path,
+                )
+                relative_path = git_relative_path(
+                    candidate_path,
+                    git_root,
+                    case_insensitive=case_insensitive,
+                )
+                if relative_path is None:
+                    try:
+                        resolved_directory = directory.resolve()
+                        directory_suffix = resolved_directory.relative_to(git_root)
+                    except (OSError, RuntimeError, ValueError):
+                        directory_suffix = None
+                    if directory_suffix is not None:
+                        lexical_root = directory
+                        if directory_suffix != Path("."):
+                            for _part in directory_suffix.parts:
+                                lexical_root = lexical_root.parent
+                        try:
+                            same_root = lexical_root.samefile(git_root)
+                        except OSError:
+                            same_root = False
+                        if same_root:
+                            relative_path = git_relative_path(
+                                candidate_path,
+                                lexical_root,
+                                case_insensitive=case_insensitive,
+                            )
+                if relative_path is not None:
+                    return git_root, relative_path, case_insensitive
+        parent = directory.parent
+        if parent == directory:
+            return None
+        directory = parent
+
+
+def path_exists_in_git_head(path: Path) -> bool:
+    lexical_path = Path(os.path.abspath(path))
+    try:
+        resolved_path = path.resolve()
+    except (OSError, RuntimeError) as exc:
         raise CliFailure(
             "E-DATA-04",
-            f"E-DATA-04 既存meta.jsonのsourcesが不正です: {meta_path}",
-            detail={"error": str(exc), "path": str(meta_path)},
+            "E-DATA-04 正規化metaパスのsymlinkを安全に解決できません: "
+            f"{path} ({exc})",
+            detail={"error": str(exc), "path": str(path)},
+            remedy=existing_meta_restore_remedy(path),
         ) from exc
+    candidate_paths = [lexical_path]
+    if resolved_path != lexical_path:
+        candidate_paths.append(resolved_path)
+    repositories: list[tuple[Path, str, bool]] = []
+    for candidate_path in candidate_paths:
+        repository = nearest_git_repository(path, candidate_path)
+        if repository is None:
+            repository_query = [
+                "git",
+                "-C",
+                str(candidate_path.parent),
+                "rev-parse",
+                "--show-toplevel",
+            ]
+            run_git_head_query(path, repository_query, cwd=Path.cwd())
+            raise CliFailure(
+                "E-ENV-04",
+                "E-ENV-04 正規化metaパスを包含するGitリポジトリを"
+                f"特定できません: {candidate_path}",
+                detail={"command": repository_query, "path": str(candidate_path)},
+                remedy=(
+                    "出力先を有効なHEADを持つGitリポジトリ内へ配置するか、"
+                    "Gitリポジトリを復旧してから再実行してください。"
+                ),
+            )
+        repositories.append(repository)
+    repositories = list(dict.fromkeys(repositories))
+    verified_roots: set[Path] = set()
+    for git_root, _relative_path, _case_insensitive in repositories:
+        if git_root not in verified_roots:
+            head_query = ["git", "rev-parse", "--verify", "HEAD^{commit}"]
+            run_git_head_query(path, head_query, cwd=git_root)
+            verified_roots.add(git_root)
+    for git_root, relative_path, case_insensitive in repositories:
+        tree_query = [
+            "git",
+            "ls-tree",
+            "--name-only",
+            "-z",
+            "HEAD",
+            "--",
+            relative_path,
+        ]
+        tree_result = run_git_head_query(path, tree_query, cwd=git_root)
+        if tree_result.stdout.rstrip("\0"):
+            return True
+        if case_insensitive:
+            all_paths_query = ["git", "ls-tree", "-r", "--name-only", "-z", "HEAD"]
+            all_paths_result = run_git_head_query(
+                path,
+                all_paths_query,
+                cwd=git_root,
+            )
+            tracked_paths = [
+                tracked_path
+                for tracked_path in all_paths_result.stdout.split("\0")
+                if tracked_path
+            ]
+            if any(
+                tracked_path.casefold() == relative_path.casefold()
+                for tracked_path in tracked_paths
+            ):
+                return True
+    return False
+
+
+def existing_meta_document(meta_path: Path) -> dict[str, Any] | None:
+    if meta_path.is_symlink() or (meta_path.exists() and not meta_path.is_file()):
+        entry_type = "symlink" if meta_path.is_symlink() else "通常ファイル以外"
+        raise CliFailure(
+            "E-DATA-04",
+            "E-DATA-04 既存meta.jsonのパスが通常ファイルではありません: "
+            f"{meta_path} ({entry_type})",
+            detail={"entry_type": entry_type, "path": str(meta_path)},
+            remedy=existing_meta_restore_remedy(meta_path),
+        )
+    if not meta_path.exists():
+        remaining_normalized = [
+            name
+            for name in NORMALIZED_FILE_NAMES
+            if name != "meta.json" and (meta_path.parent / name).is_file()
+        ]
+        if remaining_normalized:
+            raise CliFailure(
+                "E-DATA-04",
+                "E-DATA-04 既存正規化セットでmeta.jsonが欠落し、原本変更防止用の"
+                f"安全根拠を取得できません: 残存{', '.join(remaining_normalized)}",
+                detail={
+                    "existing": remaining_normalized,
+                    "missing": ["meta.json"],
+                    "path": str(meta_path),
+                },
+                remedy=existing_meta_restore_remedy(meta_path),
+            )
+        if path_exists_in_git_head(meta_path):
+            raise CliFailure(
+                "E-DATA-04",
+                "E-DATA-04 Git HEADに存在する正規化セットの3ファイルが全て欠落し、"
+                f"原本変更防止用の安全根拠を取得できません: {meta_path.parent}",
+                detail={
+                    "head_path": str(meta_path),
+                    "missing": list(NORMALIZED_FILE_NAMES),
+                },
+                remedy=existing_meta_restore_remedy(meta_path),
+            )
+        return None
+    try:
+        meta = load_json_file(meta_path, "E-DATA-04")
+    except CliFailure as exc:
+        raise CliFailure(
+            "E-DATA-04",
+            f"E-DATA-04 既存meta.jsonから原本変更防止用チェックサムを取得できません: {meta_path}",
+            detail={"cause": exc.detail, "path": str(meta_path)},
+            remedy=existing_meta_restore_remedy(meta_path),
+        ) from exc
+    problems = validate_meta_document(meta)
+    safe_sources = existing_meta_safety_sources(meta)
+    if safe_sources is None:
+        raise CliFailure(
+            "E-DATA-04",
+            f"E-DATA-04 既存meta.jsonから原本変更防止用チェックサムを取得できません: {meta_path}",
+            detail={"path": str(meta_path), "problems": problems},
+            remedy=existing_meta_restore_remedy(meta_path),
+        )
+    return {"document": meta, "problems": problems, "sources": safe_sources}
 
 
 def checksum_mismatches(
@@ -495,6 +1003,13 @@ def normalized_text(value: Any, *, field: str, required: bool, trim: bool = True
             raise ValueError(f"{field}が空です")
         return None
     return text
+
+
+def original_and_normalized_text(value: Any, *, field: str) -> tuple[str, str]:
+    if not isinstance(value, str):
+        raise ValueError(f"{field}が文字列ではありません: {value!r}")
+    normalized = normalized_text(value, field=field, required=True)
+    return value, normalized
 
 
 def normalized_id(value: Any, *, field: str) -> str:
@@ -580,17 +1095,42 @@ def ensure_exact_headers(
     sheet_name: str,
 ) -> dict[str, int]:
     values = [cell.value for cell in worksheet[row_number]]
+    found, problems = collect_exact_headers(values, expected)
+    raise_header_problems(problems, sheet_name=sheet_name)
+    return found
+
+
+def collect_exact_headers(
+    values: list[Any],
+    expected: Iterable[str],
+) -> tuple[dict[str, int], list[dict[str, Any]]]:
     found: dict[str, int] = {}
+    problems: list[dict[str, Any]] = []
     for header in expected:
         positions = [index for index, value in enumerate(values) if value == header]
         if len(positions) != 1:
-            raise CliFailure(
-                "E-DATA-06",
-                f"E-DATA-06 {sheet_name}で列名を一意に検出できません: {header}",
-                detail={"header": header, "positions": positions, "sheet": sheet_name},
-            )
-        found[header] = positions[0]
-    return found
+            problems.append({"header": header, "positions": positions})
+        else:
+            found[header] = positions[0]
+    return found, problems
+
+
+def raise_header_problems(
+    problems: list[dict[str, Any]],
+    *,
+    sheet_name: str,
+) -> None:
+    if problems:
+        rendered = "; ".join(
+            f"{problem['header']}="
+            f"{problem['positions'] if problem['positions'] else '欠落'}"
+            for problem in problems
+        )
+        raise CliFailure(
+            "E-DATA-06",
+            f"E-DATA-06 {sheet_name}で列名を一意に検出できません: {rendered}",
+            detail={"headers": problems, "sheet": sheet_name},
+        )
 
 
 def load_workbook(path: Path) -> Any:
@@ -616,7 +1156,233 @@ def lex_id(headword: str, pos: str) -> str:
     return f"lex:{headword}:{pos.replace(' ', '-')}"
 
 
-def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
+def excel_column_name(zero_based_index: int) -> str:
+    value = zero_based_index + 1
+    letters = ""
+    while value:
+        value, remainder = divmod(value - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def collect_wordlist_value_problems(
+    rows: list[tuple[Any, ...]],
+    headers: dict[str, int],
+    *,
+    sheet_name: str,
+    include_categories: bool,
+) -> list[dict[str, Any]]:
+    fields = list(WORDLIST_HEADERS if include_categories else WORDLIST_HEADERS[:3])
+    problems: list[dict[str, Any]] = []
+    for row_number, row in enumerate(rows, start=2):
+        for field_name in fields:
+            column_index = headers[field_name]
+            value = row[column_index] if column_index < len(row) else None
+            required = field_name in {"headword", "pos", "CEFR"}
+            try:
+                text = normalized_text(value, field=field_name, required=required)
+            except ValueError as exc:
+                reason = str(exc)
+            else:
+                reason = ""
+                if sheet_name == "ALL_sep" and field_name == "headword" and ":" in text:
+                    reason = f"headwordにコロンがあります: {text}"
+                elif field_name == "pos" and text not in POS_VALUES:
+                    reason = f"posが値域外です: {text}"
+                elif field_name == "CEFR" and text not in CEFR_VALUES:
+                    reason = f"CEFRが値域外です: {text}"
+            if reason:
+                problems.append(
+                    {
+                        "cell": (
+                            f"{sheet_name}!{excel_column_name(column_index)}{row_number}"
+                        ),
+                        "column": column_index,
+                        "field": field_name,
+                        "reason": reason,
+                        "row": row_number,
+                    }
+                )
+    problems.sort(key=lambda problem: (problem["row"], problem["column"]))
+    return [
+        {key: value for key, value in problem.items() if key not in {"column", "row"}}
+        for problem in problems
+    ]
+
+
+def raise_wordlist_value_problems(problems: list[dict[str, Any]]) -> None:
+    if not problems:
+        return
+    rendered = "; ".join(
+        f"{problem['cell']} {problem['reason']}" for problem in problems
+    )
+    raise CliFailure(
+        "E-DATA-06",
+        f"E-DATA-06 Wordlist原本の値が不正です: {rendered}",
+        detail={"file": WORDLIST_FILE, "problems": problems},
+    )
+
+
+def collect_wordlist_group_problems(
+    all_rows: list[tuple[Any, ...]],
+    all_headers: dict[str, int],
+    entries_by_key: dict[tuple[str, str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    headword_column = all_headers["headword"]
+    seen_group_rows: dict[str, int] = {}
+    problems: list[dict[str, Any]] = []
+    kind_order = {
+        "invalid_group_id": 0,
+        "duplicate_group_id": 1,
+        "empty_variant": 2,
+        "missing_variant": 3,
+        "duplicate_variant": 4,
+        "level_mismatch": 5,
+    }
+    for row_number, row in enumerate(all_rows, start=2):
+        _joined_original, joined = original_and_normalized_text(
+            row[headword_column],
+            field="ALL headword",
+        )
+        if "/" not in joined:
+            continue
+        pos = normalized_text(row[all_headers["pos"]], field="ALL pos", required=True)
+        level = normalized_text(
+            row[all_headers["CEFR"]],
+            field="ALL CEFR",
+            required=True,
+        )
+        variants = [
+            unicodedata.normalize("NFC", part.strip()) for part in joined.split("/")
+        ]
+        cell = f"ALL!{excel_column_name(headword_column)}{row_number}"
+        group_id = (
+            f"grp:{variants[0]}:{pos.replace(' ', '-')}" if variants[0] else None
+        )
+        if variants[0] and ":" in variants[0]:
+            problems.append(
+                {
+                    "cell": cell,
+                    "kind": "invalid_group_id",
+                    "reason": f"group_idの先頭variantにコロンがあります: {variants[0]}",
+                    "row": row_number,
+                    "variant": variants[0],
+                    "variant_index": 0,
+                }
+            )
+        if group_id is not None:
+            first_row = seen_group_rows.get(group_id)
+            if first_row is not None:
+                problems.append(
+                    {
+                        "cell": cell,
+                        "kind": "duplicate_group_id",
+                        "reason": (
+                            f"group_idが重複しています: {group_id} "
+                            f"(初出ALL行{first_row})"
+                        ),
+                        "row": row_number,
+                        "variant": variants[0],
+                        "variant_index": 0,
+                    }
+                )
+            else:
+                seen_group_rows[group_id] = row_number
+
+        seen_variants: set[str] = set()
+        member_levels: set[str] = set()
+        for variant_index, variant in enumerate(variants):
+            if not variant:
+                problems.append(
+                    {
+                        "cell": cell,
+                        "kind": "empty_variant",
+                        "reason": f"variant {variant_index + 1}が空です",
+                        "row": row_number,
+                        "variant": variant,
+                        "variant_index": variant_index,
+                    }
+                )
+                continue
+            entry = entries_by_key.get((variant, pos))
+            if entry is None:
+                problems.append(
+                    {
+                        "cell": cell,
+                        "kind": "missing_variant",
+                        "reason": (
+                            "variantに対応するALL_sep行がありません: "
+                            f"{variant}/{pos}"
+                        ),
+                        "row": row_number,
+                        "variant": variant,
+                        "variant_index": variant_index,
+                    }
+                )
+            else:
+                member_levels.add(entry["level"])
+            if variant in seen_variants:
+                problems.append(
+                    {
+                        "cell": cell,
+                        "kind": "duplicate_variant",
+                        "reason": f"variantが重複しています: {variant}",
+                        "row": row_number,
+                        "variant": variant,
+                        "variant_index": variant_index,
+                    }
+                )
+            else:
+                seen_variants.add(variant)
+        if member_levels and member_levels != {level}:
+            problems.append(
+                {
+                    "cell": cell,
+                    "kind": "level_mismatch",
+                    "reason": (
+                        f"グループ内レベルが一致しません: 期待{level} "
+                        f"実測{sorted(member_levels)}"
+                    ),
+                    "row": row_number,
+                    "variant": None,
+                    "variant_index": len(variants),
+                }
+            )
+    problems.sort(
+        key=lambda problem: (
+            problem["row"],
+            problem["variant_index"],
+            kind_order[problem["kind"]],
+        )
+    )
+    return [
+        {
+            key: value
+            for key, value in problem.items()
+            if key not in {"row", "variant_index"}
+        }
+        for problem in problems
+    ]
+
+
+def raise_wordlist_group_problems(problems: list[dict[str, Any]]) -> None:
+    if not problems:
+        return
+    rendered = "; ".join(
+        f"{problem['cell']} {problem['reason']}" for problem in problems
+    )
+    raise CliFailure(
+        "E-DATA-06",
+        f"E-DATA-06 Wordlist原本のALL併記グループが不正です: {rendered}",
+        detail={"file": WORDLIST_FILE, "problems": problems},
+    )
+
+
+def build_lexicon(
+    source_path: Path,
+    *,
+    data_version: str,
+) -> tuple[dict[str, Any], dict[str, int]]:
     workbook = load_workbook(source_path)
     try:
         required_sheets = (
@@ -632,8 +1398,9 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
             "B2_sep",
         )
         ensure_sheets(workbook, required_sheets, WORDLIST_FILE)
+        wordlist_headers: dict[str, dict[str, int]] = {}
         for sheet_name in required_sheets:
-            ensure_exact_headers(
+            wordlist_headers[sheet_name] = ensure_exact_headers(
                 workbook[sheet_name],
                 1,
                 WORDLIST_HEADERS,
@@ -647,11 +1414,41 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
                 f"行数不一致: ALL_sep={len(all_sep_rows)}、ALL={len(all_rows)}"
             )
 
+        all_sep_headers = wordlist_headers["ALL_sep"]
+        all_headers = wordlist_headers["ALL"]
+        wordlist_value_problems = collect_wordlist_value_problems(
+            all_sep_rows,
+            all_sep_headers,
+            sheet_name="ALL_sep",
+            include_categories=True,
+        )
+        wordlist_value_problems.extend(
+            collect_wordlist_value_problems(
+                all_rows,
+                all_headers,
+                sheet_name="ALL",
+                include_categories=False,
+            )
+        )
+        raise_wordlist_value_problems(wordlist_value_problems)
+
         entries_by_key: dict[tuple[str, str], dict[str, Any]] = {}
         for row_number, row in enumerate(all_sep_rows, start=2):
-            headword = normalized_text(row[0], field="headword", required=True)
-            pos = normalized_text(row[1], field="pos", required=True)
-            level = normalized_text(row[2], field="CEFR", required=True)
+            headword = normalized_text(
+                row[all_sep_headers["headword"]],
+                field="headword",
+                required=True,
+            )
+            pos = normalized_text(
+                row[all_sep_headers["pos"]],
+                field="pos",
+                required=True,
+            )
+            level = normalized_text(
+                row[all_sep_headers["CEFR"]],
+                field="CEFR",
+                required=True,
+            )
             if ":" in headword:
                 raise ValueError(f"ALL_sep!A{row_number} headwordにコロンがあります: {headword}")
             if pos not in POS_VALUES:
@@ -660,10 +1457,14 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
                 raise ValueError(f"ALL_sep!C{row_number} CEFRが値域外です: {level}")
             entry = {
                 "core_inventory_1": normalized_text(
-                    row[3], field="CoreInventory 1", required=False
+                    row[all_sep_headers["CoreInventory 1"]],
+                    field="CoreInventory 1",
+                    required=False,
                 ),
                 "core_inventory_2": normalized_text(
-                    row[4], field="CoreInventory 2", required=False
+                    row[all_sep_headers["CoreInventory 2"]],
+                    field="CoreInventory 2",
+                    required=False,
                 ),
                 "group_ids": [],
                 "headword": headword,
@@ -671,7 +1472,11 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
                 "is_multiword": " " in headword or "-" in headword,
                 "level": level,
                 "pos": pos,
-                "threshold": normalized_text(row[5], field="Threshold", required=False),
+                "threshold": normalized_text(
+                    row[all_sep_headers["Threshold"]],
+                    field="Threshold",
+                    required=False,
+                ),
             }
             key = (headword, pos)
             existing = entries_by_key.get(key)
@@ -683,12 +1488,30 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
                 if comparable != existing_comparable:
                     raise ValueError(f"ALL_sepに不一致重複があります: {headword}/{pos}")
 
+        group_problems = collect_wordlist_group_problems(
+            all_rows,
+            all_headers,
+            entries_by_key,
+        )
+        raise_wordlist_group_problems(group_problems)
+
         groups: list[dict[str, Any]] = []
         seen_group_ids: set[str] = set()
         for row_number, row in enumerate(all_rows, start=2):
-            joined = normalized_text(row[0], field="ALL headword", required=True)
-            pos = normalized_text(row[1], field="ALL pos", required=True)
-            level = normalized_text(row[2], field="ALL CEFR", required=True)
+            joined_original, joined = original_and_normalized_text(
+                row[all_headers["headword"]],
+                field="ALL headword",
+            )
+            pos = normalized_text(
+                row[all_headers["pos"]],
+                field="ALL pos",
+                required=True,
+            )
+            level = normalized_text(
+                row[all_headers["CEFR"]],
+                field="ALL CEFR",
+                required=True,
+            )
             if pos not in POS_VALUES or level not in CEFR_VALUES:
                 raise ValueError(f"ALL!{row_number} のposまたはCEFRが値域外です")
             if "/" not in joined:
@@ -717,7 +1540,7 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
             groups.append(
                 {
                     "group_id": group_id,
-                    "headword_joined": joined,
+                    "headword_joined": joined_original,
                     "level": level,
                     "member_ids": member_ids,
                     "pos": pos,
@@ -749,7 +1572,7 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
             raise ValueError("member_idsが2件未満のグループがあります")
 
         lexicon = {
-            "data_version": DATA_VERSION,
+            "data_version": data_version,
             "entries": entries,
             "groups": groups,
             "schema_version": SCHEMA_VERSION,
@@ -775,12 +1598,7 @@ def build_lexicon(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
 
 def item_header_map(worksheet: Any) -> dict[str, int]:
     values = [cell.value for cell in worksheet[2]]
-    found = ensure_exact_headers(
-        worksheet,
-        2,
-        ITEM_HEADERS_EXACT,
-        sheet_name="ITEM LIST",
-    )
+    found, problems = collect_exact_headers(values, ITEM_HEADERS_EXACT)
     prefix_targets = {
         "sentence_type_en": "Sentence Type (",
         "regex_treetagger": "正規表現(TreeTaggerベース",
@@ -792,12 +1610,10 @@ def item_header_map(worksheet: Any) -> dict[str, int]:
             if isinstance(value, str) and value.startswith(prefix)
         ]
         if len(positions) != 1:
-            raise CliFailure(
-                "E-DATA-06",
-                f"E-DATA-06 ITEM LISTで接頭辞列を一意に検出できません: {prefix}",
-                detail={"positions": positions, "prefix": prefix, "sheet": "ITEM LIST"},
-            )
-        found[key] = positions[0]
+            problems.append({"header": f"{prefix}*", "positions": positions})
+        else:
+            found[key] = positions[0]
+    raise_header_problems(problems, sheet_name="ITEM LIST")
     return found
 
 
@@ -806,6 +1622,8 @@ def numeric_value(value: Any, *, field: str, integer: bool) -> int | float | Non
         return None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field}が数値ではありません: {value!r}")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{field}が有限数ではありません: {value!r}")
     if integer:
         if isinstance(value, float) and not value.is_integer():
             raise ValueError(f"{field}が整数ではありません: {value!r}")
@@ -820,7 +1638,7 @@ def parse_level(raw_value: Any, *, field: str) -> tuple[str, str, str]:
         raise ValueError(f"{field}のCEFR-J level書式が不正です: {raw}")
     minimum = match.group(1)
     maximum = match.group(2) or minimum
-    if minimum != maximum and CEFRJ_RANK[minimum] >= CEFRJ_RANK[maximum]:
+    if match.group(2) is not None and CEFRJ_RANK[minimum] >= CEFRJ_RANK[maximum]:
         raise ValueError(f"{field}のレベル範囲が昇順ではありません: {raw}")
     return raw, minimum, maximum
 
@@ -833,7 +1651,303 @@ def grammar_sort_key(entry: dict[str, Any]) -> tuple[int, int, int]:
     return parent, 1, int(parts[1])
 
 
-def build_grammar(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
+def grammar_value_reason(value: Any, specification: dict[str, Any]) -> str | None:
+    field = specification["field"]
+    kind = specification["kind"]
+    try:
+        if kind == "id":
+            normalized_id(value, field=field)
+            parsed = None
+        elif kind == "level":
+            parse_level(value, field=field)
+            parsed = None
+        elif kind == "text":
+            normalized_text(
+                value,
+                field=field,
+                required=specification.get("required", False),
+                trim=specification.get("trim", True),
+            )
+            parsed = None
+        elif kind == "number":
+            parsed = numeric_value(
+                value,
+                field=field,
+                integer=specification.get("integer", False),
+            )
+            if specification.get("required", False) and parsed is None:
+                raise ValueError(f"{field}が空です")
+        else:
+            raise AssertionError(f"未知のGrammar値検査種別です: {kind}")
+    except ValueError as exc:
+        return str(exc)
+    minimum = specification.get("minimum")
+    if "minimum" in specification and parsed is not None and parsed < minimum:
+        return f"{field}が最小値未満です: 最小{minimum!r} 実測{parsed!r}"
+    expected = specification.get("expected")
+    if "expected" in specification and parsed != expected:
+        return f"{field}が期待値と不一致です: 期待{expected!r} 実測{parsed!r}"
+    return None
+
+
+def collect_grammar_value_problems(
+    item_rows: list[tuple[Any, ...]],
+    teacher_rows: list[tuple[Any, ...]],
+    efl_rows: list[tuple[Any, ...]],
+    corpus_row: list[Any],
+    item_headers: dict[str, int],
+    teacher_headers: dict[str, int],
+) -> list[dict[str, Any]]:
+    item_fields = {
+        "ID": {"field": "ID", "kind": "id"},
+        "文法項目": {"field": "文法項目", "kind": "text", "required": True},
+        "文タイプ(不問のものは空欄)": {
+            "field": "文タイプ",
+            "kind": "text",
+            "trim": False,
+        },
+        "Shorthand Code": {"field": "Shorthand Code", "kind": "text"},
+        "Grammatical Item": {"field": "Grammatical Item", "kind": "text"},
+        "備考": {"field": "備考", "kind": "text", "trim": False},
+        "パターン略記": {"field": "パターン略記", "kind": "text"},
+        "sentence_type_en": {
+            "field": "Sentence Type (...)",
+            "kind": "text",
+            "trim": False,
+        },
+        "regex_treetagger": {
+            "field": "正規表現(TreeTaggerベース...)",
+            "kind": "text",
+        },
+    }
+    teacher_fields = {
+        "ID": {"field": "ID", "kind": "id"},
+        "文法項目": {
+            "field": "教員版 文法項目",
+            "kind": "text",
+            "required": True,
+        },
+        "文法項目 (平易版)": {
+            "field": "文法項目 (平易版)",
+            "kind": "text",
+            "required": True,
+        },
+        "Grammatical item (English)": {
+            "field": "Grammatical item (English)",
+            "kind": "text",
+        },
+        "CEFR-J level": {"field": "CEFR-J level", "kind": "level"},
+    }
+    levels = ("A1", "A2", "B1", "B2", "C1")
+    efl_fields = [{"column": 0, "field": "ID", "kind": "id"}]
+    efl_fields.extend(
+        {
+            "column": 6 + index,
+            "field": f"rel_freq {level}",
+            "kind": "number",
+        }
+        for index, level in enumerate(levels)
+    )
+    efl_fields.extend(
+        {
+            "column": 12 + index,
+            "field": f"range {level}",
+            "integer": True,
+            "kind": "number",
+        }
+        for index, level in enumerate(levels)
+    )
+    corpus_fields = [
+        {
+            "column": 6 + index,
+            "field": f"corpus words {level}",
+            "integer": True,
+            "kind": "number",
+            "minimum": 0,
+            "required": True,
+        }
+        for index, level in enumerate(levels)
+    ]
+    expected_books = (17, 21, 26, 23, 8)
+    corpus_fields.extend(
+        {
+            "column": 12 + index,
+            "expected": expected_books[index],
+            "field": f"corpus books {level}",
+            "integer": True,
+            "kind": "number",
+            "required": True,
+        }
+        for index, level in enumerate(levels)
+    )
+
+    sources: list[tuple[int, str, int, list[Any], list[dict[str, Any]]]] = []
+    item_specifications = [
+        {"column": item_headers[key], **specification}
+        for key, specification in item_fields.items()
+    ]
+    teacher_specifications = [
+        {"column": teacher_headers[key], **specification}
+        for key, specification in teacher_fields.items()
+    ]
+    for row_number, row in enumerate(item_rows, start=3):
+        sources.append((0, "ITEM LIST", row_number, list(row), item_specifications))
+    for row_number, row in enumerate(teacher_rows, start=3):
+        sources.append((1, "教員版", row_number, list(row), teacher_specifications))
+    sources.append((2, "EFL SUMMARY (FULL)", 1, corpus_row, corpus_fields))
+    for row_number, row in enumerate(efl_rows, start=4):
+        sources.append((2, "EFL SUMMARY (FULL)", row_number, list(row), efl_fields))
+
+    problems: list[dict[str, Any]] = []
+    for sheet_order, sheet_name, row_number, row, specifications in sources:
+        for specification in specifications:
+            column_index = specification["column"]
+            value = row[column_index] if column_index < len(row) else None
+            reason = grammar_value_reason(value, specification)
+            if reason is not None:
+                problems.append(
+                    {
+                        "cell": (
+                            f"{sheet_name}!{excel_column_name(column_index)}{row_number}"
+                        ),
+                        "column": column_index,
+                        "field": specification["field"],
+                        "reason": reason,
+                        "row": row_number,
+                        "sheet_order": sheet_order,
+                    }
+                )
+    problems.sort(
+        key=lambda problem: (
+            problem["sheet_order"],
+            problem["row"],
+            problem["column"],
+        )
+    )
+    return [
+        {
+            key: value
+            for key, value in problem.items()
+            if key not in {"column", "row", "sheet_order"}
+        }
+        for problem in problems
+    ]
+
+
+def raise_grammar_value_problems(problems: list[dict[str, Any]]) -> None:
+    if not problems:
+        return
+    rendered = "; ".join(
+        f"{problem['cell']} {problem['reason']}" for problem in problems
+    )
+    raise CliFailure(
+        "E-DATA-06",
+        f"E-DATA-06 Grammar Profile原本の値が不正です: {rendered}",
+        detail={"file": GRAMMAR_FILE, "problems": problems},
+    )
+
+
+def collect_grammar_id_problems(
+    item_rows: list[tuple[Any, ...]],
+    teacher_rows: list[tuple[Any, ...]],
+    efl_rows: list[tuple[Any, ...]],
+    item_headers: dict[str, int],
+    teacher_headers: dict[str, int],
+) -> list[dict[str, Any]]:
+    sheet_inputs = (
+        (0, "ITEM LIST", item_rows, 3, item_headers["ID"]),
+        (1, "教員版", teacher_rows, 3, teacher_headers["ID"]),
+        (2, "EFL SUMMARY (FULL)", efl_rows, 4, 0),
+    )
+    occurrences_by_sheet: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for _sheet_order, sheet_name, rows, start_row, column_index in sheet_inputs:
+        occurrences: dict[str, list[dict[str, Any]]] = {}
+        for row_number, row in enumerate(rows, start=start_row):
+            item_id = normalized_id(row[column_index], field=f"{sheet_name} ID")
+            occurrences.setdefault(item_id, []).append(
+                {
+                    "cell": (
+                        f"{sheet_name}!{excel_column_name(column_index)}{row_number}"
+                    ),
+                    "row": row_number,
+                }
+            )
+        occurrences_by_sheet[sheet_name] = occurrences
+
+    item_ids = set(occurrences_by_sheet["ITEM LIST"])
+    problems: list[dict[str, Any]] = []
+    for sheet_order, sheet_name, _rows, _start_row, _column_index in sheet_inputs:
+        occurrences = occurrences_by_sheet[sheet_name]
+        for item_id, locations in occurrences.items():
+            if len(locations) > 1:
+                problems.append(
+                    {
+                        "cells": [location["cell"] for location in locations],
+                        "id": item_id,
+                        "kind": "duplicate_id",
+                        "row": locations[0]["row"],
+                        "sheet": sheet_name,
+                        "sheet_order": sheet_order,
+                    }
+                )
+            if sheet_name == "ITEM LIST" or item_id in item_ids:
+                continue
+            for location in locations:
+                problems.append(
+                    {
+                        "cell": location["cell"],
+                        "id": item_id,
+                        "kind": "missing_item_list_id",
+                        "row": location["row"],
+                        "sheet": sheet_name,
+                        "sheet_order": sheet_order,
+                    }
+                )
+    problems.sort(
+        key=lambda problem: (
+            problem["sheet_order"],
+            problem["row"],
+            problem["id"],
+            problem["kind"],
+        )
+    )
+    return [
+        {
+            key: value
+            for key, value in problem.items()
+            if key not in {"row", "sheet_order"}
+        }
+        for problem in problems
+    ]
+
+
+def raise_grammar_id_problems(problems: list[dict[str, Any]]) -> None:
+    if not problems:
+        return
+    rendered: list[str] = []
+    for problem in problems:
+        if problem["kind"] == "duplicate_id":
+            rendered.append(
+                f"{problem['sheet']} ID重複 {problem['id']}: "
+                f"{', '.join(problem['cells'])}"
+            )
+        else:
+            rendered.append(
+                f"{problem['cell']} IDがITEM LISTにありません: {problem['id']}"
+            )
+    raise CliFailure(
+        "E-DATA-06",
+        "E-DATA-06 Grammar Profile原本のID結合が不正です: "
+        + "; ".join(rendered),
+        detail={"file": GRAMMAR_FILE, "problems": problems},
+    )
+
+
+def build_grammar(
+    source_path: Path,
+    *,
+    data_version: str,
+) -> tuple[dict[str, Any], dict[str, int]]:
     workbook = load_workbook(source_path)
     try:
         ensure_sheets(
@@ -887,6 +2001,25 @@ def build_grammar(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
             raise ValueError(
                 f"データ行数不一致: ITEM LIST={len(item_rows)}、教員版={len(teacher_rows)}、EFL={len(efl_rows)}"
             )
+
+        corpus_row = [cell.value for cell in efl_sheet[1]]
+        grammar_value_problems = collect_grammar_value_problems(
+            item_rows,
+            teacher_rows,
+            efl_rows,
+            corpus_row,
+            item_headers,
+            teacher_headers,
+        )
+        raise_grammar_value_problems(grammar_value_problems)
+        grammar_id_problems = collect_grammar_id_problems(
+            item_rows,
+            teacher_rows,
+            efl_rows,
+            item_headers,
+            teacher_headers,
+        )
+        raise_grammar_id_problems(grammar_id_problems)
 
         item_by_id: dict[str, dict[str, Any]] = {}
         for row_number, row in enumerate(item_rows, start=3):
@@ -989,7 +2122,6 @@ def build_grammar(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
             }
             efl_by_id[item_id] = {"range": ranges, "rel_freq": rel_freq}
 
-        corpus_row = [cell.value for cell in efl_sheet[1]]
         words = {
             level: numeric_value(corpus_row[6 + index], field=f"EFL corpus words/{level}", integer=True)
             for index, level in enumerate(levels)
@@ -1007,10 +2139,27 @@ def build_grammar(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
         child_ids = {item_id for item_id in item_by_id if "-" in item_id}
         if len(parent_ids) != 263 or len(child_ids) != 238:
             raise ValueError(f"親子件数が不一致です: 親{len(parent_ids)}、枝番{len(child_ids)}")
-        for child_id in child_ids:
-            parent_id = child_id.split("-", 1)[0]
-            if parent_id not in parent_ids:
-                raise ValueError(f"枝番の親IDがありません: {child_id} -> {parent_id}")
+        missing_parents = sorted(
+            [
+                {
+                    "child_id": child_id,
+                    "parent_id": child_id.split("-", 1)[0],
+                }
+                for child_id in child_ids
+                if child_id.split("-", 1)[0] not in parent_ids
+            ],
+            key=lambda item: tuple(int(part) for part in item["child_id"].split("-")),
+        )
+        if missing_parents:
+            rendered = "; ".join(
+                f"{item['child_id']} -> {item['parent_id']}"
+                for item in missing_parents
+            )
+            raise CliFailure(
+                "E-DATA-06",
+                f"E-DATA-06 枝番の親IDがありません: {rendered}",
+                detail={"missing_parents": missing_parents},
+            )
 
         missing_direct_parents = parent_ids - set(teacher_by_id)
         if missing_direct_parents != UNASSIGNED_PARENT_IDS:
@@ -1088,7 +2237,7 @@ def build_grammar(source_path: Path) -> tuple[dict[str, Any], dict[str, int]]:
 
         entries.sort(key=grammar_sort_key)
         grammar = {
-            "data_version": DATA_VERSION,
+            "data_version": data_version,
             "efl_corpus": {"books": books, "words": words},
             "entries": entries,
             "schema_version": SCHEMA_VERSION,
@@ -1119,16 +2268,13 @@ def build_meta(
     sources: list[dict[str, str]],
     checksums: dict[str, str],
     *,
+    data_version: str,
     model_version: str,
     lexicon_count: int,
     group_count: int,
     grammar_count: int,
     target_count: int,
 ) -> dict[str, Any]:
-    source_versions = {
-        "wordlist": "1.6",
-        "grammar_profile": "20200220",
-    }
     return {
         "counts": {
             "grammar_items": grammar_count,
@@ -1136,7 +2282,7 @@ def build_meta(
             "lexicon_groups": group_count,
             "target_eligible": target_count,
         },
-        "data_version": DATA_VERSION,
+        "data_version": data_version,
         "pipeline_version": PIPELINE_VERSION,
         "sources": [
             {
@@ -1145,7 +2291,7 @@ def build_meta(
                 "role": source["role"],
                 "sha256": checksums[source["file"]],
                 "url": source["url"],
-                "version_label": source_versions[source["role"]],
+                "version_label": source["version_label"],
             }
             for source in sources
         ],
@@ -1153,7 +2299,11 @@ def build_meta(
     }
 
 
-def validate_meta_document(meta: Any) -> list[str]:
+def validate_meta_document(
+    meta: Any,
+    *,
+    expected_data_version: str | None = None,
+) -> list[str]:
     problems: list[str] = []
     if not isinstance(meta, dict) or set(meta) != {
         "counts",
@@ -1163,15 +2313,28 @@ def validate_meta_document(meta: Any) -> list[str]:
         "spacy_model",
     }:
         return ["トップレベルキーがNRM-29と一致しません"]
-    if meta.get("data_version") != DATA_VERSION:
-        problems.append("data_versionが不一致です")
-    if meta.get("pipeline_version") != PIPELINE_VERSION:
-        problems.append("pipeline_versionが不一致です")
+    data_version = meta.get("data_version")
+    if not isinstance(data_version, str) or not DATA_VERSION_PATTERN.fullmatch(data_version):
+        problems.append("data_versionの書式が不正です")
+    elif expected_data_version is not None and data_version != expected_data_version:
+        problems.append(f"data_versionが期待値と不一致です: {data_version} != {expected_data_version}")
+    pipeline_version = meta.get("pipeline_version")
+    if not isinstance(pipeline_version, str) or not SEMVER_PATTERN.fullmatch(pipeline_version):
+        problems.append("pipeline_versionの書式が不正です")
     model = meta.get("spacy_model")
     if not isinstance(model, dict) or set(model) != {"name", "version"}:
         problems.append("spacy_modelの構造が不正です")
-    elif model.get("name") != MODEL_NAME or not isinstance(model.get("version"), str):
-        problems.append("spacy_modelの値が不正です")
+    else:
+        if model.get("name") != MODEL_NAME:
+            problems.append(
+                f"spacy_model.nameが期待値と不一致です: "
+                f"期待{MODEL_NAME} 実測{model.get('name')}"
+            )
+        if model.get("version") != MODEL_VERSION:
+            problems.append(
+                f"spacy_model.versionが期待値と不一致です: "
+                f"期待{MODEL_VERSION} 実測{model.get('version')}"
+            )
     counts = meta.get("counts")
     count_keys = {"lexicon_entries", "lexicon_groups", "grammar_items", "target_eligible"}
     if not isinstance(counts, dict) or set(counts) != count_keys:
@@ -1179,28 +2342,139 @@ def validate_meta_document(meta: Any) -> list[str]:
     elif any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts.values()):
         problems.append("countsに0以上の整数でない値があります")
     sources = meta.get("sources")
-    expected = (("wordlist", WORDLIST_FILE, "1.6"), ("grammar_profile", GRAMMAR_FILE, "20200220"))
+    expected = (("wordlist", WORDLIST_FILE), ("grammar_profile", GRAMMAR_FILE))
+    source_versions: dict[str, str] = {}
     if not isinstance(sources, list) or len(sources) != 2:
         problems.append("sourcesは2要素でなければなりません")
     else:
-        for index, (role, file_name, version_label) in enumerate(expected):
+        for index, (role, file_name) in enumerate(expected):
             source = sources[index]
             required_keys = {"role", "file", "sha256", "version_label", "url", "retrieved_date"}
             if not isinstance(source, dict) or set(source) != required_keys:
                 problems.append(f"sources[{index}]の構造が不正です")
                 continue
-            if source["role"] != role or source["file"] != file_name or source["version_label"] != version_label:
+            if source["role"] != role or source["file"] != file_name:
                 problems.append(f"sources[{index}]の固定値が不正です")
+            version_label = source.get("version_label")
+            if not isinstance(version_label, str) or not VERSION_LABEL_PATTERN.fullmatch(version_label):
+                problems.append(f"sources[{index}].version_labelが不正です")
+            else:
+                source_versions[role] = version_label
             if not isinstance(source["sha256"], str) or not SHA256_PATTERN.fullmatch(source["sha256"]):
                 problems.append(f"sources[{index}].sha256が不正です")
             if not isinstance(source["url"], str) or not re.match(r"^https?://", source["url"]):
                 problems.append(f"sources[{index}].urlが不正です")
             if not isinstance(source["retrieved_date"], str) or not DATE_PATTERN.fullmatch(source["retrieved_date"]):
                 problems.append(f"sources[{index}].retrieved_dateが不正です")
+    if (
+        isinstance(pipeline_version, str)
+        and SEMVER_PATTERN.fullmatch(pipeline_version)
+        and set(source_versions) == {"wordlist", "grammar_profile"}
+    ):
+        derived_data_version = compose_data_version(
+            source_versions["wordlist"],
+            source_versions["grammar_profile"],
+            pipeline_version,
+        )
+        if data_version != derived_data_version:
+            problems.append(
+                f"data_versionがsourcesとpipeline_versionからの導出値に不一致です: "
+                f"{data_version} != {derived_data_version}"
+            )
     return problems
 
 
-def validate_normalized_set(repo_root: Path, normalized_dir: Path) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+def one_line_text(value: Any) -> str:
+    return " ".join(str(value).splitlines())
+
+
+def render_normalized_problems(
+    problems: list[Any],
+    current_mismatches: list[dict[str, str]],
+) -> str:
+    rendered: list[str] = []
+    for problem in problems:
+        if "lexicon" in problem or "grammar" in problem:
+            target = "lexicon" if "lexicon" in problem else "grammar"
+            errors = problem[target]
+            total = problem["total"]
+            error_text = ", ".join(
+                f"{error['json_pointer'] or '/'} {one_line_text(error['message'])}"
+                for error in errors
+            )
+            qualifier = f"先頭{len(errors)}件: " if total > len(errors) else ""
+            rendered.append(
+                f"{target}スキーマ違反（総数{total}件）: {qualifier}{error_text}"
+            )
+        elif "meta" in problem:
+            rendered.extend(
+                f"meta不整合: {one_line_text(message)}"
+                for message in problem["meta"]
+            )
+        elif "data_versions" in problem:
+            values = json.dumps(
+                problem["data_versions"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            rendered.append(f"3ファイルのdata_versionが不一致です: {values}")
+        elif "actual_counts" in problem:
+            expected = json.dumps(
+                problem["actual_counts"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            actual = json.dumps(
+                problem["meta_counts"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            rendered.append(f"meta.counts不一致: 期待{expected} 実測{actual}")
+        elif "count_error" in problem:
+            rendered.append(f"件数検査不能: {one_line_text(problem['count_error'])}")
+        else:
+            rendered.append(
+                json.dumps(
+                    problem,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+    rendered.extend(
+        f"{item['field']} 期待{item['expected']} 実測{item['actual']}"
+        for item in current_mismatches
+    )
+    return "; ".join(rendered)
+
+
+def raise_normalized_data_failure(
+    normalized_dir: Path,
+    problems: list[Any],
+    current_mismatches: list[dict[str, str]],
+) -> None:
+    detail: dict[str, Any] = {"problems": problems}
+    if current_mismatches:
+        detail["mismatches"] = current_mismatches
+    raise CliFailure(
+        "E-DATA-04",
+        "E-DATA-04 正規化データのスキーマ・内部整合・現在値との整合が不正です: "
+        f"{normalized_dir}: {render_normalized_problems(problems, current_mismatches)}",
+        detail=detail,
+    )
+
+
+def validate_normalized_set(
+    repo_root: Path,
+    normalized_dir: Path,
+    *,
+    expected_data_version: str | None = None,
+    expected_pipeline_version: str | None = None,
+    expected_source_versions: dict[str, str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     missing = [name for name in NORMALIZED_FILE_NAMES if not (normalized_dir / name).is_file()]
     if missing:
         raise CliFailure(
@@ -1222,9 +2496,68 @@ def validate_normalized_set(repo_root: Path, normalized_dir: Path) -> tuple[dict
         problems.append({"grammar": grammar_errors[:50], "total": len(grammar_errors)})
     if meta_errors:
         problems.append({"meta": meta_errors})
-    versions = {lexicon.get("data_version"), grammar.get("data_version"), meta.get("data_version")}
-    if versions != {DATA_VERSION}:
-        problems.append({"data_versions": sorted(str(value) for value in versions)})
+    current_mismatches: list[dict[str, str]] = []
+
+    def compare_current(field: str, expected: str, actual: str) -> None:
+        if actual != expected:
+            current_mismatches.append(
+                {"actual": actual, "expected": expected, "field": field}
+            )
+
+    def safe_data_version(document: Any) -> str | None:
+        if isinstance(document, dict) and isinstance(document.get("data_version"), str):
+            return document["data_version"]
+        return None
+
+    lexicon_data_version = safe_data_version(lexicon)
+    grammar_data_version = safe_data_version(grammar)
+    meta_data_version = safe_data_version(meta)
+    if expected_data_version is not None and lexicon_data_version is not None:
+        compare_current("lexicon.data_version", expected_data_version, lexicon_data_version)
+    if expected_data_version is not None and grammar_data_version is not None:
+        compare_current("grammar.data_version", expected_data_version, grammar_data_version)
+    if expected_data_version is not None and meta_data_version is not None:
+        compare_current("meta.data_version", expected_data_version, meta_data_version)
+    if (
+        expected_pipeline_version is not None
+        and isinstance(meta, dict)
+        and isinstance(meta.get("pipeline_version"), str)
+    ):
+        compare_current(
+            "meta.pipeline_version",
+            expected_pipeline_version,
+            meta["pipeline_version"],
+        )
+    if expected_source_versions is not None and isinstance(meta, dict):
+        sources = meta.get("sources")
+        meta_sources: dict[str, Any] = {}
+        if isinstance(sources, list):
+            meta_sources = {
+                source.get("role"): source
+                for source in sources
+                if isinstance(source, dict) and isinstance(source.get("role"), str)
+            }
+        for role in ("wordlist", "grammar_profile"):
+            source = meta_sources.get(role)
+            if isinstance(source, dict) and isinstance(source.get("version_label"), str):
+                compare_current(
+                    f"meta.sources[{role}].version_label",
+                    expected_source_versions[role],
+                    source["version_label"],
+                )
+    if all(
+        value is not None
+        for value in (lexicon_data_version, grammar_data_version, meta_data_version)
+    ):
+        versions = {
+            lexicon_data_version,
+            grammar_data_version,
+            meta_data_version,
+        }
+        if len(versions) != 1:
+            problems.append({"data_versions": sorted(versions)})
+    if problems or current_mismatches:
+        raise_normalized_data_failure(normalized_dir, problems, current_mismatches)
     try:
         expected_counts = {
             "grammar_items": len(grammar["entries"]),
@@ -1237,11 +2570,7 @@ def validate_normalized_set(repo_root: Path, normalized_dir: Path) -> tuple[dict
     except (KeyError, TypeError) as exc:
         problems.append({"count_error": str(exc)})
     if problems:
-        raise CliFailure(
-            "E-DATA-04",
-            f"E-DATA-04 正規化データのスキーマまたは内部整合が不正です: {normalized_dir}",
-            detail={"problems": problems},
-        )
+        raise_normalized_data_failure(normalized_dir, problems, [])
     return lexicon, grammar, meta
 
 
@@ -1281,22 +2610,191 @@ def build_diff(
     }
 
 
-def atomic_write_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = canonical_json_text(value)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
-    )
-    temporary = Path(temporary_name)
+def stage_json_text(path: Path, text: str) -> Path:
+    descriptor: int | None = None
+    temporary: Path | None = None
     try:
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        )
+        temporary = Path(temporary_name)
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            descriptor = None
             stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary.exists():
-            temporary.unlink()
+        return temporary
+    except OSError as exc:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
+
+
+def backup_regular_file(path: Path) -> Path:
+    descriptor: int | None = None
+    backup: Path | None = None
+    try:
+        descriptor, backup_name = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".backup", dir=path.parent
+        )
+        backup = Path(backup_name)
+        os.close(descriptor)
+        descriptor = None
+        backup.unlink()
+        os.link(path, backup)
+        return backup
+    except OSError:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if backup is not None:
+            try:
+                backup.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
+
+
+def cleanup_temporary_paths(paths: Iterable[Path]) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def validate_output_targets(out_dir: Path) -> None:
+    invalid: list[dict[str, str]] = []
+    for file_name in NORMALIZED_FILE_NAMES:
+        path = out_dir / file_name
+        if path.is_symlink():
+            invalid.append({"entry_type": "symlink", "path": str(path)})
+        elif path.exists() and not path.is_file():
+            invalid.append({"entry_type": "通常ファイル以外", "path": str(path)})
+    if invalid:
+        details = "; ".join(
+            f"{item['path']} ({item['entry_type']})" for item in invalid
+        )
+        raise CliFailure(
+            "E-ENV-05",
+            f"E-ENV-05 正規化JSONの最終パスを置換できません: {details}",
+            detail={"invalid_targets": invalid},
+        )
+
+
+def write_normalized_set(out_dir: Path, output_texts: dict[str, str]) -> None:
+    staged: dict[str, Path] = {}
+    backups: dict[str, Path] = {}
+    committed: list[str] = []
+    active_path = out_dir
+    phase = "一時ファイル準備"
+    try:
+        for file_name in NORMALIZED_FILE_NAMES:
+            active_path = out_dir / file_name
+            staged[file_name] = stage_json_text(active_path, output_texts[file_name])
+
+        validate_output_targets(out_dir)
+        phase = "既存ファイル退避"
+        for file_name in NORMALIZED_FILE_NAMES:
+            active_path = out_dir / file_name
+            if active_path.exists():
+                backups[file_name] = backup_regular_file(active_path)
+
+        phase = "確定"
+        for file_name in NORMALIZED_FILE_NAMES:
+            active_path = out_dir / file_name
+            os.replace(staged[file_name], active_path)
+            del staged[file_name]
+            committed.append(file_name)
+    except CliFailure:
+        cleanup_temporary_paths(staged.values())
+        cleanup_temporary_paths(backups.values())
+        raise
+    except OSError as exc:
+        rollback_errors: list[dict[str, str]] = []
+        preserved_backups: set[Path] = set()
+        for file_name in reversed(committed):
+            path = out_dir / file_name
+            try:
+                if file_name in backups:
+                    os.replace(backups[file_name], path)
+                    del backups[file_name]
+                else:
+                    path.unlink(missing_ok=True)
+            except OSError as rollback_exc:
+                problem = {"error": str(rollback_exc), "path": str(path)}
+                if file_name in backups:
+                    backup = backups[file_name]
+                    preserved_backups.add(backup)
+                    problem["backup_path"] = str(backup)
+                rollback_errors.append(problem)
+        cleanup_temporary_paths(staged.values())
+        cleanup_temporary_paths(
+            backup for backup in backups.values() if backup not in preserved_backups
+        )
+        restoration = (
+            "復元にも失敗しました"
+            if rollback_errors
+            else "更新前の正規化セットへ復元しました"
+        )
+        detail: dict[str, Any] = {
+            "error": str(exc),
+            "path": str(active_path),
+            "phase": phase,
+        }
+        if rollback_errors:
+            detail["rollback_errors"] = rollback_errors
+        raise CliFailure(
+            "E-ENV-05",
+            f"E-ENV-05 正規化JSONの{phase}に失敗し、{restoration}: "
+            f"{active_path} ({exc})",
+            detail=detail,
+        ) from exc
+    cleanup_temporary_paths(backups.values())
+
+
+def ensure_output_writable(out_dir: Path) -> None:
+    descriptor: int | None = None
+    probe: Path | None = None
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        if not out_dir.is_dir():
+            raise NotADirectoryError(f"ディレクトリではありません: {out_dir}")
+        validate_output_targets(out_dir)
+        descriptor, probe_name = tempfile.mkstemp(prefix=".write-check.", dir=out_dir)
+        probe = Path(probe_name)
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = None
+            stream.write(b"doctor")
+            stream.flush()
+            os.fsync(stream.fileno())
+        probe.unlink()
+    except OSError as exc:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if probe is not None:
+            try:
+                probe.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise CliFailure(
+            "E-ENV-05",
+            f"E-ENV-05 出力ディレクトリを作成または書き込みできません: {out_dir} ({exc})",
+            detail={"error": str(exc), "path": str(out_dir)},
+        ) from exc
 
 
 def relative_path(path: Path, repo_root: Path) -> str:
@@ -1355,7 +2853,11 @@ def run(argv: list[str] | None = None) -> int:
     if not out_dir.is_absolute():
         out_dir = repo_root / out_dir
 
+    if not args.dry_run and not args.diff:
+        ensure_output_writable(out_dir)
+
     sources = load_sources(source_dir)
+    data_version = source_data_version(sources)
     checksums = source_checksums(source_dir)
     if args.diff:
         missing = [name for name in NORMALIZED_FILE_NAMES if not (out_dir / name).is_file()]
@@ -1365,8 +2867,21 @@ def run(argv: list[str] | None = None) -> int:
                 f"E-INPUT-02 --diffに必要な既存正規化データがありません: {', '.join(missing)}",
                 detail={"missing": missing, "out_dir": str(out_dir)},
             )
-    existing_checksums = existing_meta_checksums(out_dir / "meta.json")
-    if existing_checksums is not None:
+    existing_meta = existing_meta_document(out_dir / "meta.json")
+    if existing_meta is not None:
+        if args.diff and existing_meta["problems"]:
+            raise CliFailure(
+                "E-DATA-04",
+                f"E-DATA-04 --diffに必要な既存meta.jsonがNRM-29に適合しません: {out_dir / 'meta.json'}",
+                detail={
+                    "path": str(out_dir / "meta.json"),
+                    "problems": existing_meta["problems"],
+                },
+                remedy=existing_meta_restore_remedy(out_dir / "meta.json"),
+            )
+        existing_checksums = {
+            source["file"]: source["sha256"] for source in existing_meta["sources"]
+        }
         mismatches = checksum_mismatches(existing_checksums, checksums)
         if mismatches and not args.diff and not args.accept_source_change:
             details = "; ".join(
@@ -1378,12 +2893,65 @@ def run(argv: list[str] | None = None) -> int:
                 f"E-DATA-02 原本チェックサムがmeta.jsonと一致しません: {details}",
                 detail={"mismatches": mismatches},
             )
+        if mismatches and args.accept_source_change:
+            old_versions = {
+                source["file"]: source["version_label"] for source in existing_meta["sources"]
+            }
+            new_versions = {source["file"]: source["version_label"] for source in sources}
+            missing_old_versions = [
+                item["file"]
+                for item in mismatches
+                if old_versions[item["file"]] is None
+            ]
+            if missing_old_versions:
+                raise CliFailure(
+                    "E-DATA-04",
+                    "E-DATA-04 --accept-source-changeの安全確認に必要な既存版を"
+                    f"meta.jsonから取得できません: {', '.join(missing_old_versions)}",
+                    detail={
+                        "files": missing_old_versions,
+                        "path": str(out_dir / "meta.json"),
+                    },
+                    remedy=existing_meta_restore_remedy(out_dir / "meta.json"),
+                )
+            unchanged_versions = [
+                {
+                    "actual": item["actual"],
+                    "expected": item["expected"],
+                    "file": item["file"],
+                    "new_version": new_versions[item["file"]],
+                    "old_version": old_versions[item["file"]],
+                }
+                for item in mismatches
+                if new_versions[item["file"]] == old_versions[item["file"]]
+            ]
+            if unchanged_versions:
+                details = "; ".join(
+                    f"{item['file']} 期待SHA-256 {item['expected']} 実測SHA-256 {item['actual']} "
+                    f"旧版{item['old_version']} 新版{item['new_version']}"
+                    for item in unchanged_versions
+                )
+                raise CliFailure(
+                    "E-DATA-02",
+                    f"E-DATA-02 原本チェックサム変更に対してversion_labelが未更新です: {details}",
+                    detail={
+                        "mismatches": mismatches,
+                        "unchanged_versions": unchanged_versions,
+                    },
+                )
 
-    lexicon, lexicon_stats = build_lexicon(source_dir / WORDLIST_FILE)
-    grammar, grammar_stats = build_grammar(source_dir / GRAMMAR_FILE)
+    lexicon, lexicon_stats = build_lexicon(
+        source_dir / WORDLIST_FILE,
+        data_version=data_version,
+    )
+    grammar, grammar_stats = build_grammar(
+        source_dir / GRAMMAR_FILE,
+        data_version=data_version,
+    )
     meta = build_meta(
         sources,
         checksums,
+        data_version=data_version,
         model_version=model_version,
         lexicon_count=lexicon_stats["entries"],
         group_count=lexicon_stats["groups"],
@@ -1400,7 +2968,7 @@ def run(argv: list[str] | None = None) -> int:
         repo_root / "schemas/normalized_grammar.schema.json",
         "normalized_grammar",
     )
-    meta_problems = validate_meta_document(meta)
+    meta_problems = validate_meta_document(meta, expected_data_version=data_version)
     if meta_problems:
         raise CliFailure(
             "E-DATA-06",
@@ -1420,17 +2988,22 @@ def run(argv: list[str] | None = None) -> int:
             "grammar.json": grammar,
             "meta.json": meta,
         }
-        for file_name in NORMALIZED_FILE_NAMES:
-            path = out_dir / file_name
-            atomic_write_json(path, output_values[file_name])
-            written.append(relative_path(path, repo_root))
+        output_texts = {
+            file_name: canonical_json_text(output_values[file_name])
+            for file_name in NORMALIZED_FILE_NAMES
+        }
+        write_normalized_set(out_dir, output_texts)
+        written.extend(
+            relative_path(out_dir / file_name, repo_root)
+            for file_name in NORMALIZED_FILE_NAMES
+        )
 
     summary = {
         "counts": {
             "grammar_items": grammar_stats["entries"],
             "lexicon_entries": lexicon_stats["entries"],
         },
-        "data_version": DATA_VERSION,
+        "data_version": data_version,
         "diff": diff,
         "source_checksums": checksums,
         "written": written,

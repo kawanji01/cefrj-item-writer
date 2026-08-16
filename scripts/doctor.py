@@ -17,18 +17,21 @@ from build_normalized import (
     MODEL_NAME,
     MODEL_VERSION,
     NORMALIZED_FILE_NAMES,
+    PIPELINE_VERSION,
     REQUIRED_PACKAGES,
     SCHEMA_FILES,
     SOURCE_FILE_NAMES,
     CliFailure,
-    canonical_json_text,
     checksum_mismatches,
     dependency_issues,
+    emit_json,
     load_json_file,
     load_sources,
     load_spacy_model,
     schema_errors,
     source_checksums,
+    source_data_version,
+    strict_json_loads,
     validate_meta_document,
     validate_normalized_set,
 )
@@ -41,10 +44,10 @@ REMEDIES = {
     "E-ENV-04": "リポジトリルートに移動してください。ファイル欠落時は git status で確認し git checkout で復元してください。",
     "E-ENV-05": "output/の権限と空き容量を確認してください。",
     "E-ENV-06": "docs/cross-agent-compatibility.mdに従い、.claude/agents/またはcodexコマンドの配線を整備してください。",
-    "E-DATA-01": "原本2ファイルを固定名でdata/source/に配置し、sources.jsonに入手URLとダウンロード日を記入してください。",
-    "E-DATA-02": "意図的な原本更新は python scripts/build_normalized.py --diff で確認後、python scripts/build_normalized.py --accept-source-change を実行してください。意図しない場合は正しい原本を配置し直してください。",
+    "E-DATA-01": "原本2ファイルを固定名でdata/source/に配置し、sources.jsonに原本版・入手URL・ダウンロード日を記入してください。",
+    "E-DATA-02": "意図的な原本更新はsources.jsonの対応するversion_labelも更新し、python scripts/build_normalized.py --diff で確認後、python scripts/build_normalized.py --accept-source-change を実行してください。意図しない場合は正しい原本を配置し直してください。",
     "E-DATA-03": "git checkoutで復元するか、python scripts/build_normalized.py を実行してください。",
-    "E-DATA-04": "python scripts/build_normalized.py で再ビルドしてください。再発時は正規化パイプラインの不具合として報告してください。",
+    "E-DATA-04": "python scripts/build_normalized.py で再ビルドしてください。同じE-DATA-04で停止する場合は git checkout -- data/normalized/meta.json でコミット済みmetaを復元してから再ビルドしてください。再発時は正規化パイプラインの不具合として報告してください。",
     "E-DATA-05": "git checkoutで設定を復元し、M3以降は python scripts/validate.py --schema config_limits --file data/config/limits.json で違反箇所を確認してください。",
 }
 
@@ -160,8 +163,8 @@ def check_repository(repo_root: Path) -> dict[str, Any]:
             problems.append(f"schemas/{schema_name}")
             continue
         try:
-            json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+            strict_json_loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
             problems.append(f"schemas/{schema_name}（破損）")
     if problems:
         return failed(
@@ -208,14 +211,13 @@ def check_source_checksums(repo_root: Path) -> dict[str, Any]:
     try:
         actual = source_checksums(source_dir)
     except CliFailure as exc:
-        return failed("D07", name, "E-DATA-02", f"E-DATA-02 原本SHA-256を計算できません: {exc.message}")
+        return failed("D07", name, exc.error_code, exc.message)
     if not meta_path.is_file():
-        actual_text = ", ".join(f"{key}={value}" for key, value in actual.items())
         return failed(
             "D07",
             name,
-            "E-DATA-02",
-            f"E-DATA-02 原本チェックサムの期待値を取得できません: {meta_path.relative_to(repo_root)}、実測{actual_text}",
+            "E-DATA-03",
+            f"E-DATA-03 正規化データが欠落しています: {meta_path.relative_to(repo_root)}",
         )
     try:
         meta = load_json_file(meta_path, "E-DATA-04")
@@ -223,12 +225,14 @@ def check_source_checksums(repo_root: Path) -> dict[str, Any]:
         if meta_problems:
             raise ValueError("; ".join(meta_problems))
         expected = {source["file"]: source["sha256"] for source in meta["sources"]}
-    except (CliFailure, KeyError, TypeError, ValueError) as exc:
+    except CliFailure as exc:
+        return failed("D07", name, exc.error_code, exc.message)
+    except (KeyError, TypeError, ValueError) as exc:
         return failed(
             "D07",
             name,
-            "E-DATA-02",
-            f"E-DATA-02 meta.jsonから期待チェックサムを取得できません: {exc}",
+            "E-DATA-04",
+            f"E-DATA-04 meta.jsonから期待チェックサムを取得できません: {exc}",
         )
     mismatches = checksum_mismatches(expected, actual)
     if mismatches:
@@ -261,14 +265,23 @@ def check_normalized_presence(repo_root: Path) -> dict[str, Any]:
 def check_normalized_integrity(repo_root: Path) -> dict[str, Any]:
     name = "正規化データ整合"
     try:
-        lexicon, grammar, meta = validate_normalized_set(repo_root, repo_root / "data/normalized")
-    except Exception as exc:
-        message = exc.message if isinstance(exc, CliFailure) else str(exc)
-        return failed("D09", name, "E-DATA-04", f"E-DATA-04 正規化データが不整合です: {message}")
+        sources = load_sources(repo_root / "data/source")
+        expected_source_versions = {
+            source["role"]: source["version_label"] for source in sources
+        }
+        lexicon, grammar, meta = validate_normalized_set(
+            repo_root,
+            repo_root / "data/normalized",
+            expected_data_version=source_data_version(sources),
+            expected_pipeline_version=PIPELINE_VERSION,
+            expected_source_versions=expected_source_versions,
+        )
+    except CliFailure as exc:
+        return failed("D09", name, exc.error_code, exc.message)
     return passed(
         "D09",
         name,
-        "スキーマ・data_version・件数を確認しました: "
+        "スキーマ・現在の入力版・パイプライン版・data_version・件数を確認しました: "
         f"lexicon={len(lexicon['entries'])}, grammar={len(grammar['entries'])}, version={meta['data_version']}",
     )
 
@@ -322,11 +335,21 @@ def check_schemas(repo_root: Path) -> dict[str, Any]:
     for schema_name in SCHEMA_FILES:
         path = repo_root / "schemas" / schema_name
         try:
-            schema = json.loads(path.read_text(encoding="utf-8"))
+            schema = strict_json_loads(path.read_text(encoding="utf-8"))
+            if not isinstance(schema, dict):
+                raise ValueError("トップレベルがobjectではありません")
             if schema.get("$schema") != "https://json-schema.org/draft/2020-12/schema":
                 raise ValueError("$schemaがdraft 2020-12ではありません")
             jsonschema.Draft202012Validator.check_schema(schema)
-        except (OSError, UnicodeError, json.JSONDecodeError, ValueError, schema_error) as exc:
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ValueError,
+            TypeError,
+            AttributeError,
+            schema_error,
+        ) as exc:
             problems.append(f"{schema_name}: {exc}")
     if problems:
         return failed(
@@ -340,17 +363,21 @@ def check_schemas(repo_root: Path) -> dict[str, Any]:
 
 def check_reviewer_wiring(repo_root: Path) -> dict[str, Any]:
     name = "レビュアー配線"
-    agents_dir = repo_root / ".claude/agents"
-    agent_files = sorted(path for path in agents_dir.glob("*.md") if path.is_file()) if agents_dir.is_dir() else []
+    reviewer_definition = repo_root / ".claude/agents/cefrj-reviewer.md"
     codex_path = shutil.which("codex")
-    if agent_files or codex_path:
-        detected = str(agent_files[0].relative_to(repo_root)) if agent_files else codex_path
+    if reviewer_definition.is_file() or codex_path:
+        detected = (
+            str(reviewer_definition.relative_to(repo_root))
+            if reviewer_definition.is_file()
+            else codex_path
+        )
         return passed("D12", name, f"レビュアー配線を検出しました: {detected}")
     return failed(
         "D12",
         name,
         "E-ENV-06",
-        "E-ENV-06 レビュアー配線を検出できません: .claude/agents/*.md、PATH上のcodex。",
+        "E-ENV-06 レビュアー配線を検出できません: "
+        ".claude/agents/cefrj-reviewer.md、PATH上のcodex。",
     )
 
 
@@ -380,7 +407,7 @@ def run(argv: list[str] | None = None) -> int:
         "checks": checks,
         "summary": {"fail": failed_count, "pass": len(checks) - failed_count},
     }
-    sys.stdout.write(canonical_json_text(report))
+    emit_json(report)
     return 1 if failed_count else 0
 
 
@@ -388,7 +415,7 @@ def main() -> int:
     try:
         return run()
     except CliFailure as exc:
-        sys.stderr.write(canonical_json_text(exc.as_dict()))
+        emit_json(exc.as_dict(), sys.stderr)
         return 1
     except Exception:
         traceback.print_exc(file=sys.stderr)

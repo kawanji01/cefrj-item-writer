@@ -5,8 +5,8 @@
     "lexicon_groups": 179,
     "target_eligible": 256
   },
-  "data_version": "wl1.6+gp20200220+norm1.0.0",
-  "pipeline_version": "1.0.0",
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "pipeline_version": "1.0.2",
   "sources": [
     {
       "file": "CEFR-J Wordlist Ver1.6.xlsx",
