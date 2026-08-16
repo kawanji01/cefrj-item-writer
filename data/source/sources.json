@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "download_date": "2026-08-16",
+      "file": "CEFR-J Wordlist Ver1.6.xlsx",
+      "role": "wordlist",
+      "url": "https://www.cefr-j.org/download.html"
+    },
+    {
+      "download_date": "2026-08-16",
+      "file": "CEFR-J Grammar Profile full 20200220.xlsx",
+      "role": "grammar_profile",
+      "url": "https://www.cefr-j.org/download.html"
+    }
+  ]
+}

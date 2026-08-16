@@ -758,6 +758,7 @@
 - **NDS-03（limits.json）**: `{"schema_version", "sentence_word_limits": {A1,A2,B1,B2}, "explanation_char_limits": {brief,detailed}, "distractor_reuse_max", "generation_max", "set_question_max", "review_timeout_seconds"}`。変更可能なのはこのファイルの値のみである（`docs/cefrj-validation-spec.md` VAL-CFG-01）。
 - **NDS-04（proper_nouns.json）**: `{"schema_version", "words": [...]}`。`words` の各語は空白を含まない1トークンでなければならない(MUST)（機械検査の allowlist 照合が1トークン単位のため。スキーマのパターンで強制）。
 - **NDS-05（正準形）**: `data/normalized/` の3ファイルと `data/config/` の2ファイルは JS-01 の正準形で保存しなければならない(MUST)（正規化ゴールデンのバイト一致テストの前提。`docs/testing-and-acceptance.md`）。
+- **NDS-06（出典ヘッダー）**: `data/normalized/` の出典追跡情報は、`lexicon.json` / `grammar.json` の `data_version` と `meta.json.sources` の組で表現する。`lexicon.json` / `grammar.json` にスキーマ外の出典フィールドを追加してはならない(MUST NOT)。
 
 ### 7.1 実例
 

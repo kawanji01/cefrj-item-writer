@@ -172,6 +172,8 @@
 | `data/source/CEFR-J Grammar Profile full 20200220.xlsx` | `data/normalized/grammar.json` |
 | `data/source/sources.json`（原本URL・ダウンロード日の手動維持ファイル。NRM-29。更新手順は `docs/architecture.md` OPS-01、欠落・不正の検出は同 E-DATA-01 が正） | `data/normalized/meta.json` |
 
+`sources.json` は `{"sources": [<wordlist>, <grammar_profile>]}` とし、配列順を `wordlist` → `grammar_profile` に固定する。各要素は `role` / `file` / `url` / `download_date` の4キーのみを持ち、`role` と `file` は NRM-29 の `sources[]` と同じ固定値、`url` は `http://` または `https://` で始まる文字列、`download_date` は `YYYY-MM-DD` とする。`build_normalized.py` は `download_date` を `meta.json` の `retrieved_date` に転記する。
+
 **NRM-02（決定性）** 同一入力（xlsxのSHA-256・`sources.json`・パイプライン版・spaCyモデル版が同一）からの出力はバイト一致しなければならない。出力にビルド時刻・乱数・環境依存値を含めてはならない。
 
 **NRM-03（出力整形）** 全出力JSONは `docs/json-output-spec.md` JS-01 の正準形（UTF-8・BOMなし・非ASCII非エスケープ・キー辞書順ソート・インデント2・改行LF・末尾改行1つ）で直列化しなければならない（`docs/json-output-spec.md` NDS-05）。
@@ -202,7 +204,7 @@
 | フィールド | 型 | 規則 |
 |---|---|---|
 | `is_multiword` | boolean | `headword` にASCII空白またはハイフン（`-`）が1つ以上含まれるとき `true` |
-| `group_ids` | string[] | NRM-10で所属する併記グループIDの配列。所属なしは空配列。ALL_sep由来のエントリが複数グループに属することは原本上は想定されないが、構造上は配列で保持する |
+| `group_ids` | string[] | NRM-10で所属する併記グループIDの配列。所属なしは空配列。複数グループ所属時を含め、`group_id` の辞書順に整列する |
 
 照合キー（headword の小文字化NFC文字列）および複数語見出しのトークン列は、正規化データには**保存しない**。これらは `machine_check.py` が実行時に `headword` から決定的に導出する（MC-14/MC-15）。
 
@@ -236,7 +238,7 @@
 
 **NRM-15（対象シート）** 使用するシートは `ITEM LIST`（501項目）、`教員版`（256項目）、`EFL SUMMARY (FULL)`（傍証）の3枚のみである。他の9シートは使用してはならない。
 
-**NRM-16（読み取り規則）** ITEM LISTはA1セルにタイトル行、2行目に列ヘッダーを持つ。3行目以降の501データ行を読み取る。教員版はヘッダー行1行+256データ行を読み取る。各エントリの `id` は `gp:<ID列原表記>`（例 `gp:13`, `gp:1-1`）、`item_list_id` はID列原表記（trimのみ）とする。
+**NRM-16（読み取り規則）** ITEM LISTは1行目にタイトル、2行目に列ヘッダー、3〜503行目に501データ行を持つ。教員版は1行目にタイトル、2行目に列ヘッダー、3〜258行目に256データ行を持つ。EFL SUMMARY (FULL) は1行目にコーパス母数、2行目にタイトル、3行目に列ヘッダー、4〜504行目に501データ行を持つ。各エントリの `id` は `gp:<ID列原表記>`（例 `gp:13`, `gp:1-1`）、`item_list_id` はID列原表記（trimのみ）とする。
 
 **NRM-17（ITEM LIST列マッピング）** ITEM LIST由来の属性は各エントリのネストオブジェクト `item_list` に格納しなければならない。
 
@@ -250,6 +252,8 @@
 | `備考` | `note` | string \| null | 空セルは `null` |
 | `パターン略記` | `pattern_shorthand` | string \| null | trim。LLMレビューでの対象構造照合の根拠（MC-25）。空セルは `null` |
 | `正規表現(TreeTaggerベース...)` | `regex_treetagger` | string \| null | trim。参考保持のみ。機械照合への使用は `docs/requirements.md` の V2-04 |
+
+上表の省略表記2列は、原本ヘッダーのうち `Sentence Type (` および `正規表現(TreeTaggerベース` でそれぞれ始まる列を指す。この2列は当該固定接頭辞で識別し、その他の列は上表の文字列との完全一致で識別する。
 
 **NRM-18（教員版結合）** 教員版の256行は `ID` でITEM LIST項目に結合しなければならない（教員版のIDがITEM LISTに存在しない場合はビルドエラー）。
 
@@ -317,6 +321,8 @@
 
 SHA-256は原本xlsxファイル全体に対して計算した小文字16進64桁でなければならない。meta.json は引用文（citation）を保持しない。引用文の組み立ては `docs/json-output-spec.md` ATT-02（`finalize_set.py` が `version_label` / `url` / `retrieved_date` からテンプレートで決定的に組み立てる）が正である。`set.json` への転記規則は `docs/json-output-spec.md` ATT-01・FIN-02 が正である。
 
+`data/normalized/` の「出典ヘッダー付き」とは、`lexicon.json` / `grammar.json` の `data_version` と、同一ディレクトリの `meta.json.sources` を一体として出典追跡できる状態をいう。lexicon / grammar のスキーマに出典フィールドを追加してはならない。
+
 ### 2.5 起動時整合検証（NRM-30）
 
 **NRM-30** 正規化データを読み込む全CLI（`machine_check.py` / `set_check.py` / `lookup.py` / `build_html.py` / `finalize_set.py`）は、処理前に次を検証し、不一致なら `E-DATA-*` で停止しなければならない（コード値は `docs/architecture.md`）。
@@ -334,7 +340,7 @@ SHA-256は原本xlsxファイル全体に対して計算した小文字16進64�
 
 1. `entries` 数 = 7,988（ALL_sep行数）。レベル別度数 A1:1200 / A2:1443 / B1:2486 / B2:2859（ALL_sep単位。原本更新でこの定数が変わる場合の手順は `docs/architecture.md` OPS-01 による）。
 2. `A1_sep`〜`B2_sep` 各シートの行数が上記レベル別度数と一致する。
-3. `(headword, pos)` のユニーク数 = 7,801（ALLシートの行数と一致する。併記見出し由来の追加分がALL_sepとの差分に等しい）。
+3. `(headword, pos)` のユニーク数 = 7,988。ALLシートのデータ行数 = 7,801。併記見出しを展開したALL_sepとの差分を保持しつつ、NRM-09aの一意性を満たす。
 4. `groups` の全要素の `member_ids` が2件以上である。`groups` の総数は初回ビルド時の実測値をゴールデン（`docs/testing-and-acceptance.md` CI-NRM-02 のチェックサム）で固定する。
 5. grammar `entries` 数 = 501、親263・枝番238、`target_eligible = true` が256件、`level.source = null` の項目がLVL-14の16親とその継承不能枝番に限られる。
 6. 全枝番の `parent_id` が解決できる。

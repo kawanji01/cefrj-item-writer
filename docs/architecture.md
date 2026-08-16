@@ -105,7 +105,7 @@ cefr_j_agents/
 - **CLI-01** 全CLIはリポジトリルートをカレントディレクトリとして実行しなければならない(MUST)。各CLIは起動時に `schemas/` と `data/config/` の存在によりカレントディレクトリを確認し、不成立なら E-ENV-04 で停止しなければならない(MUST)。
 - **CLI-02** 終了コードは全CLI共通で次のとおりとする(MUST)。
   - `0` = 正常完了。検査系CLI（machine_check.py / set_check.py）は検査を完遂すれば判定が `fail` でも `0` とする（不合格は正常な業務結果であり、判定はstdoutのJSONで表現する）。例外として doctor.py と validate.py は「合格/妥当」のみ `0` とする（ゲート用途のため。各節参照）。
-  - `1` = 定義済みエラーによる停止。stderrの最終行に第6節のエラーJSON（CLI-05）を出力する。
+  - `1` = 定義済みエラーによる停止。stderrの最終行に第6節のエラーJSON（CLI-05）を出力する。ただしdoctor.pyの診断failはCLI-11の一括レポートをstdoutへ出力し、stderrへ単一エラーJSONを重複出力しない。
   - `2` = 未定義の内部エラー（バグ）。stderrにスタックトレースを出力してもよい(MAY)。
 - **CLI-03** stdoutには結果JSONを1個だけ出力しなければならない(MUST)。進捗・診断ログをstdoutに混ぜてはならない(MUST NOT)（ログはstderrに出力してもよい(MAY)）。
 - **CLI-04** CLIが書き出すJSON（stdout・ファイルとも）は正準形とする(MUST): UTF-8・`ensure_ascii=False`・キーを辞書順ソート・インデント2・改行LF・末尾に改行1個。この規則はHTML決定性・正規化ゴールデン・互換テスト（`docs/cross-agent-compatibility.md` CAT-01、`docs/testing-and-acceptance.md`）のバイト一致の前提である。
@@ -119,7 +119,7 @@ cefr_j_agents/
 | CLI | 目的 | 主な引数 | stdin | stdout（正常時） | 終了コード | 前提検査 |
 |---|---|---|---|---|---|---|
 | `doctor.py` | 環境・データ・配線の一括診断 | なし | 使わない | 診断レポートJSON（5.2） | 0=全項目pass / 1=failあり / 2=内部エラー | なし（自身が検査そのもの） |
-| `build_normalized.py` | 原本xlsx→正規化JSONの決定的ビルド | `--source-dir`(既定 `data/source`) / `--out-dir`(既定 `data/normalized`) / `--diff` / `--dry-run` | 使わない | ビルドサマリーJSON（5.3） | 0/1/2 | 【基本】+ E-DATA-01・E-DATA-06 + spaCy（E-ENV-03） |
+| `build_normalized.py` | 原本xlsx→正規化JSONの決定的ビルド | `--source-dir`(既定 `data/source`) / `--out-dir`(既定 `data/normalized`) / `--diff` / `--dry-run` / `--accept-source-change` | 使わない | ビルドサマリーJSON（5.3） | 0/1/2 | 【基本】+ E-DATA-01・E-DATA-02・E-DATA-06 + spaCy（E-ENV-03） |
 | `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >`（必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
 | `set_check.py` | セット横断の決定的検査 | `--set-dir <path>`（必須。`output/<set_id>`） | 使わない | セット横断machine_report JSON（5.5） | 0=検査完遂 / 1/2 | 【基本】【データ】+ 監査配置（E-CONTRACT-03）+ set_id形式（E-INPUT-05） |
 | `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | セットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-CONTRACT-03/04/05 + E-INPUT-03/05 |
@@ -131,7 +131,7 @@ cefr_j_agents/
 
 ### 5.2 doctor.py
 
-- **CLI-10** 診断項目は次の12項目としなければならない(MUST)。各項目は `pass` / `fail` を判定し、fail時は対応エラーコードを添える。
+- **CLI-10** 診断項目は次の12項目としなければならない(MUST)。各項目は `pass` / `fail` を判定し、fail時は対応エラーコードを添える。要求依存版は `requirements.txt` の完全固定値（初版: spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）、spaCyモデル要求版は en_core_web_sm 3.8.0 とする。
   1. Pythonバージョン ≥ 3.11（E-ENV-01）
   2. 依存パッケージのインポート可否（E-ENV-02）
   3. spaCy en_core_web_sm のロード可否（E-ENV-03）
@@ -144,13 +144,13 @@ cefr_j_agents/
   10. `limits.json`・`proper_nouns.json` の存在とスキーマ通過（E-DATA-05）
   11. `schemas/` 9ファイルの存在とJSON Schema draft 2020-12 としての自己妥当性（E-ENV-04）
   12. レビュアー配線の検出（E-ENV-06）: `.claude/agents/` のレビュアー定義ファイルの存在、**または** `codex` コマンドがPATH上に存在すること。どちらか一方があれば pass とする。両方無ければ fail。
-- **CLI-11** stdout: `{"checks": [{"id": "D01".."D12", "name": "<日本語名>", "status": "pass"|"fail", "error_code": <コードまたはnull>, "message": "<日本語>"}], "summary": {"pass": <int>, "fail": <int>}}`。fail が1件でもあれば終了コード1とする(MUST)。doctor は fail 項目があっても全12項目を最後まで実行しなければならない(MUST)（一括診断のため途中停止しない）。
+- **CLI-11** stdout: `{"checks": [{"id": "D01".."D12", "name": "<日本語名>", "status": "pass"|"fail", "error_code": <コードまたはnull>, "message": "<日本語>", "remedy": <日本語対処手順またはnull>}], "summary": {"pass": <int>, "fail": <int>}}`。pass項目の`remedy`はnull、fail項目は対応エラーコードの具体的手順とする。fail が1件でもあれば終了コード1とする(MUST)。doctor は fail 項目があっても全12項目を最後まで実行しなければならない(MUST)（一括診断のため途中停止しない）。診断failは本レポートのみを出力し、CLI-05の単一エラーJSONをstderrへ出力しない。
 
 ### 5.3 build_normalized.py
 
 - **CLI-12** 変換規則（シート→JSON・列マッピング・ID規則・併記グループ・教員版⊕ITEM LIST結合・EFL傍証・チェックサム記録）の正は `docs/cefrj-validation-spec.md` の正規化仕様である。本CLIはその仕様の決定的実装であり、同一原本から同一出力（CLI-04の正準形でバイト一致）を生成しなければならない(MUST)。
-- **CLI-13** `--diff` 指定時は、既存の `data/normalized/` と新ビルド結果の差分（追加・削除・レベル変更のエントリID一覧と件数）をstdoutサマリーJSONの `diff` キーに含めなければならない(MUST)。既存データが無い場合の `--diff` は E-INPUT-02 で停止する(MUST)。
-- **CLI-14** `--dry-run` 指定時はファイルを書き込んではならない(MUST NOT)。
+- **CLI-13** `--diff` 指定時は、既存の `data/normalized/` と新ビルド結果の差分（追加・削除・レベル変更のエントリID一覧と件数）をstdoutサマリーJSONの `diff` キーに含めなければならない(MUST)。`diff` は `{"lexicon": <区分>, "grammar": <区分>}`、各`<区分>`は `{"added": {"count": <int>, "ids": [...]}, "removed": 同形, "level_changed": 同形}` とし、ID配列を辞書順とする。語彙は`level`値、文法は`level`ブロック全体の差でlevel_changedを判定する。既存データが無い場合の `--diff` は E-INPUT-02 で停止する(MUST)。`--diff` は原本チェックサム不一致を比較目的に限り許容し、ファイルを書き込んではならない(MUST NOT)。
+- **CLI-14** `--dry-run` 指定時はファイルを書き込んではならない(MUST NOT)。既存 `meta.json` と原本チェックサムが異なる通常ビルドは E-DATA-02 で停止する。承認済み原本更新を本ビルドする場合だけ `--accept-source-change` を指定しなければならない(MUST)。初回ビルド（既存 `meta.json` なし）は同オプションなしで実行してよい(MAY)。`--diff` と `--accept-source-change` の併用は E-INPUT-01 とする。
 - **CLI-15** stdout: `{"data_version": "<第7節の書式>", "source_checksums": {"<ファイル名>": "<sha256>"}, "counts": {"lexicon_entries": <int>, "grammar_items": <int>}, "written": ["<相対パス>", ...], "diff": <CLI-13の差分またはnull>}`。
 
 ### 5.4 machine_check.py
@@ -218,9 +218,9 @@ cefr_j_agents/
 
 | コード | 発生条件 | メッセージ要件 | 対処手順（remedyに含める内容） |
 |---|---|---|---|
-| E-ENV-01 | 実行中のPythonが3.11未満 | 検出したバージョンと要求バージョン(3.11以上)を明記 | Python 3.11以上をインストールし、セットアップスクリプトでvenvを再作成する |
-| E-ENV-02 | 依存パッケージのインポート失敗、または要求バージョン不一致 | 欠落・不一致のパッケージ名を全件列挙 | venvを有効化した上でセットアップスクリプトを再実行する |
-| E-ENV-03 | spaCyモデル en_core_web_sm のロード失敗 | モデル名 en_core_web_sm を明記 | セットアップスクリプトのモデル取得手順（唯一のネットワーク許可点）を再実行する |
+| E-ENV-01 | 実行中のPythonが3.11未満 | 検出したバージョンと要求バージョン(3.11以上)を明記 | Python 3.11以上をインストールし、`python scripts/setup.py` でvenvを再作成する |
+| E-ENV-02 | `requirements.txt` に固定した依存パッケージのインポート失敗、または要求バージョン不一致 | 欠落・不一致のパッケージ名・要求版・検出版を全件列挙 | リポジトリルートで `python scripts/setup.py` を再実行する |
+| E-ENV-03 | spaCyモデル en_core_web_sm のロード失敗、または要求版3.8.0との不一致 | モデル名 en_core_web_sm・要求版・検出版を明記 | リポジトリルートで `python scripts/setup.py` のモデル取得手順（唯一のネットワーク許可点）を再実行する |
 | E-ENV-04 | リポジトリ構成の欠落: カレントディレクトリがリポジトリルートでない、または `schemas/`・`data/config/`・`agent/`・`scripts/` のいずれかが欠落、またはスキーマファイル自体が欠落・破損 | 欠落したパスを全件列挙 | リポジトリルートに移動して再実行する。ファイル欠落の場合は `git status` で確認し `git checkout` で復元する |
 | E-ENV-05 | `output/` またはセットディレクトリの作成・書き込み失敗 | 対象パスとOSエラー内容を明記 | ディレクトリの権限と空き容量を確認する |
 | E-ENV-06 | レビュアー配線が未検出: `.claude/agents/` のレビュアー定義が存在せず、かつ `codex` コマンドもPATH上に無い | 探索した2つの配線（ファイルパスとコマンド名）を明記 | `docs/cross-agent-compatibility.md` に従い、使用するツール側のアダプタ配線を整備する |
@@ -229,12 +229,12 @@ cefr_j_agents/
 
 | コード | 発生条件 | メッセージ要件 | 対処手順（remedyに含める内容） |
 |---|---|---|---|
-| E-DATA-01 | 原本入力の欠落・不正: `data/source/CEFR-J Wordlist Ver1.6.xlsx` と `data/source/CEFR-J Grammar Profile full 20200220.xlsx`（ファイル名はこの2つに固定）のいずれかが存在しない、または `data/source/sources.json` が存在しない・JSONとしてパース不能・原本2件分の `url` / `download_date`（`YYYY-MM-DD`）の記載を欠く | 欠落したファイル名（固定名）または sources.json の不正内容を明記 | 原本2ファイルを固定名で `data/source/` に配置し、`sources.json` に入手URL・ダウンロード日を記入する（OPS-01）。入手元と引用条件は NOTICE を参照する |
+| E-DATA-01 | 原本入力の欠落・不正: `data/source/CEFR-J Wordlist Ver1.6.xlsx` と `data/source/CEFR-J Grammar Profile full 20200220.xlsx`（ファイル名はこの2つに固定）のいずれかが存在しない、または `data/source/sources.json` が存在しない・JSONとしてパース不能・`docs/cefrj-validation-spec.md` NRM-01の構造に適合しない | 欠落したファイル名（固定名）または sources.json の不正内容を明記 | 原本2ファイルを固定名で `data/source/` に配置し、`sources.json` に入手URL・ダウンロード日を記入する（OPS-01）。入手元と引用条件は NOTICE を参照する |
 | E-DATA-02 | 原本チェックサム不一致: `data/source/` の実ファイルのSHA-256が `data/normalized/meta.json` の記録値と一致しない | ファイル名・期待値・実測値を明記 | 原本を意図的に更新した場合は第8節 OPS-01（原本更新手順）を実施する。意図しない場合は正しい原本を配置し直す |
 | E-DATA-03 | 正規化データの欠落: `data/normalized/lexicon.json`・`grammar.json`・`meta.json` のいずれかが存在しない | 欠落ファイルを全件列挙 | `git checkout` で復元するか、原本がある場合は `python scripts/build_normalized.py` を実行する |
 | E-DATA-04 | 正規化データの不整合: normalized JSONがスキーマ不通過、または `meta.json` の `data_version`・チェックサムと lexicon.json / grammar.json の記録値が相互に矛盾 | 不整合の内容（スキーマ違反箇所または矛盾したフィールド）を明記 | `python scripts/build_normalized.py` で再ビルドする。再発する場合は正規化パイプラインの不具合として報告する |
 | E-DATA-05 | 設定ファイル不正: `data/config/limits.json`・`proper_nouns.json` のいずれかが欠落またはスキーマ不通過 | 対象ファイルと違反箇所（JSONポインタ）を明記 | `git checkout` で復元するか、`python scripts/validate.py --schema config_limits --file data/config/limits.json`（proper_nounsも同様）で違反箇所を確認し修正する |
-| E-DATA-06 | 原本構造不一致: build_normalized.py が期待するシート名・列名（`docs/cefrj-validation-spec.md` 正規化仕様に列挙）を原本xlsxに見いだせない | 見つからなかったシート名・列名を全件列挙 | 原本の版が設計前提（Wordlist Ver1.6 / Grammar Profile full 20200220）と一致するか確認する。新版へ移行する場合は OPS-01 に従い正規化仕様の改訂を先行させる |
+| E-DATA-06 | 原本構造・内容不一致: build_normalized.py が期待するシート名・列名・行位置を原本xlsxに見いだせない、必須セル値が値域外、ID結合・親子・併記variant対応が解決不能、またはNRM-31の件数不変条件を満たさない | 見つからなかったシート名・列名・行位置、値域外セル、解決不能ID、または不一致の件数を全件列挙 | 原本の版が設計前提（Wordlist Ver1.6 / Grammar Profile full 20200220）と一致するか確認する。新版へ移行する場合は OPS-01 に従い正規化仕様の改訂を先行させる |
 
 ### 6.3 E-CONTRACT（スキーマ・契約違反）
 
@@ -269,7 +269,7 @@ cefr_j_agents/
 
 ## 8. 運用手順
 
-- **OPS-01 原本更新手順**: 次の順で実施しなければならない(MUST)。①新版xlsxを `data/source/` に配置し、新版の入手URL・ダウンロード日を `data/source/sources.json` に更新する（ファイル名が変わる場合は本書 E-DATA-01 の固定名定義と `docs/cefrj-validation-spec.md` 正規化仕様の改訂を先行させる）→ ②`python scripts/build_normalized.py --diff` を実行し新旧差分レポートを確認 → ③差分を承認したら `--diff` なしで本ビルドし `data/normalized/` を更新 → ④`data_version`（VER-04）が更新されたことを `meta.json` で確認 → ⑤`CHANGELOG.md` に原本版・差分要約を記載 → ⑥コミット。差分確認前に本ビルド結果をコミットしてはならない(MUST NOT)。
+- **OPS-01 原本更新手順**: 次の順で実施しなければならない(MUST)。①新版xlsxを `data/source/` に配置し、新版の入手URL・ダウンロード日を `data/source/sources.json` に更新する（ファイル名が変わる場合は本書 E-DATA-01 の固定名定義と `docs/cefrj-validation-spec.md` 正規化仕様の改訂を先行させる）→ ②`python scripts/build_normalized.py --diff` を実行し、書き込みなしで新旧差分レポートを確認 → ③差分を承認したら `python scripts/build_normalized.py --accept-source-change` で本ビルドし `data/normalized/` を更新 → ④`data_version`（VER-04）が更新されたことを `meta.json` で確認 → ⑤`CHANGELOG.md` に原本版・差分要約を記載 → ⑥コミット。差分確認前に本ビルド結果をコミットしてはならない(MUST NOT)。
 - **OPS-02 固有名詞allowlist追加手順**: ①教師が追加候補語を提示 → ②選定基準（学習者への馴染み・文化的中立。基準の正は `docs/cefrj-validation-spec.md` の免除規則）に照らして判断 → ③`data/config/proper_nouns.json` を編集 → ④`python scripts/validate.py --schema config_proper_nouns --file data/config/proper_nouns.json` で検証 → ⑤コミットと `CHANGELOG.md` 記載。総語数は50〜100語の範囲を維持すべきである(SHOULD)。
 - **OPS-03 リリース手順**: ①`CHANGELOG.md` 整理 → ②決定的pytest CI 全通過 → ③手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施し全項目合格 → ④gitタグ付与 → ⑤タグをpush。③に不合格項目がある状態でタグを付与してはならない(MUST NOT)。
 - **OPS-04 教師の更新手順**: `git pull` → `python scripts/doctor.py` の2手順とする(MUST)。doctor が fail を返した場合は表示された remedy に従う。
@@ -280,6 +280,7 @@ cefr_j_agents/
   3. 利用条件: 適切な引用を伴う研究・教育・商用利用、および改変（別語彙表・派生データの作成）が原本ライセンスで許容される旨。
   4. 再配布注意: `data/source/`・`data/normalized/` を含む本リポジトリの再配布時も出典明示（前項の引用）が必要である旨。
   5. 免責: 原本READMEに内容の誤りの可能性が明記されている旨、および生成問題の教育利用の最終確認は教師の責任である旨。
+- **OPS-07 セットアップスクリプト**: `python scripts/setup.py` はリポジトリ直下の `.venv` を作成し、`requirements.txt` の完全固定版（spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）を導入した後、en_core_web_sm 3.8.0を取得しなければならない(MUST)。依存導入とモデル取得はセットアップ処理であり、決定的CLIのオフライン要件の対象外とする。モデル取得以外の決定的CLIからネットワークへアクセスしてはならない(MUST NOT)。
 
 ## 9. スコープ外
 

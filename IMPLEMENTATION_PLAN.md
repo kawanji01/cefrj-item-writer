@@ -50,7 +50,7 @@
 - **成果物**:
   1. `scripts/build_normalized.py`（原本xlsx→`data/normalized/lexicon.json`・`grammar.json`・`meta.json`。新旧差分レポート機能を含む）
   2. `scripts/doctor.py`（環境・データ一括診断）
-  3. セットアップスクリプト（venv構築・依存導入・spaCyモデル取得。`docs/architecture.md` の運用手順参照）
+  3. セットアップスクリプト `scripts/setup.py` と `requirements.txt`（venv構築・固定版依存導入・spaCyモデル取得。`docs/architecture.md` の運用手順参照）
   4. `data/source/` への原本xlsx配置（`CEFR-J Wordlist Ver1.6.xlsx`・`CEFR-J Grammar Profile full 20200220.xlsx`）とSHA-256記録、および `data/source/sources.json`（原本の入手URL・ダウンロード日）の作成（`docs/architecture.md` OPS-01・E-DATA-01）
   5. ビルド済み `data/normalized/` 3ファイルのコミット（出典ヘッダー付き）
   6. `data/config/limits.json`・`data/config/proper_nouns.json` 初版（値の正は `docs/cefrj-validation-spec.md` と `docs/requirements.md`、固有名詞の選定基準は `docs/cefrj-validation-spec.md` の免除規則）
@@ -58,7 +58,7 @@
 - **DoD**:
   1. `build_normalized.py` を2回実行し、3ファイルがそれぞれバイト一致する
   2. 3ファイルが `normalized_lexicon.schema.json`・`normalized_grammar.schema.json`（`meta.json` は `docs/cefrj-validation-spec.md` NRM-29 の定義）に適合する（この時点ではjsonschemaライブラリの直接呼び出しで検証してよい(MAY)。`validate.py` はM3）
-  3. `docs/testing-and-acceptance.md` の CI-NRM-03 に列挙された件数不変条件（entries=7,988 / レベル別度数 / (headword,pos)ユニーク=7,801 / 256 / 501 / 枝番親存在 / 未付与16件ID一致）を満たす
+  3. `docs/testing-and-acceptance.md` の CI-NRM-03 に列挙された件数不変条件（entries=7,988 / レベル別度数 / (headword,pos)ユニーク=7,988 / ALL行数=7,801 / 256 / 501 / 枝番親存在 / 未付与16件ID一致）を満たす
   4. 枝番のレベル継承・教員版範囲値の下限上限分解が `docs/cefrj-validation-spec.md` の正規化仕様どおりである（CI-NRM-05・CI-NRM-07の合否条件で確認）
   5. `doctor.py` が完全環境で終了コード0、原本改変・正規化欠落・config欠落の各模擬環境で `docs/architecture.md` の目録どおりの E-ENV / E-DATA 系コードで停止する（CI-NRM-06・CI-CLI-03の合否条件で確認）
   6. 差分レポートが「原本更新なし」の再ビルドで差分ゼロを報告する

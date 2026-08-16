@@ -55,7 +55,7 @@
 |---|---|---|---|
 | CI-NRM-01 | `build_normalized.py` の決定性 | `data/source/` の原本xlsx | 2回連続実行し、`lexicon.json`・`grammar.json`・`meta.json` がそれぞれバイト一致すること |
 | CI-NRM-02 | 正規化ゴールデン（チェックサム固定） | コミット済み `data/normalized/` 3ファイル | 各ファイルのSHA-256が `tests/golden/normalized/checksums.json` の値と一致すること |
-| CI-NRM-03 | 件数不変条件（`docs/cefrj-validation-spec.md` NRM-31 と同一の定義を共有する） | `data/normalized/` 3ファイル | `entries`（ALL_sep由来）=7,988、`entries` のレベル別度数 A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859、`(headword, pos)` ユニーク数=7,801（ALL行数と一致）、`groups` の全要素の `member_ids` が2件以上（`groups` 総数は初回ビルド時に実測し CI-NRM-02 のチェックサムゴールデンで固定する）、文法項目数=教員版256・ITEM LIST 501、全枝番IDの親IDが存在、教員版レベル未付与16件のIDが `36,47,48,52,80,83,94,96,98,115,130,191,225,226,227,238` と一致すること |
+| CI-NRM-03 | 件数不変条件（`docs/cefrj-validation-spec.md` NRM-31 と同一の定義を共有する） | `data/normalized/` 3ファイル | `entries`（ALL_sep由来）=7,988、`entries` のレベル別度数 A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859、`(headword, pos)` ユニーク数=7,988、原本ALL行数=7,801、`groups` の全要素の `member_ids` が2件以上（`groups` 総数は初回ビルド時に実測し CI-NRM-02 のチェックサムゴールデンで固定する）、文法項目数=教員版256・ITEM LIST 501、全枝番IDの親IDが存在、教員版レベル未付与16件のIDが `36,47,48,52,80,83,94,96,98,115,130,191,225,226,227,238` と一致すること |
 | CI-NRM-04 | 正規化データのスキーマ適合 | `data/normalized/lexicon.json`・`grammar.json` | `validate.py` で `normalized_lexicon.schema.json`・`normalized_grammar.schema.json` に合格すること |
 | CI-NRM-05 | 枝番のレベル継承 | `data/normalized/grammar.json` | `gp:1-1`・`gp:1-2`・`gp:1-3` のレベルが `gp:1` のレベルと一致すること（継承規則の正は `docs/cefrj-validation-spec.md`） |
 | CI-NRM-06 | 原本チェックサム不一致の検出 | 1バイト改変した原本xlsxのコピー（テスト一時ディレクトリ） | `build_normalized.py` および `doctor.py` が処理を拒否し、`docs/architecture.md` のエラーコード目録に定義された E-DATA 系コードで停止すること |

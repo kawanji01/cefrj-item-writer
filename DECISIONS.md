@@ -721,3 +721,59 @@
 - **AD-裁定2 固有名詞の照合**: casefold統一案を退け、大文字小文字を区別する完全一致に統一（既存2文書の一致と固有名詞の性質から保守側を採用）。
 - **AD-裁定3 解説の字数計測**: NFC正規化後の全コードポイント数（空白・句読点含む）に統一。
 - **AD-端点 RG-19（question_id枯渇）**: question_idは q01〜q20 固定（§共通定数）のため、要求数N=20で全IDを使い切った場合、補充・代替は提示せず減数完成/中止の教師照会に縮退する。最悪2Nの試行保証は N<20 でのみ完全成立。q01〜q40への拡張は将来の改訂候補として本記録に留める。
+
+---
+
+## 4. M1実装開始時の承認決定（M1D-01〜M1D-10）
+
+2026-08-16、PLN-05に基づく実装前確認で発見した次の10件について、作問者が推奨案を一括承認した。
+
+### M1D-01 Wordlist件数不変条件の訂正
+- **決定**: `ALL_sep` 由来entriesは7,988件、`(headword, pos)` ユニーク数も7,988件、原本`ALL`データ行数は7,801件とする。原本実測では重複0、併記グループ179件である。
+- **理由**: 旧CI-NRM-03/NRM-31のユニーク数7,801は、entries=7,988およびNRM-09aの一意性と両立しなかったため。
+- **影響先**: `IMPLEMENTATION_PLAN.md`、`docs/cefrj-validation-spec.md`、`docs/testing-and-acceptance.md`。
+
+### M1D-02 Grammar Profile物理構造とE-DATA-06
+- **決定**: ITEM LISTはタイトル1行＋ヘッダー1行＋501行、教員版はタイトル1行＋ヘッダー1行＋256行、EFL SUMMARY (FULL)は母数1行＋タイトル1行＋ヘッダー1行＋501行として読む。省略表記された長い2列名は固定接頭辞で識別する。原本の行・列・セル値・ID結合・親子・variant対応・件数不変条件の不整合はE-DATA-06とする。
+- **理由**: 実原本の物理構造を追加判断なしで読み取り、既存エラーコード体系を増やさず不整合を拒否するため。
+- **影響先**: `docs/cefrj-validation-spec.md`、`docs/architecture.md`、M1正規化実装。
+
+### M1D-03 原本更新の明示承認フラグ
+- **決定**: 通常ビルドは既存metaとの原本チェックサム不一致をE-DATA-02で拒否する。`--diff` は不一致を比較目的に限り許容し書き込まない。承認済み更新は `--accept-source-change` で本ビルドする。初回ビルドは同フラグ不要とする。
+- **理由**: CI-NRM-06の改変拒否とOPS-01の意図的更新を明示的に両立させるため。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`。
+
+### M1D-04 sources.jsonの構造と初版値
+- **決定**: `sources.json` は `sources` 配列に `role` / `file` / `url` / `download_date` を持ち、wordlist→grammar_profile順とする。初版の両URLは `https://www.cefr-j.org/download.html`、download_dateは `2026-08-16` とする。
+- **理由**: meta.jsonへの決定的な対応付けと転記を可能にするため。
+- **影響先**: `docs/cefrj-validation-spec.md`、`docs/architecture.md`、`data/source/sources.json`。
+
+### M1D-05 初版固有名詞allowlist
+- **決定**: 初版は次の50語とする: Africa, Alice, America, Anna, Asia, Australia, Beijing, Bob, Brazil, Britain, Canada, China, Chinese, Christmas, David, Egypt, Emi, Emma, England, English, Europe, France, French, German, Germany, India, Italian, Italy, Japan, Japanese, John, Kate, Ken, Korean, Kyoto, Lisa, London, Mary, Mike, Osaka, Paris, Paul, Rome, Sarah, Seoul, Spain, Spanish, Sydney, Tokyo, Tom。
+- **理由**: 既存例10語を包含し、1トークン制約・学習者への馴染み・文化的中立・50〜100語の運用範囲を満たすため。
+- **影響先**: `data/config/proper_nouns.json`。
+
+### M1D-06 セットアップ実装と固定依存版
+- **決定**: `python scripts/setup.py` が `.venv` を作成し、`requirements.txt` の spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6 と en_core_web_sm 3.8.0を導入する。doctorはこれらの完全一致とモデルロードを検査する。
+- **理由**: macOS/Linux/Windows共通の具体的セットアップコマンドとE-ENV-02/03の要求版を一意にするため。
+- **影響先**: `IMPLEMENTATION_PLAN.md`、`docs/architecture.md`、`docs/cross-agent-compatibility.md`、M1セットアップ・doctor実装。
+
+### M1D-07 正規化データの出典ヘッダー
+- **決定**: 「出典ヘッダー付き」はlexicon/grammarの`data_version`と同一ディレクトリの`meta.json.sources`を一体として出典追跡できる状態をいう。lexicon/grammarへスキーマ外フィールドを追加しない。
+- **理由**: 出典要件とadditionalProperties=falseの既存スキーマを非破壊で両立させるため。
+- **影響先**: `docs/cefrj-validation-spec.md`、`docs/json-output-spec.md`、M1正規化成果物。
+
+### M1D-08 差分レポートの構造
+- **決定**: `diff` はlexicon/grammar別にadded/removed/level_changedを持ち、各区分を件数と辞書順ID配列で表す。文法のレベル変更はlevelブロック全体の差で判定する。
+- **理由**: 語彙と文法を分離し、決定的な機械処理・監査を可能にするため。
+- **影響先**: `docs/architecture.md`、`scripts/build_normalized.py`。
+
+### M1D-09 doctorのremedyとstderr例外
+- **決定**: doctorの各checkに`remedy`を追加し、passはnull、failは具体的手順とする。診断failはstdoutの一括レポートのみで終了コード1とし、単一エラーJSONをstderrへ重複出力しない。
+- **理由**: 全12項目を最後まで診断する契約と、全failへの日本語対処手順提示を両立するため。
+- **影響先**: `docs/architecture.md`、`scripts/doctor.py`。
+
+### M1D-10 複数併記グループ所属時の順序
+- **決定**: lexicon entryの`group_ids`は`group_id`辞書順とする。groupの`member_ids`はALL行内のvariant出現順を維持する。
+- **理由**: 原本に2グループ所属の`check-in:noun`が存在するため、原本行順に依存しない決定的順序を固定する必要がある。
+- **影響先**: `docs/cefrj-validation-spec.md`、`scripts/build_normalized.py`。

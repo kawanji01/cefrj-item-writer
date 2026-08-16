@@ -1,0 +1,32 @@
+{
+  "counts": {
+    "grammar_items": 501,
+    "lexicon_entries": 7988,
+    "lexicon_groups": 179,
+    "target_eligible": 256
+  },
+  "data_version": "wl1.6+gp20200220+norm1.0.0",
+  "pipeline_version": "1.0.0",
+  "sources": [
+    {
+      "file": "CEFR-J Wordlist Ver1.6.xlsx",
+      "retrieved_date": "2026-08-16",
+      "role": "wordlist",
+      "sha256": "e41033a12f92983012a0a6b201d4f1f860b7ba3de700c2c3b89660ea21a390e1",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "1.6"
+    },
+    {
+      "file": "CEFR-J Grammar Profile full 20200220.xlsx",
+      "retrieved_date": "2026-08-16",
+      "role": "grammar_profile",
+      "sha256": "f292ef17a60396797c0da2efea95f2ca3de940571164c93e5488c70029eab1c2",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "20200220"
+    }
+  ],
+  "spacy_model": {
+    "name": "en_core_web_sm",
+    "version": "3.8.0"
+  }
+}

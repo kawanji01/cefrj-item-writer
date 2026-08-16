@@ -127,7 +127,7 @@
 - **SUP-02** 両手順書は次の11項目をこの順で含まなければならない(MUST)。
   1. 前提環境: 対応OS（macOS / Linux / Windows）、Python 3.11+、git、対象ツール本体（インストールと認証はツール公式手順への参照とする）。
   2. リポジトリ取得: 非公開リポジトリのclone手順（アクセス権の入手先を含む）。
-  3. Python環境構築: venv作成とセットアップスクリプト実行。
+  3. Python環境構築: `python scripts/setup.py` による `.venv` 作成と `requirements.txt` の固定版依存導入。
   4. spaCyモデル取得: en_core_web_sm の取得。ここが唯一のネットワーク許可点であることの明示（`docs/architecture.md` ARC-05）。
   5. 診断: `python scripts/doctor.py` の実行と全項目passの確認。fail時はエラーコード目録（`docs/architecture.md` 第6節）の remedy に従う旨。
   6. ツール固有設定: Claude Code版=`.claude/` 配下の配線確認と権限設定（第3節）、Codex版=`codex exec --help` の実行確認（CDX-10）とAGENTS.md配線確認（第4節）。
