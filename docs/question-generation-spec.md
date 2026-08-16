@@ -59,7 +59,7 @@
 
 `provenance`（合格世代の監査参照）は `finalize_set.py` が `set.json` 構築時に付与する（`docs/json-output-spec.md` SET-06）。生成候補（candidate）に `provenance` を含めてはならない（`candidate.schema.json` は `additionalProperties: false` によりこれを拒否する）。`target` に上表以外のフィールド（原本レベル表記の転記を含む）を追加してはならない。原本レベルは `target.ref` を介して正規化データから常に参照できる。
 
-**GEN-02** `format`・`level`・問題数は1セット内で全問題に共通でなければならない（1セッション=同一条件セット）。セット条件との不一致は `machine_check.py` の違反である（検査手順は `docs/cefrj-validation-spec.md`）。
+**GEN-02** `format`・`level`・問題数は1セット内で全問題に共通でなければならない（1セッション=同一条件セット）。`machine_check.py` はオーケストレータが渡す確定済みの期待`format`・`level`・依頼問題数とcandidateを照合し、形式・レベルの不一致、または`question_id`番号が依頼問題数を超える場合を`V-COND-01`とする。依頼問題数分の候補が全て揃ったかどうかは1問検査では判定せず、`finalize_set.py` のSET-07で検証する。
 
 **GEN-03** `target.ref` が指す項目は正規化データ（`data/normalized/lexicon.json` / `data/normalized/grammar.json`）に実在しなければならない。文法ターゲットは教員版256項目（レベル付与済み）のいずれかでなければならず、教員版レベル未付与の16項目（`docs/cefrj-validation-spec.md` 参照）をターゲットにしてはならない。指定レベルとターゲットの適格判定（範囲値の包含判定を含む）は `docs/cefrj-validation-spec.md` のターゲット適格規則（Q6）が正である。
 

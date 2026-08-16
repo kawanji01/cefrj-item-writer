@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
-import importlib.metadata
 import json
 import math
 import os
@@ -200,8 +199,9 @@ class JapaneseArgumentParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> None:
         translated = message
-        if message.startswith("unrecognized arguments:"):
-            translated = f"未知の引数です:{message.removeprefix('unrecognized arguments:')}"
+        prefix = "unrecognized arguments:"
+        if message.startswith(prefix):
+            translated = f"未知の引数です:{message[len(prefix):]}"
         else:
             missing_value = re.fullmatch(r"argument (.+): expected one argument", message)
             if missing_value:
@@ -289,12 +289,99 @@ def json_pointer(path: Iterable[Any]) -> str:
     return "/" + "/".join(parts) if parts else ""
 
 
+def selected_schema_branch(instance: Any, schema: dict[str, Any]) -> dict[str, Any]:
+    """Discriminatorが有効な場合はoneOfの対応分岐を直接検証する。"""
+
+    if not isinstance(instance, dict):
+        return schema
+    definition_name: str | None = None
+    if schema.get("title") == "candidate":
+        format_value = instance.get("format")
+        if isinstance(format_value, str) and f"q_{format_value}" in schema.get("$defs", {}):
+            definition_name = f"q_{format_value}"
+    elif schema.get("title") == "machine_report":
+        scope = instance.get("scope")
+        if scope in {"question", "set"}:
+            definition_name = f"{scope}_report"
+    if definition_name is None:
+        return schema
+    return {
+        "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
+        "$defs": schema["$defs"],
+        "$ref": f"#/$defs/{definition_name}",
+    }
+
+
+def leaf_schema_errors(error: Any) -> list[Any]:
+    if not error.context:
+        return [error]
+    leaves: list[Any] = []
+    for child in error.context:
+        leaves.extend(leaf_schema_errors(child))
+    return leaves
+
+
+def json_type_name(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, dict):
+        return "object"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    return type(value).__name__
+
+
+def japanese_schema_message(error: Any) -> str:
+    validator = error.validator
+    constraint = error.validator_value
+    if validator == "required" and isinstance(error.instance, dict):
+        missing = sorted(set(constraint) - set(error.instance))
+        return f"必須プロパティがありません: {', '.join(missing)}"
+    if validator == "type":
+        expected = constraint if isinstance(constraint, str) else "|".join(constraint)
+        return f"型が不正です: 期待{expected}、実際{json_type_name(error.instance)}"
+    if validator == "additionalProperties" and isinstance(error.instance, dict):
+        allowed = set(error.schema.get("properties", {}))
+        unexpected = sorted(set(error.instance) - allowed)
+        return f"未定義のプロパティです: {', '.join(unexpected)}"
+    if validator == "pattern":
+        return f"文字列がパターン{constraint}に一致しません"
+    if validator == "enum":
+        return f"値{error.instance!r}が許容値{constraint!r}に含まれません"
+    if validator == "const":
+        return f"値{error.instance!r}が固定値{constraint!r}と一致しません"
+    if validator == "minLength":
+        return f"文字列は{constraint}文字以上必要です"
+    if validator == "maxLength":
+        return f"文字列は{constraint}文字以下である必要があります"
+    if validator == "minItems":
+        return f"配列は{constraint}件以上必要です"
+    if validator == "maxItems":
+        return f"配列は{constraint}件以下である必要があります"
+    if validator == "uniqueItems":
+        return "配列の要素が重複しています"
+    if validator == "minimum":
+        return f"値は{constraint}以上である必要があります"
+    if validator == "maximum":
+        return f"値は{constraint}以下である必要があります"
+    return f"スキーマ制約{validator}に適合しません"
+
+
 def schema_errors(instance: Any, schema_path: Path) -> list[dict[str, str]]:
     try:
         jsonschema = importlib.import_module("jsonschema")
         schema = load_json_file(schema_path, "E-ENV-04")
-        validator = jsonschema.Draft202012Validator(schema)
-        errors = sorted(validator.iter_errors(instance), key=lambda error: list(error.absolute_path))
+        validator = jsonschema.Draft202012Validator(selected_schema_branch(instance, schema))
+        root_errors = validator.iter_errors(instance)
+        errors = [leaf for error in root_errors for leaf in leaf_schema_errors(error)]
     except CliFailure:
         raise
     except Exception as exc:
@@ -303,9 +390,12 @@ def schema_errors(instance: Any, schema_path: Path) -> list[dict[str, str]]:
             f"E-ENV-04 スキーマを検証器へ読み込めません: {schema_path}",
             detail={"error": str(exc), "path": str(schema_path)},
         ) from exc
+    rendered = {
+        (json_pointer(error.absolute_path), japanese_schema_message(error)) for error in errors
+    }
     return [
-        {"json_pointer": json_pointer(error.absolute_path), "message": error.message}
-        for error in errors
+        {"json_pointer": pointer, "message": message}
+        for pointer, message in sorted(rendered)
     ]
 
 
@@ -321,10 +411,22 @@ def validate_against_schema(instance: Any, schema_path: Path, target: str) -> No
 
 def dependency_issues() -> list[dict[str, str | None]]:
     issues: list[dict[str, str | None]] = []
+    try:
+        metadata = importlib.import_module("importlib.metadata")
+    except Exception as exc:
+        return [
+            {
+                "detected": None,
+                "error": str(exc),
+                "package": distribution,
+                "required": required_version,
+            }
+            for distribution, (_module_name, required_version) in REQUIRED_PACKAGES.items()
+        ]
     for distribution, (module_name, required_version) in REQUIRED_PACKAGES.items():
         detected: str | None = None
         try:
-            detected = importlib.metadata.version(distribution)
+            detected = metadata.version(distribution)
             importlib.import_module(module_name)
         except Exception as exc:
             issues.append(
@@ -392,7 +494,8 @@ def require_basic_environment(repo_root: Path) -> None:
 def load_spacy_model() -> tuple[Any, str]:
     detected: str | None = None
     try:
-        detected = importlib.metadata.version(MODEL_NAME)
+        metadata = importlib.import_module("importlib.metadata")
+        detected = metadata.version(MODEL_NAME)
         spacy = importlib.import_module("spacy")
         model = spacy.load(MODEL_NAME)
     except Exception as exc:

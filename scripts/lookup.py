@@ -89,10 +89,12 @@ class LookupArgumentParser(argparse.ArgumentParser):
 
 
 def translate_argument_error(message: str) -> str:
-    if message.startswith("unrecognized arguments:"):
-        return f"未知の引数です:{message.removeprefix('unrecognized arguments:')}"
-    if message.startswith("the following arguments are required:"):
-        return f"必須引数が欠落しています:{message.removeprefix('the following arguments are required:')}"
+    unknown_prefix = "unrecognized arguments:"
+    if message.startswith(unknown_prefix):
+        return f"未知の引数です:{message[len(unknown_prefix):]}"
+    required_prefix = "the following arguments are required:"
+    if message.startswith(required_prefix):
+        return f"必須引数が欠落しています:{message[len(required_prefix):]}"
     missing_value = re.fullmatch(r"argument (.+): expected one argument", message)
     if missing_value:
         return f"引数 {missing_value.group(1)} に値が必要です"

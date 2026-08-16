@@ -111,7 +111,7 @@ cefr_j_agents/
 - **CLI-04** CLIが書き出すJSON（stdout・ファイルとも）は正準形とする(MUST): UTF-8・`ensure_ascii=False`・キーを辞書順ソート・インデント2・改行LF・末尾に改行1個。この規則はHTML決定性・正規化ゴールデン・互換テスト（`docs/cross-agent-compatibility.md` CAT-01、`docs/testing-and-acceptance.md`）のバイト一致の前提である。
 - **CLI-05** エラーJSONの形は `{"error_code": "<コード>", "message": "<日本語1行要約>", "remedy": "<日本語対処手順>", "detail": <任意のJSON値またはnull>}` としなければならない(MUST)。message・remedy の内容要件は第6節の各コード定義に従う。
 - **CLI-06** 全CLIは `--help`（日本語ヘルプ）を実装しなければならない(MUST)。未知の引数・必須引数欠落は E-INPUT-01 で停止する(MUST)。
-- **CLI-07** 入力ファイル引数が `-` の場合はstdinから読む(MUST)。stdinのJSONがパース不能な場合は E-INPUT-03 で停止する(MUST)。
+- **CLI-07** 入力ファイル引数が `-` の場合はstdinのバイト列を読み、実行環境の標準入力エンコーディングに依存せずUTF-8として復号する(MUST)。stdinまたはファイルのJSONがUTF-8でない、またはパース不能な場合は E-INPUT-03 で停止する(MUST)。
 - **CLI-08** 各CLIは処理開始前に、当該CLIの前提条件（下表「前提検査」）を検査しなければならない(MUST)。前提検査の共通セット【基本】= Python版（E-ENV-01）・依存パッケージ（E-ENV-02）・カレントディレクトリ（E-ENV-04）。正規化データを読むCLIはさらに【データ】= 原本xlsx存在（E-DATA-01）・原本チェックサム照合（E-DATA-02）・正規化データ存在（E-DATA-03）・スキーマ通過と内部整合（E-DATA-04）・設定ファイル（E-DATA-05）を検査する。原本欠落・チェックサム不一致・正規化データ不整合のいずれかがあれば処理を拒否しなければならない(MUST)。
 
 ### 5.1 契約一覧（8本）
@@ -120,7 +120,7 @@ cefr_j_agents/
 |---|---|---|---|---|---|---|
 | `doctor.py` | 環境・データ・配線の一括診断 | なし | 使わない | 診断レポートJSON（5.2） | 0=全項目pass / 1=failあり / 2=内部エラー | なし（自身が検査そのもの） |
 | `build_normalized.py` | 原本xlsx→正規化JSONの決定的ビルド | `--source-dir`(既定 `data/source`) / `--out-dir`(既定 `data/normalized`) / `--diff` / `--dry-run` / `--accept-source-change` | 使わない | ビルドサマリーJSON（5.3） | 0/1/2 | 【基本】+ E-DATA-01・E-DATA-02・E-DATA-06 + spaCy（E-ENV-03）+ 通常ビルド時の出力先書込み（E-ENV-05） |
-| `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >` / `--set-id <set_id>` / `--generation <gen1\|gen2\|gen3>`（全て必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
+| `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >` / `--set-id <set_id>` / `--generation <gen1\|gen2\|gen3>` / `--expected-format <9形式>` / `--expected-level <対応レベル>` / `--requested-count <1..上限>`（全て必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
 | `set_check.py` | セット横断の決定的検査 | `--set-dir <path>`（必須。`output/<set_id>`） | 使わない | セット横断machine_report JSON（5.5） | 0=検査完遂 / 1/2 | 【基本】【データ】+ 監査配置（E-CONTRACT-03）+ set_id形式（E-INPUT-05） |
 | `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | セットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-CONTRACT-03/04/05 + E-INPUT-03/05 |
 | `build_html.py` | set.json→単一自己完結HTMLの決定的生成 | `--set <path>`（必須。set.json） / `--out <path>`(既定: 入力と同ディレクトリの `index.html`) | 使わない | 生成サマリーJSON（5.7） | 0/1/2 | 【基本】+ 入力スキーマ（E-CONTRACT-01）+ メジャー一致（E-CONTRACT-02） |
@@ -155,7 +155,7 @@ cefr_j_agents/
 
 ### 5.4 machine_check.py
 
-- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分と、必須引数`--set-id <set_id>`・`--generation <gen1|gen2|gen3>`とする(MUST)。`set_id`書式不正はE-INPUT-05、generation値域外はE-INPUT-04で停止する。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。machine_reportの`question_id`・`format`・`level`はcandidateから、`set_id`・`generation`は引数から転記する。
+- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分と、必須引数`--set-id <set_id>`・`--generation <gen1|gen2|gen3>`・`--expected-format <9形式のいずれか>`・`--expected-level <該当形式のcefr|cefrj値>`・`--requested-count <1..limits.jsonのset_question_max>`とする(MUST)。`set_id`書式不正はE-INPUT-05、その他の引数値域外はE-INPUT-04で停止する。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。machine_reportの`question_id`・`format`・`level`はcandidateから、`set_id`・`generation`は引数から転記する。オーケストレータはセット開始時に確定した形式・レベル・問題数を期待値引数へ毎回渡さなければならない(MUST)。
 - **CLI-17** stdout は `machine_report.schema.json` 準拠のJSONとする(MUST)。検査段・違反判定・免除規則・レポート内容の正は `docs/cefrj-validation-spec.md` の機械検査仕様である。verdict が `fail` でも終了コードは 0 とする(MUST)（CLI-02）。
 - **CLI-18** 本CLIは監査ファイルを書き込んではならない(MUST NOT)。監査保存（`review/<question_id>.<gen>.machine.json`）は呼び出し側（オーケストレータ）の責務とする（配置の正は `docs/subagent-review-spec.md`）。
 
@@ -253,7 +253,7 @@ cefr_j_agents/
 |---|---|---|---|
 | E-INPUT-01 | CLI引数の不正: 未知のオプション、必須引数の欠落、併用禁止オプションの同時指定 | 問題の引数名と正しい書式を明記 | `--help` の日本語ヘルプを参照して引数を修正する |
 | E-INPUT-02 | 指定ファイル・ディレクトリの不存在または読み取り不可 | 対象パスを明記 | パスの綴りと存在、読み取り権限を確認する |
-| E-INPUT-03 | 入力JSONのパース不能（stdin・ファイルとも） | 対象（stdinまたはパス）とパーサの位置情報（行・列）を明記 | 入力JSONの構文を修正する。エージェントが生成した入力の場合は生成をやり直す |
+| E-INPUT-03 | 入力JSONがUTF-8でない、または構文のパース不能（stdin・ファイルとも） | 対象（stdinまたはパス）とパーサの位置情報（行・列）を明記 | 入力をUTF-8の標準JSONに修正する。エージェントが生成した入力の場合は生成をやり直す |
 | E-INPUT-04 | 値域外の値: format 9値以外、level_scale と対応しないレベル値、pos 15種以外、問題数が1〜`limits.json` 上限（既定20）の範囲外、gen が `gen1|gen2|gen3` 以外、`question_id` が `q01`〜`q20` の書式外、ID書式（`lex:<headword>:<pos>` / `gp:<ID>`）不一致、validate.py の未知スキーマ識別子、`--limit` 範囲外 | 対象フィールド名・受け取った値・許容値（列挙または範囲）を明記 | 許容値の一覧（`docs/json-output-spec.md` のID規則・`schemas/` の列挙定義）に従って値を修正する |
 | E-INPUT-05 | `set_id` の書式不正: `^\d{8}-\d{6}-[a-z0-9]{4}$` に不一致（`--set-dir` のディレクトリ名を含む） | 受け取った値と正規表現を明記 | set_id の書式（例 `20260816-142530-k7x2`）に一致するディレクトリを指定する |
 

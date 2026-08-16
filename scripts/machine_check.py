@@ -37,6 +37,18 @@ SYMBOL_ONLY_PATTERN = re.compile(r"^[^\w]+$", re.UNICODE)
 JSON_NUMBER_PATTERN = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 NONSTANDARD_JSON_CONSTANTS = ("-Infinity", "Infinity", "NaN")
 GENERATION_VALUES = ("gen1", "gen2", "gen3")
+FORMAT_VALUES = (
+    "vocab_mcq_en2ja",
+    "vocab_mcq_ja2en",
+    "vocab_flashcard_en2ja",
+    "vocab_flashcard_ja2en",
+    "grammar_mcq",
+    "grammar_cloze",
+    "grammar_reorder",
+    "grammar_rewrite",
+    "grammar_example_selfcheck",
+)
+MACHINE_REPORT_SCHEMA_VERSION = "1.1.0"
 VOCAB_FORMATS = {
     "vocab_mcq_en2ja",
     "vocab_mcq_ja2en",
@@ -95,8 +107,8 @@ REMEDIES = {
     ),
     "E-INPUT-01": "python scripts/machine_check.py --help の日本語ヘルプを参照して引数を修正してください。",
     "E-INPUT-02": "指定パスの綴り・存在・読み取り権限を確認してください。",
-    "E-INPUT-03": "入力JSONの構文を修正してください。エージェント生成入力の場合は生成をやり直してください。",
-    "E-INPUT-04": "generationをgen1|gen2|gen3のいずれかへ修正してください。",
+    "E-INPUT-03": "入力をUTF-8の標準JSONに修正してください。エージェント生成入力の場合は生成をやり直してください。",
+    "E-INPUT-04": "docs/architecture.md CLI-16の値域に従って入力値を修正してください。",
     "E-INPUT-05": "set_idを書式例20260816-142530-k7x2に一致させてください。",
 }
 
@@ -230,6 +242,9 @@ def make_parser() -> MachineArgumentParser:
     parser.add_argument("--candidate", required=True, help="candidate JSONのパス。-はstdin。")
     parser.add_argument("--set-id", required=True, help="セットID。")
     parser.add_argument("--generation", required=True, help="候補世代（gen1〜gen3）。")
+    parser.add_argument("--expected-format", required=True, help="セットの確定済み形式コード。")
+    parser.add_argument("--expected-level", required=True, help="セットの確定済みレベル値。")
+    parser.add_argument("--requested-count", required=True, help="セットの依頼問題数。")
     return parser
 
 
@@ -250,11 +265,69 @@ def validate_identifiers(set_id: str, generation: str) -> None:
         )
 
 
+def invalid_input_value(field: str, received: Any, allowed: Any) -> CliFailure:
+    return CliFailure(
+        "E-INPUT-04",
+        f"E-INPUT-04 {field}が値域外です: 受取{received!r}、許容{allowed}。",
+        detail={"allowed": allowed, "field": field, "received": received},
+        remedy=REMEDIES["E-INPUT-04"],
+    )
+
+
+def validate_set_conditions(
+    expected_format: str,
+    expected_level: str,
+    requested_count_text: str,
+    resources: dict[str, Any],
+) -> tuple[dict[str, str], int]:
+    if expected_format not in FORMAT_VALUES:
+        raise invalid_input_value("expected_format", expected_format, list(FORMAT_VALUES))
+    if expected_format in VOCAB_FORMATS:
+        scale = "cefr"
+        allowed_levels = tuple(CEFR_RANK)
+    else:
+        scale = "cefrj"
+        allowed_levels = tuple(CEFRJ_RANK)
+    if expected_level not in allowed_levels:
+        raise invalid_input_value("expected_level", expected_level, list(allowed_levels))
+    try:
+        requested_count = int(requested_count_text)
+    except ValueError as exc:
+        raise invalid_input_value("requested_count", requested_count_text, "1以上の整数") from exc
+    maximum = resources["limits"]["set_question_max"]
+    if str(requested_count) != requested_count_text or not 1 <= requested_count <= maximum:
+        raise invalid_input_value("requested_count", requested_count_text, f"1〜{maximum}の10進整数")
+    return {"scale": scale, "value": expected_level}, requested_count
+
+
+def decode_candidate_utf8(payload: bytes, source_name: str) -> str:
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        prefix = payload[: exc.start]
+        line = prefix.count(b"\n") + 1
+        line_start = prefix.rfind(b"\n") + 1
+        column = exc.start - line_start + 1
+        raise CliFailure(
+            "E-INPUT-03",
+            f"E-INPUT-03 candidate入力がUTF-8ではありません: {source_name}（{line}行{column}列）。",
+            detail={
+                "column": column,
+                "encoding": "utf-8",
+                "error": str(exc),
+                "line": line,
+                "source": source_name,
+            },
+            remedy=REMEDIES["E-INPUT-03"],
+        ) from exc
+
+
 def parse_candidate(path_text: str) -> dict[str, Any]:
     source_name = "stdin" if path_text == "-" else path_text
     if path_text == "-":
         try:
-            text = sys.stdin.read()
+            input_stream = getattr(sys.stdin, "buffer", sys.stdin)
+            payload = input_stream.read()
         except OSError as exc:
             raise CliFailure(
                 "E-INPUT-02",
@@ -262,6 +335,7 @@ def parse_candidate(path_text: str) -> dict[str, Any]:
                 detail={"error": str(exc), "path": "stdin"},
                 remedy=REMEDIES["E-INPUT-02"],
             ) from exc
+        text = payload if isinstance(payload, str) else decode_candidate_utf8(payload, source_name)
     else:
         path = Path(path_text)
         if not path.is_file():
@@ -272,14 +346,15 @@ def parse_candidate(path_text: str) -> dict[str, Any]:
                 remedy=REMEDIES["E-INPUT-02"],
             )
         try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as exc:
+            payload = path.read_bytes()
+        except OSError as exc:
             raise CliFailure(
                 "E-INPUT-02",
                 f"E-INPUT-02 candidateファイルを読み取れません: {path}",
                 detail={"error": str(exc), "path": str(path)},
                 remedy=REMEDIES["E-INPUT-02"],
             ) from exc
+        text = decode_candidate_utf8(payload, source_name)
     try:
         document = strict_candidate_json_loads(text)
     except json.JSONDecodeError as exc:
@@ -301,7 +376,11 @@ def parse_candidate(path_text: str) -> dict[str, Any]:
     return document
 
 
-def contract_failure(target: str, errors: list[dict[str, str]]) -> CliFailure:
+def contract_failure(
+    target: str,
+    errors: list[dict[str, str]],
+    schema_version: str = "1.0.0",
+) -> CliFailure:
     rendered = "; ".join(
         f"{error['json_pointer'] or '/'} {error['message']}" for error in errors[:50]
     )
@@ -309,8 +388,8 @@ def contract_failure(target: str, errors: list[dict[str, str]]) -> CliFailure:
         rendered = f"先頭50件: {rendered}; 総数{len(errors)}件"
     return CliFailure(
         "E-CONTRACT-01",
-        f"E-CONTRACT-01 {target}がスキーマ1.0.0に適合しません: {rendered}",
-        detail={"errors": errors[:50], "schema_version": "1.0.0", "target": target, "total_errors": len(errors)},
+        f"E-CONTRACT-01 {target}がスキーマ{schema_version}に適合しません: {rendered}",
+        detail={"errors": errors[:50], "schema_version": schema_version, "target": target, "total_errors": len(errors)},
         remedy=REMEDIES["E-CONTRACT-01"],
     )
 
@@ -940,12 +1019,16 @@ def check_distractor_anchors(
                     )
                 )
     if body["pos_pool_relaxed"]:
-        cross_pos_used = any(
-            (entry := lexicon_by_id.get(choice["anchor"]["entry_id"])) is not None
-            and choice["anchor"]["pos"] == entry["pos"]
-            and entry["pos"] != target_pos
-            for choice in distractors
-        )
+        cross_pos_used = False
+        for choice in distractors:
+            entry = lexicon_by_id.get(choice["anchor"]["entry_id"])
+            if (
+                entry is not None
+                and choice["anchor"]["pos"] == entry["pos"]
+                and entry["pos"] != target_pos
+            ):
+                cross_pos_used = True
+                break
         if same_pos_pool_count >= 3 or not cross_pos_used:
             violations.append(
                 violation(
@@ -1044,9 +1127,43 @@ def machine_check(
     resources: dict[str, Any],
     nlp: Any,
     model_version: str,
+    expected_format: str,
+    expected_level: dict[str, str],
+    requested_count: int,
 ) -> dict[str, Any]:
     violations: list[dict[str, Any]] = []
     warnings: list[dict[str, str]] = []
+
+    if candidate["format"] != expected_format:
+        violations.append(
+            violation(
+                "V-COND-01",
+                "format",
+                f"セット形式={expected_format}、candidate形式={candidate['format']}です。",
+                "candidateのformatをセットの確定済み形式と一致させてください。",
+            )
+        )
+    if candidate["level"] != expected_level:
+        violations.append(
+            violation(
+                "V-COND-01",
+                "level",
+                f"セットレベル={expected_level}、candidateレベル={candidate['level']}です。",
+                "candidateのlevel.scaleとlevel.valueをセットの確定済みレベルと一致させてください。",
+                expected_level=expected_level["value"],
+                actual_level=candidate["level"]["value"],
+            )
+        )
+    question_ordinal = int(candidate["question_id"][1:])
+    if question_ordinal > requested_count:
+        violations.append(
+            violation(
+                "V-COND-01",
+                "question_id",
+                f"依頼問題数={requested_count}、candidate問題ID={candidate['question_id']}です。",
+                f"question_idをq01〜q{requested_count:02d}の範囲に修正してください。",
+            )
+        )
 
     lexicon_entries = resources["lexicon"]["entries"]
     lexicon_by_id = {entry["id"]: entry for entry in lexicon_entries}
@@ -1142,7 +1259,7 @@ def machine_check(
         "generation": generation,
         "level": candidate["level"],
         "question_id": candidate["question_id"],
-        "schema_version": "1.0.0",
+        "schema_version": MACHINE_REPORT_SCHEMA_VERSION,
         "scope": "question",
         "set_id": set_id,
         "spacy_model": MODEL_NAME,
@@ -1160,17 +1277,32 @@ def main(argv: list[str] | None = None) -> int:
         args = make_parser().parse_args(argv)
         validate_identifiers(args.set_id, args.generation)
         resources = load_validated_resources(Path.cwd())
+        expected_level, requested_count = validate_set_conditions(
+            args.expected_format, args.expected_level, args.requested_count, resources
+        )
         nlp, model_version = load_spacy_model()
         candidate = parse_candidate(args.candidate)
         candidate_errors = schema_errors(candidate, Path.cwd() / "schemas/candidate.schema.json")
         if candidate_errors:
             raise contract_failure("candidate", candidate_errors)
         report = machine_check(
-            candidate, args.set_id, args.generation, resources, nlp, model_version
+            candidate,
+            args.set_id,
+            args.generation,
+            resources,
+            nlp,
+            model_version,
+            args.expected_format,
+            expected_level,
+            requested_count,
         )
         report_errors = schema_errors(report, Path.cwd() / "schemas/machine_report.schema.json")
         if report_errors:
-            raise contract_failure("machine_report（内部生成結果）", report_errors)
+            raise contract_failure(
+                "machine_report（内部生成結果）",
+                report_errors,
+                MACHINE_REPORT_SCHEMA_VERSION,
+            )
         emit_json(report)
         return 0
     except CliFailure as exc:

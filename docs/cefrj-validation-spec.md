@@ -353,7 +353,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 ### 3.1 契約と前提（MC-01〜MC-05）
 
-**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
+**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、セットの確定済み期待条件（format・level・依頼問題数）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
 
 **MC-02（verdict）** `verdict` は `violations` が1件以上あれば `fail`、0件なら `pass` である。他の判定基準を導入してはならない。
 
@@ -374,7 +374,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 | S1 | 前提検査 | CLI引数・正規化データ・設定 | 検証済みリソース | 不備は `E-ENV-*` / `E-DATA-*` で停止 |
 | S2 | 検査対象テキスト抽出 | candidate | 形式別の検査対象フィールド集合（MC-07） | candidateスキーマ不適合は `E-CONTRACT-01` で停止 |
 | S3 | spaCy解析 | 検査対象英文 | Doc（トークン列・レンマ・タグ・文分割） | — |
-| S4 | 構造制約検査 | Doc・limits.json | 文数・語数・字数・日本語フィールドの判定 | `V-SENT-01`, `V-LEN-01`, `V-EXP-01`, `V-JPN-01` |
+| S4 | 構造・セット条件制約検査 | candidate・期待条件・Doc・limits.json | format・level・question_id上限・文数・語数・字数・日本語フィールドの判定 | `V-COND-01`, `V-SENT-01`, `V-LEN-01`, `V-EXP-01`, `V-JPN-01` |
 | S5 | 語彙照合 | Doc・lexicon・allowlist | トークン別照合結果・レベル判定・対象語出現数 | `V-LEX-01`, `V-LEX-02`, `V-TGT-02` |
 | S6 | 形式固有検査 | candidate・lexicon・grammar | ターゲット照合・選択肢・誤答由来・整序・穴埋め・書き換えの判定 | `V-TGT-01`, `V-TGT-03`, `V-CHO-01`, `V-DIS-01/02/03`, `V-ORD-01/02`, `V-CLZ-01/02`, `V-RWT-01` |
 | S7 | レポート生成 | S3〜S6の全結果 | machine_report JSON（MC-30） | — |
@@ -567,10 +567,11 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 ### 3.8 machine_report の内容（MC-28〜MC-31）
 
-**MC-28（質問スコープ違反コード目録）** `machine_check.py` が発行する違反コード（`violations[].code`）は次の18種のみである。`machine_report.schema.json` の enum と一致する。エラーコード `E-*`（CLI停止）とは別体系であり混同してはならない。
+**MC-28（質問スコープ違反コード目録）** `machine_check.py` が発行する違反コード（`violations[].code`）は次の19種のみである。`machine_report.schema.json` の enum と一致する。エラーコード `E-*`（CLI停止）とは別体系であり混同してはならない。
 
 | コード | 意味 | 発行規則 |
 |---|---|---|
+| `V-COND-01` | セットの確定済み条件とcandidateの不一致（format・level・question_id番号上限） | GEN-02 |
 | `V-SENT-01` | 文数・2文例外の不正（文数≠1・対の不整合・要求元文タイプ値不正） | MC-08 |
 | `V-LEN-01` | 文の語数上限超過 | MC-09 |
 | `V-EXP-01` | 解説の字数上限超過 | MC-09 |
@@ -607,7 +608,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 | `set_id` / `question_id` / `generation` / `format` / `level` | 検査対象の識別（candidateとオーケストレータ入力から転記） |
 | `spacy_model` / `spacy_model_version` | `"en_core_web_sm"` 固定文字列とインストール版 |
 | `verdict` | MC-02 |
-| `violations[]` | `{code（MC-28の18種）, location（文字列。AUD-06のフィールドパス記法＋該当語列の引用）, evidence（採用エントリID・レベル値・計測値の引用。日本語）, expected_level（許容上限。無関係な違反はnull）, actual_level（検出レベル。同null）, suggestion（修正案。定型文でもよいが非空）}` |
+| `violations[]` | `{code（MC-28の19種）, location（文字列。AUD-06のフィールドパス記法＋該当語列の引用）, evidence（採用エントリID・レベル値・計測値の引用。日本語）, expected_level（許容上限。無関係な違反はnull）, actual_level（検出レベル。同null）, suggestion（修正案。定型文でもよいが非空）}` |
 | `warnings[]` | MC-29 |
 | `stats` | `{"texts": [...], "explanation_char_count": <int\|null>}`。`texts[]` の各要素は `{field（AUD-06記法）, text（検査した完成文）, sentence_count, word_count（MC-09）, tokens[]}`。`tokens[]` の各要素は `{surface, lemma（MC-16補正後）, upos, tag, decision, matched_entry_id, level, exemption_class}` |
 
@@ -654,6 +655,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 | 25 | 英文の自然さ | LLM | CHK-11 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 同上 |
 | 26 | 学習上の適切さ（内容の中立性・教育的妥当性） | LLM | CHK-12 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 同上 |
 | 27 | 指定レベル超の前提知識の不要性 | LLM | CHK-13 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 同上 |
+| 28 | セット確定条件と候補の一致 | 機械 | V-COND-01 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | GEN-02 |
 
 **MAT-02（網羅と追加不合格）** LLM担当の全項目は `docs/subagent-review-spec.md` 第3節のチェックリスト（CHK-01〜CHK-19）で網羅されなければならない（対応表は同文書3.0節）。レビュアーは本表のLLM担当項目と同文書の追加チェック（CHK-02・CHK-17・CHK-19）についてのみ不合格を追加でき、機械担当項目の再判定・上書きをしてはならない。
 
@@ -665,7 +667,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 | 体系 | 値 | 正 |
 |---|---|---|
-| 機械検査（1問） | MC-28 の18種 | 本文書 MC-28 と `schemas/machine_report.schema.json` |
+| 機械検査（1問） | MC-28 の19種 | 本文書 MC-28 と `schemas/machine_report.schema.json` |
 | 機械検査（警告） | MC-29 の3種 | 本文書 MC-29 と同スキーマ |
 | 機械検査（セット横断） | `V-SET-01`〜`V-SET-03` | 本文書 MC-27/MC-31 と同スキーマ |
 | LLMレビュー | `CHK-01`〜`CHK-19`（violationは CHK-18 を除く） | `docs/subagent-review-spec.md` 第3節と `schemas/review_result.schema.json` |

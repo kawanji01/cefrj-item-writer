@@ -457,7 +457,7 @@
 | `violations` | array | `{code, location, evidence, expected_level, actual_level, suggestion}`。レベルと無関係な違反では `expected_level` / `actual_level` は `null` |
 | `warnings` | array | `{code, location, message}`。verdict に影響しない |
 
-- **AUD-04（scope=question の追加フィールド）**: `question_id`・`generation`（`gen1|gen2|gen3`）・`format`・`level`・`spacy_model`（`en_core_web_sm` 固定）・`spacy_model_version`・`stats`。`violations[].code` は machine_check の18コード（`docs/cefrj-validation-spec.md` MC-28）のみ、`warnings[].code` は3コード（MC-29）のみ。`stats` は次の構造とする(MUST):
+- **AUD-04（scope=question の追加フィールド）**: `question_id`・`generation`（`gen1|gen2|gen3`）・`format`・`level`・`spacy_model`（`en_core_web_sm` 固定）・`spacy_model_version`・`stats`。`violations[].code` は machine_check の19コード（`docs/cefrj-validation-spec.md` MC-28）のみ、`warnings[].code` は3コード（MC-29）のみ。`stats` は次の構造とする(MUST):
   - `texts[]`: 英文検査対象ごとに `{field, text, sentence_count, word_count, tokens[]}`。`tokens[]` の各要素は `{surface, lemma, upos, tag, decision, matched_entry_id, level, exemption_class}`（`decision` は `multiword_match` / `wordlist_match` / `allowlist` / `exempt` / `target` / `violation` の6値、`exemption_class` は `punct_sym_space` / `numeric` / `possessive` / `contraction_fragment` / `null`）。
   - `explanation_char_count`: 解説の字数（S7の計測値）。解説を持たない語彙4形式では `null`。
 - **AUD-05（scope=set の追加フィールド）**: `target_question_id`（増分検査で加えた候補の `question_id`。全体最終検査 `set_check.final.json` では `null`）・`checked_question_ids[]`（検査範囲の問題ID昇順）。`violations[].code` は `V-SET-01`〜`V-SET-03` のみ。`warnings` は常に空配列とする(MUST)。
@@ -523,7 +523,7 @@
 <!-- example:machine_report -->
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "data_version": "wl1.6+gp20200220+norm1.0.0",
   "generated_at": "2026-08-16T14:26:02+09:00",
   "scope": "question",
@@ -575,7 +575,7 @@
 <!-- example:machine_report -->
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "data_version": "wl1.6+gp20200220+norm1.0.0",
   "generated_at": "2026-08-16T14:40:11+09:00",
   "scope": "set",
@@ -624,7 +624,7 @@
     }
   },
   "machine_report": {
-    "schema_version": "1.0.0",
+    "schema_version": "1.1.0",
     "data_version": "wl1.6+gp20200220+norm1.0.0",
     "generated_at": "2026-08-16T16:05:31+09:00",
     "scope": "question",

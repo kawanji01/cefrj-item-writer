@@ -64,8 +64,9 @@ class DoctorArgumentParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> None:
         translated = message
-        if message.startswith("unrecognized arguments:"):
-            translated = f"未知の引数です:{message.removeprefix('unrecognized arguments:')}"
+        prefix = "unrecognized arguments:"
+        if message.startswith(prefix):
+            translated = f"未知の引数です:{message[len(prefix):]}"
         raise CliFailure(
             "E-INPUT-01",
             f"E-INPUT-01 doctor.pyの引数が不正です: {translated}",

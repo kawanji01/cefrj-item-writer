@@ -82,6 +82,7 @@
 | CI-MCH-13 | 2文例文の条件 | (a)先行文脈要求の文タイプ記録付き2文候補 (b)記録なし2文候補 | (a)は当該違反なし、(b)は verdict `fail` |
 | CI-MCH-14 | 整序シャッフルの非同一性 | シャッフル提示順が正解順と同一の `grammar_reorder` 候補 | verdict `fail`、シャッフル同一違反が含まれること |
 | CI-MCH-15 | 出力の決定性 | 任意の候補フィクスチャ1件 | 2回実行の出力がCI-R-02の意味でバイト一致すること |
+| CI-MCH-16 | セット確定条件と候補の一致 | 同一の適合candidateに対し、(a)format・level・question_id番号が期待条件内 (b)format不一致 (c)level不一致 (d)question_id番号がrequested_count超過となるCLI引数 | (a)は`V-COND-01`なし、(b)(c)(d)はverdict `fail`かつ該当フィールドをlocationに持つ`V-COND-01`が含まれること。依頼数に対する欠問の判定はSET-07の責務であり本テストに含めない |
 
 ### 2.4 テスト対象一覧: lookup（CI-LKP群）
 

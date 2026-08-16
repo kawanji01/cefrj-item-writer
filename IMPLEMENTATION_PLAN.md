@@ -72,7 +72,7 @@
   2. `scripts/lookup.py`（語彙・文法項目の照会。明示指定照合と提案候補提示の情報源）
 - **依存**: M1（正規化データ）。
 - **DoD**:
-  1. `docs/testing-and-acceptance.md` の CI-MCH-01〜15 の入力条件を満たす手元フィクスチャに対し、各合否条件どおりの出力を返す（pytest化はM8。M2では手動実行で確認し結果を記録する）
+  1. `docs/testing-and-acceptance.md` の CI-MCH-01〜16 の入力条件を満たす手元フィクスチャに対し、各合否条件どおりの出力を返す（pytest化はM8。M2では手動実行で確認し結果を記録する）
   2. CI-LKP-01〜04 の合否条件どおりの出力を返す
   3. `machine_check.py` の出力が `machine_report.schema.json` に適合する（M2ではjsonschemaライブラリの直接呼び出しで確認し、`validate.py` 経由のCI-MCH-12はM3で再確認する）
   4. 同一入力2回で、実行日時フィールド（`docs/testing-and-acceptance.md` CI-R-02）を除きバイト一致する

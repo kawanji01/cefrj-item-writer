@@ -57,6 +57,31 @@
 - R2-03: 英語選択肢のNFC/NFDは区別し、前後空白・大小文字だけの差は重複とすること、日本語選択肢のNFC/NFDと前後空白差は重複とすることを確認した。`vocab_mcq_ja2en` のNFD choiceはNFC headwordと不一致の `V-DIS-01`、大小文字差だけは一致、前後空白差は不一致となった。
 - `.venv/bin/python scripts/doctor.py` は12 pass / 0 fail・stderr空、py_compile・`git diff --check` はpassした。CPython 3.10.18で `machine_check.py` が引き続きstdout空・終了コード1・`E-ENV-01`を返した。`docs/`、`schemas/`、`DECISIONS.md`、`IMPLEMENTATION_PLAN.md` にR2修正差分はない。
 
+### R3レビュー修正
+
+- R3-01: candidateのstdinとファイルをともにバイト列で読み、UTF-8を明示デコードするよう修正した。不正UTF-8は対象・行・列付き`E-INPUT-03`とし、`PYTHONIOENCODING`非依存にした。
+- R3-02: PLN-05で提案したM2D-09の承認を受け、`--expected-format`・`--expected-level`・`--requested-count`を必須化した。候補の形式・レベル不一致と問題番号上限超過を`V-COND-01`で列挙し、欠問の完全性はSET-07の責務とした。`machine_report.schema.json`はenumの後方互換な追加により1.1.0へマイナー版上げした。
+- R3-03: candidate/machine_reportは`format`/`scope`で該当スキーマ分岐を直接検証し、その他の複合スキーマはcontextのleaf errorを全件展開するよう修正した。required・type・additionalProperties・pattern・enum・const等を決定的な日本語理由へ変換する。
+- R3-04: Python 3.7で構文解析できない代入式を通常のループへ置換し、Python 3.8以下にない`str.removeprefix()`をスライスへ置換した。`importlib.metadata`もPython要件検査後の動的importとし、要件未満版が定義済みエラーへ到達できる起動境界にした。
+- 承認決定M2D-09を`DECISIONS.md`に記録し、GEN-02・CLI-16・MC-01/06/28/30・MAT-01/04・CI-MCH-16・M2 DoDとJSON例を同期した。
+
+### R3修正後の再検証
+
+1. M2 DoD（4/4 pass）
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 実データ・spaCyでmachine_checkを実行し、CI-MCH-01〜16と9形式・スキーマ・決定性を検証 ... PY`、および`.venv/bin/python - <<'PY' ... lookup.pyをsubprocess実行 ... PY`。
+   - 結果: CI-MCH-01〜16は16/16 pass、CI-LKP-01〜04は4/4 pass。全9形式のquestion reportが`machine_report.schema.json` 1.1.0に適合し、`generated_at`除去後の正準JSONバイト列が一致した。CI-MCH-16は同条件で`V-COND-01`なし、format・level・question_id上限の各3不一致で該当locationの`V-COND-01`を確認した。
+2. R3-01 UTF-8入力
+   - コマンド: `.venv/bin/python - <<'PY' ... PYTHONIOENCODING=utf-8|ascii|cp932|utf-16でmachine_check.pyに同一UTF-8 candidateをsubprocess入力 ... PY`。
+   - 結果: 4環境で終了コード0・stderr空、`generated_at`除去後のレポートが一致した。不正UTF-8をstdin・一時ファイルに入れた2経路はともに終了コード1・`E-INPUT-03`・2行1列となった。
+3. R3-03 スキーマ理由
+   - コマンド: `.venv/bin/python - <<'PY' ... grammar_cloze candidateのanswer欠落・型不正・余分フィールドを実CLIへ入力 ... PY`。
+   - 結果: 順に`/body`・`/body/answer`・`/body`の各1件を`E-CONTRACT-01`で返し、理由は「必須プロパティがありません」・「型が不正です」・「未定義のプロパティです」の日本語となった。
+4. R3-04 要件未満Python
+   - コマンド: `uv run --no-project --python 3.8|3.9|3.10 scripts/machine_check.py ...`と同`lookup.py`、および`docker run --rm --platform linux/amd64 ... python:3.7-slim python scripts/machine_check.py ...`と同`lookup.py`。各版で有効引数・未知引数・必須引数欠落を実行した。
+   - 結果: Python 3.7.17・3.8.20・3.9.23・3.10.18の全版で、両CLIの有効引数は終了コード1・`E-ENV-01`、未知/欠落引数は終了コード1・`E-INPUT-01`。全件stdout空・tracebackなし。Python 3.7 grammar指定の`ast.parse`もpassした。
+5. 契約・環境健全性
+   - `--expected-format`・`--expected-level`・`--requested-count`の値域外4条件が`E-INPUT-04`、新必須引数欠落が`E-INPUT-01`となった。`.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、9スキーマのDraft 2020-12自己妥当性、py_compile、`git diff --check`はpassした。
+
 ### M2 DoD実行記録（4/4 pass）
 
 1. 機械検査マトリクス（CI-MCH-01〜15）

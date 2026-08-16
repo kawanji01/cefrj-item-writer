@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cefr-j-agents.local/schemas/machine_report/1.0.0",
+  "$id": "https://cefr-j-agents.local/schemas/machine_report/1.1.0",
   "title": "machine_report",
   "description": "決定的機械検査のレポート。scope=question は machine_check.py（1問検査）、scope=set は set_check.py（セット横断検査）の出力。検査内容の正は docs/cefrj-validation-spec.md、フィールドの正は docs/json-output-spec.md。",
   "oneOf": [
@@ -90,12 +90,12 @@
       "properties": {
         "code": {
           "enum": [
-            "V-SENT-01", "V-LEN-01", "V-TGT-01", "V-TGT-02", "V-TGT-03",
+            "V-COND-01", "V-SENT-01", "V-LEN-01", "V-TGT-01", "V-TGT-02", "V-TGT-03",
             "V-CHO-01", "V-ORD-01", "V-ORD-02", "V-CLZ-01", "V-CLZ-02",
             "V-RWT-01", "V-LEX-01", "V-LEX-02", "V-DIS-01", "V-DIS-02",
             "V-DIS-03", "V-EXP-01", "V-JPN-01"
           ],
-          "description": "違反コード（machine_check.py の18種のみ）。"
+          "description": "違反コード（machine_check.py の19種のみ）。"
         },
         "location": { "type": "string", "minLength": 1, "description": "違反箇所（フィールド名とテキスト中の該当語列の引用）。" },
         "evidence": { "type": "string", "minLength": 1, "description": "根拠（原本参照 lex:/gp: IDとレベル値の引用、または計測値）。" },

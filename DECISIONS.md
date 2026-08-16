@@ -815,9 +815,9 @@
 
 ---
 
-## 5. M2実装前の承認決定（M2D-01〜M2D-08）
+## 5. M2実装に伴う承認決定（M2D-01〜M2D-09）
 
-2026-08-16、PLN-05に基づくM2実装前確認で発見した次の8件について、作問者が推奨案を承認した。
+2026-08-16、PLN-05に基づくM2実装前確認およびM2 R3レビューで発見した次の9件について、作問者が推奨案を承認した。
 
 ### M2D-01 machine_check識別情報のCLI入力
 - **決定**: `machine_check.py` に必須引数 `--set-id` と `--generation` を追加する。`question_id`はcandidateから取得する。`set_id`書式不正はE-INPUT-05、`generation`が`gen1|gen2|gen3`以外の場合はE-INPUT-04とする。
@@ -858,3 +858,8 @@
 - **決定**: 複数語ターゲットに一致した区間の全トークンを`decision="target"`とし、全トークンに同じ対象entry IDとlevelを記録する。非ターゲット複数語の一致区間だけを`decision="multiword_match"`とする。
 - **理由**: MC-19の対象語一次資料を区間全体で明示しつつ、非ターゲットの複数語照合と機械判別できるため。
 - **影響先**: `docs/cefrj-validation-spec.md` MC-19・MC-30、M2機械検査実装、CI-MCH-08。
+
+### M2D-09 セット条件の1問機械検査契約
+- **決定**: `machine_check.py` に必須引数 `--expected-format`・`--expected-level`・`--requested-count` を追加する。candidateの`format`、`level.scale`/`level.value`と期待値の不一致、および`question_id`の番号が依頼問題数を超える場合は新設の`V-COND-01`とする。依頼問題数分の完全性は1問入力では判定せず、`finalize_set.py` のSET-07で検証する。`machine_report.schema.json` は違反コードenumの後方互換な追加として1.1.0へマイナー版上げする。
+- **理由**: candidate単体の`format`・`level`はセットの確定済み条件の正値にならず、現行契約ではGEN-02の不一致を検出できないため。一方、1問検査に存在しない問題の欠落判定を担わせず、完成条件の既存責務を維持する。
+- **影響先**: `docs/question-generation-spec.md` GEN-02、`docs/architecture.md` CLI-16、`docs/cefrj-validation-spec.md` MC-28・MC-30・MAT-01/MAT-04、`docs/testing-and-acceptance.md` CI-MCH-16、`IMPLEMENTATION_PLAN.md` M2 DoD、`schemas/machine_report.schema.json`、M2機械検査実装、M4・M5呼び出し側。
