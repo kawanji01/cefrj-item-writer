@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/review_request/1.0.0",
+  "title": "review_request",
+  "description": "独立レビュアーへの入力封筒。含めるべき内容・含めてはならない内容の正は docs/subagent-review-spec.md（RC-06 / RC-07）、フィールドの正は docs/json-output-spec.md。candidate と machine_report は封筒作成前にそれぞれ candidate.schema.json / machine_report.schema.json の検証を通過済みでなければならない（本スキーマでは object として受ける）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "set_id", "question_id", "generation", "format", "level",
+    "target_ref", "level_limits", "candidate", "machine_report",
+    "constraints_snapshot", "readable_resources"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する review_request スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "set_id": {
+      "type": "string",
+      "pattern": "^\\d{8}-\\d{6}-[a-z0-9]{4}$",
+      "description": "セットID。"
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^q(0[1-9]|1[0-9]|20)$",
+      "description": "レビュー対象の問題ID。"
+    },
+    "generation": {
+      "enum": ["gen1", "gen2", "gen3"],
+      "description": "レビュー対象候補の世代。"
+    },
+    "format": {
+      "enum": [
+        "vocab_mcq_en2ja", "vocab_mcq_ja2en", "vocab_flashcard_en2ja", "vocab_flashcard_ja2en",
+        "grammar_mcq", "grammar_cloze", "grammar_reorder", "grammar_rewrite", "grammar_example_selfcheck"
+      ],
+      "description": "レビュー対象の形式コード。"
+    },
+    "level": {
+      "oneOf": [ { "$ref": "#/$defs/level_cefr" }, { "$ref": "#/$defs/level_cefrj" } ],
+      "description": "指定レベル。語彙4形式は cefr、文法5形式は cefrj。"
+    },
+    "target_ref": {
+      "oneOf": [ { "$ref": "#/$defs/lex_id" }, { "$ref": "#/$defs/gp_id" } ],
+      "description": "対象参照。語彙問題は lex:<headword>:<pos>、文法問題は gp:<ID>。"
+    },
+    "level_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vocabulary_level_max", "grammar_intro_level_max"],
+      "description": "オーケストレータが docs/cefrj-validation-spec.md の規則（LVL-09〜LVL-11）に従い算出したレベル上限。レビュアー自身に算出させてはならず、与えられた上限との比較のみ行わせる（RC-06）。",
+      "properties": {
+        "vocabulary_level_max": {
+          "$ref": "#/$defs/cefr_value",
+          "description": "例文語彙に許容されるWordlistレベル上限（cefr値）。"
+        },
+        "grammar_intro_level_max": {
+          "$ref": "#/$defs/cefrj_value",
+          "description": "例文中の文法構造に許容される導入レベル上限 L_ctx（cefrj値）。"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "description": "候補問題JSON全体（candidate.schema.json 検証通過済み）。本スキーマでは内容を再検証しない。"
+    },
+    "machine_report": {
+      "type": "object",
+      "description": "機械検査レポートJSON全体（machine_report.schema.json 検証通過済み。verdict が fail の場合も含める）。本スキーマでは内容を再検証しない。"
+    },
+    "constraints_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limits", "proper_nouns", "topic"],
+      "description": "当該セットに適用された制約のスナップショット（RC-06）。",
+      "properties": {
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sentence_word_limit", "explanation_char_limit"],
+          "description": "limits.json から当該問題向けに解決した実効値。",
+          "properties": {
+            "sentence_word_limit": { "type": "integer", "minimum": 1, "description": "適用される語数上限（指定レベルの帯の値）。" },
+            "explanation_char_limit": { "type": ["integer", "null"], "minimum": 1, "description": "適用される解説字数上限（brief または detailed の値）。解説を持たない語彙4形式では null。" }
+          }
+        },
+        "proper_nouns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "description": "固有名詞1語。" },
+          "description": "data/config/proper_nouns.json の allowlist 全文。"
+        },
+        "topic": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "description": "教師指定トピック。指定なしは null。"
+        }
+      }
+    },
+    "readable_resources": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "description": "リポジトリルートからの相対パス。" },
+      "description": "レビュアーに許可される読み取り専用リソースのパス一覧（許可範囲の正は docs/subagent-review-spec.md RC-10）。"
+    }
+  },
+  "allOf": [
+    {
+      "oneOf": [
+        {
+          "description": "語彙4形式: level は cefr、target_ref は lex ID。",
+          "properties": {
+            "format": { "enum": ["vocab_mcq_en2ja", "vocab_mcq_ja2en", "vocab_flashcard_en2ja", "vocab_flashcard_ja2en"] },
+            "level": { "$ref": "#/$defs/level_cefr" },
+            "target_ref": { "$ref": "#/$defs/lex_id" }
+          }
+        },
+        {
+          "description": "文法5形式: level は cefrj、target_ref は gp ID。",
+          "properties": {
+            "format": { "enum": ["grammar_mcq", "grammar_cloze", "grammar_reorder", "grammar_rewrite", "grammar_example_selfcheck"] },
+            "level": { "$ref": "#/$defs/level_cefrj" },
+            "target_ref": { "$ref": "#/$defs/gp_id" }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "cefr_value": {
+      "enum": ["A1", "A2", "B1", "B2"],
+      "description": "cefrスケールのレベル値。"
+    },
+    "cefrj_value": {
+      "enum": ["A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"],
+      "description": "cefrjスケールのレベル値。"
+    },
+    "level_cefr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "語彙問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefr", "description": "レベルスケール。" },
+        "value": { "$ref": "#/$defs/cefr_value", "description": "指定レベル。" }
+      }
+    },
+    "level_cefrj": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "文法問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefrj", "description": "レベルスケール。" },
+        "value": { "$ref": "#/$defs/cefrj_value", "description": "指定レベル。" }
+      }
+    },
+    "lex_id": {
+      "type": "string",
+      "pattern": "^lex:[^:]+:(noun|verb|adjective|adverb|pronoun|preposition|determiner|conjunction|number|modal-auxiliary|be-verb|interjection|do-verb|have-verb|infinitive-to)$",
+      "description": "語彙エントリID。"
+    },
+    "gp_id": {
+      "type": "string",
+      "pattern": "^gp:[0-9]+(-[0-9]+)?$",
+      "description": "文法項目ID。"
+    }
+  }
+}

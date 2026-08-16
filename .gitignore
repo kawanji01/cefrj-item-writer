@@ -1,0 +1,12 @@
+# 実行時生成物（監査JSONに問題内容を含むため既定ではコミットしない。共有する場合は運用判断で個別に追加）
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+.idea/

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/normalized_lexicon/1.0.0",
+  "title": "normalized_lexicon",
+  "description": "正規化済み語彙データ data/normalized/lexicon.json の構造。変換規則（ALL_sep基礎・併記グループ導出・整列順）の正は docs/cefrj-validation-spec.md の正規化仕様（NRM-06〜NRM-14）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "data_version", "entries", "groups"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する normalized_lexicon スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "data_version": {
+      "$ref": "#/$defs/data_version",
+      "description": "データ版文字列。data/normalized/meta.json の値と一致しなければならない（E-DATA-04）。"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "語彙エントリの配列。ALL_sep シート由来（1行1見出し語）。並び順は (headwordのcasefold, headword, pos) の辞書順（NRM-13）。",
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "groups": {
+      "type": "array",
+      "description": "併記グループ（ALLシートの `/` 併記行由来）の配列。group_id の辞書順（NRM-13）。",
+      "items": { "$ref": "#/$defs/group" }
+    }
+  },
+  "$defs": {
+    "data_version": {
+      "type": "string",
+      "pattern": "^wl[0-9A-Za-z.\\-]+\\+gp[0-9A-Za-z.\\-]+\\+norm\\d+\\.\\d+\\.\\d+$",
+      "description": "データ版文字列。書式 wl<Wordlist版>+gp<GrammarProfile版>+norm<正規化パイプラインsemver>（docs/architecture.md VER-04）。"
+    },
+    "pos15": {
+      "enum": [
+        "noun", "verb", "adjective", "adverb", "pronoun", "preposition",
+        "determiner", "conjunction", "number", "modal auxiliary", "be-verb",
+        "interjection", "do-verb", "have-verb", "infinitive-to"
+      ],
+      "description": "Wordlist の品詞15種（原文表記のまま。modal auxiliary のみ内部空白を含む）。"
+    },
+    "cefr_value": {
+      "enum": ["A1", "A2", "B1", "B2"],
+      "description": "語彙レベル（cefrスケール4値）。"
+    },
+    "lex_id": {
+      "type": "string",
+      "pattern": "^lex:[^:]+:(noun|verb|adjective|adverb|pronoun|preposition|determiner|conjunction|number|modal-auxiliary|be-verb|interjection|do-verb|have-verb|infinitive-to)$",
+      "description": "語彙エントリID。書式 lex:<headword>:<pos'>（pos' は pos の空白を `-` に置換した値。docs/json-output-spec.md のID規則）。"
+    },
+    "group_id": {
+      "type": "string",
+      "pattern": "^grp:[^:]+:(noun|verb|adjective|adverb|pronoun|preposition|determiner|conjunction|number|modal-auxiliary|be-verb|interjection|do-verb|have-verb|infinitive-to)$",
+      "description": "併記グループID。書式 grp:<先頭variant>:<pos'>（NRM-10）。"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "headword", "pos", "level",
+        "core_inventory_1", "core_inventory_2", "threshold",
+        "is_multiword", "group_ids"
+      ],
+      "description": "語彙エントリ1件。(headword, pos) の組はファイル内で一意（NRM-09a）。",
+      "properties": {
+        "id": { "$ref": "#/$defs/lex_id", "description": "語彙エントリID。" },
+        "headword": { "type": "string", "minLength": 1, "description": "見出し語（原文のまま。大文字小文字・ピリオド・ハイフン・アポストロフィ・内部空白を保持）。" },
+        "pos": { "$ref": "#/$defs/pos15", "description": "品詞（Wordlist 15種の原文表記）。" },
+        "level": { "$ref": "#/$defs/cefr_value", "description": "CEFRレベル（Wordlist の CEFR 列）。" },
+        "core_inventory_1": { "type": ["string", "null"], "minLength": 1, "description": "CoreInventory 1（分野カテゴリ大項目）。未付与は null。" },
+        "core_inventory_2": { "type": ["string", "null"], "minLength": 1, "description": "CoreInventory 2（分野カテゴリ下位項目）。未付与は null。" },
+        "threshold": { "type": ["string", "null"], "minLength": 1, "description": "Threshold Level の Notion category。未付与は null。" },
+        "is_multiword": { "type": "boolean", "description": "headword が空白またはハイフンを含む複数語見出しなら true（NRM-09）。" },
+        "group_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/group_id" },
+          "description": "所属する併記グループIDの配列。所属なしは空配列。"
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "headword_joined", "pos", "level", "member_ids"],
+      "description": "併記グループ1件（NRM-11）。",
+      "properties": {
+        "group_id": { "$ref": "#/$defs/group_id", "description": "併記グループID。" },
+        "headword_joined": { "type": "string", "minLength": 3, "pattern": "/", "description": "ALLシート原文の併記見出し（`/` 区切りをそのまま保持。例 `a.m./A.M./am/AM`）。" },
+        "pos": { "$ref": "#/$defs/pos15", "description": "品詞。" },
+        "level": { "$ref": "#/$defs/cefr_value", "description": "CEFRレベル。全メンバーで同一（NRM-10）。" },
+        "member_ids": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/lex_id" },
+          "description": "グループに属する語彙エントリIDの配列（ALL行での出現順）。"
+        }
+      }
+    }
+  }
+}

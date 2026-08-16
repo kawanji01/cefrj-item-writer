@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/config_limits/1.0.0",
+  "title": "config_limits",
+  "description": "運用パラメータ設定ファイル data/config/limits.json の構造。変更可能なパラメータの正は docs/cefrj-validation-spec.md の VAL-CFG-01 と docs/subagent-review-spec.md の RG-01 に従う。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sentence_word_limits",
+    "explanation_char_limits",
+    "distractor_reuse_max",
+    "generation_max",
+    "set_question_max",
+    "review_timeout_seconds"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する config_limits スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "sentence_word_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A1", "A2", "B1", "B2"],
+      "description": "英文1文あたりの語数上限（句読点を除くトークン数）。レベル帯（cefr値）ごとに定める。既定値: A1=10 / A2=14 / B1=20 / B2=26。",
+      "properties": {
+        "A1": { "type": "integer", "minimum": 1, "description": "A1帯の語数上限。既定値10。" },
+        "A2": { "type": "integer", "minimum": 1, "description": "A2帯の語数上限。既定値14。" },
+        "B1": { "type": "integer", "minimum": 1, "description": "B1帯の語数上限。既定値20。" },
+        "B2": { "type": "integer", "minimum": 1, "description": "B2帯の語数上限。既定値26。" }
+      }
+    },
+    "explanation_char_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["brief", "detailed"],
+      "description": "解説の字数上限（NFC正規化後の全Unicodeコードポイント数。空白・句読点を含む。docs/cefrj-validation-spec.md MC-09）。既定値: brief=200 / detailed=400。",
+      "properties": {
+        "brief": { "type": "integer", "minimum": 1, "description": "簡潔解説（grammar_mcq / grammar_cloze / grammar_reorder / grammar_rewrite）の字数上限。既定値200。" },
+        "detailed": { "type": "integer", "minimum": 1, "description": "詳細解説（grammar_example_selfcheck）の字数上限。既定値400。" }
+      }
+    },
+    "distractor_reuse_max": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "セット内で同一の誤答由来エントリID（lex:<headword>:<pos'>）を誤答として使用できる問題数の上限。既定値2（V-SET-03 の閾値。docs/cefrj-validation-spec.md MC-27）。"
+    },
+    "generation_max": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1問あたりの世代上限（初回を含む生成試行回数）。既定値3。question_id ごとの世代表記 gen1〜gen3 と監査ファイル命名はこの値3を前提とするため、変更する場合はスキーマ改版を要する。"
+    },
+    "set_question_max": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "1セットの問題数上限。既定値20。question_id の書式（q01〜q20）の制約により20を超えてはならない。"
+    },
+    "review_timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "独立レビュー1実行に適用するタイムアウト秒数。既定値300。超過はインフラ障害として扱う（docs/subagent-review-spec.md INF-07）。"
+    }
+  }
+}

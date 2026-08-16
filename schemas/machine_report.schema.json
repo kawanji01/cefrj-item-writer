@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/machine_report/1.0.0",
+  "title": "machine_report",
+  "description": "決定的機械検査のレポート。scope=question は machine_check.py（1問検査）、scope=set は set_check.py（セット横断検査）の出力。検査内容の正は docs/cefrj-validation-spec.md、フィールドの正は docs/json-output-spec.md。",
+  "oneOf": [
+    { "$ref": "#/$defs/question_report" },
+    { "$ref": "#/$defs/set_report" }
+  ],
+  "$defs": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する machine_report スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "data_version": {
+      "type": "string",
+      "pattern": "^wl[0-9A-Za-z.\\-]+\\+gp[0-9A-Za-z.\\-]+\\+norm\\d+\\.\\d+\\.\\d+$",
+      "description": "検査に使用した正規化データのデータ版文字列（data/normalized/meta.json から転記）。"
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$",
+      "description": "レポート生成日時（ISO 8601）。本フィールドのみ実行毎に変わる。決定性のバイト比較（テスト）からは本フィールドを除外する。"
+    },
+    "set_id": {
+      "type": "string",
+      "pattern": "^\\d{8}-\\d{6}-[a-z0-9]{4}$",
+      "description": "セットID。"
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^q(0[1-9]|1[0-9]|20)$",
+      "description": "問題ID（q01〜q20）。"
+    },
+    "generation": {
+      "enum": ["gen1", "gen2", "gen3"],
+      "description": "検査対象候補の世代。"
+    },
+    "verdict": {
+      "enum": ["pass", "fail"],
+      "description": "機械検査の判定。violations が1件以上あれば fail、0件なら pass（MC-02）。fail は後続工程で覆せない。"
+    },
+    "cefr_value": {
+      "enum": ["A1", "A2", "B1", "B2"],
+      "description": "cefrスケールのレベル値。"
+    },
+    "cefrj_value": {
+      "enum": ["A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"],
+      "description": "cefrjスケールのレベル値。"
+    },
+    "level_cefr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "語彙問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefr", "description": "レベルスケール。" },
+        "value": { "$ref": "#/$defs/cefr_value", "description": "指定レベル。" }
+      }
+    },
+    "level_cefrj": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "文法問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefrj", "description": "レベルスケール。" },
+        "value": { "$ref": "#/$defs/cefrj_value", "description": "指定レベル。" }
+      }
+    },
+    "level_or_null": {
+      "enum": [
+        "A1", "A2", "B1", "B2",
+        "A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2",
+        null
+      ],
+      "description": "レベル値（cefr 4値または cefrj 9値）。レベルと無関係な違反では null。"
+    },
+    "lex_id": {
+      "type": "string",
+      "pattern": "^lex:[^:]+:(noun|verb|adjective|adverb|pronoun|preposition|determiner|conjunction|number|modal-auxiliary|be-verb|interjection|do-verb|have-verb|infinitive-to)$",
+      "description": "語彙エントリID。"
+    },
+    "violation_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "location", "evidence", "expected_level", "actual_level", "suggestion"],
+      "description": "1問検査の違反1件（コード目録の正は docs/cefrj-validation-spec.md MC-28）。",
+      "properties": {
+        "code": {
+          "enum": [
+            "V-SENT-01", "V-LEN-01", "V-TGT-01", "V-TGT-02", "V-TGT-03",
+            "V-CHO-01", "V-ORD-01", "V-ORD-02", "V-CLZ-01", "V-CLZ-02",
+            "V-RWT-01", "V-LEX-01", "V-LEX-02", "V-DIS-01", "V-DIS-02",
+            "V-DIS-03", "V-EXP-01", "V-JPN-01"
+          ],
+          "description": "違反コード（machine_check.py の18種のみ）。"
+        },
+        "location": { "type": "string", "minLength": 1, "description": "違反箇所（フィールド名とテキスト中の該当語列の引用）。" },
+        "evidence": { "type": "string", "minLength": 1, "description": "根拠（原本参照 lex:/gp: IDとレベル値の引用、または計測値）。" },
+        "expected_level": { "$ref": "#/$defs/level_or_null", "description": "許容されるレベル上限。レベルと無関係な違反では null。" },
+        "actual_level": { "$ref": "#/$defs/level_or_null", "description": "検出されたレベル。レベルと無関係な違反では null。" },
+        "suggestion": { "type": "string", "minLength": 1, "description": "修正案（機械検査では定型文でもよい）。" }
+      }
+    },
+    "violation_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "location", "evidence", "expected_level", "actual_level", "suggestion"],
+      "description": "セット横断検査の違反1件（コード目録の正は docs/cefrj-validation-spec.md MC-31）。",
+      "properties": {
+        "code": {
+          "enum": ["V-SET-01", "V-SET-02", "V-SET-03"],
+          "description": "違反コード（set_check.py の3種のみ）。"
+        },
+        "location": { "type": "string", "minLength": 1, "description": "違反箇所（関与する question_id と該当テキストの引用）。" },
+        "evidence": { "type": "string", "minLength": 1, "description": "根拠（重複した対象ID・例文正規化文字列・誤答headwordと件数）。" },
+        "expected_level": { "type": "null", "description": "セット横断違反はレベルと無関係のため常に null。" },
+        "actual_level": { "type": "null", "description": "セット横断違反はレベルと無関係のため常に null。" },
+        "suggestion": { "type": "string", "minLength": 1, "description": "修正案（定型文でもよい）。" }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "location", "message"],
+      "description": "verdict に影響しない警告1件（MC-29）。誤検出調査の手がかりとしてレビュアーと監査に渡す。",
+      "properties": {
+        "code": {
+          "enum": ["W-POS-01", "W-PROPN-01", "W-LEMMA-01"],
+          "description": "警告コード（3種のみ）。"
+        },
+        "location": { "type": "string", "minLength": 1, "description": "警告対象の箇所（トークン位置と表層の引用）。" },
+        "message": { "type": "string", "minLength": 1, "description": "警告内容（日本語）。" }
+      }
+    },
+    "token_stat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "lemma", "upos", "tag", "decision", "matched_entry_id", "level", "exemption_class"],
+      "description": "トークン1件の照合結果（MC-30 のトークン表の1行）。",
+      "properties": {
+        "surface": { "type": "string", "minLength": 1, "description": "表層形。" },
+        "lemma": { "type": "string", "minLength": 1, "description": "レンマ（MC-16 の補正表適用後）。" },
+        "upos": { "type": "string", "minLength": 1, "description": "spaCy UPOS（token.pos_）。" },
+        "tag": { "type": "string", "minLength": 1, "description": "spaCy 詳細タグ（token.tag_）。" },
+        "decision": {
+          "enum": ["multiword_match", "wordlist_match", "allowlist", "exempt", "target", "violation"],
+          "description": "照合結果の区分。multiword_match=複数語トークン列マッチで消費、wordlist_match=単語照合で判定、allowlist=固有名詞allowlist合格、exempt=免除クラス、target=語彙問題の対象語トークン、violation=違反（V-LEX-01/V-LEX-02）。"
+        },
+        "matched_entry_id": {
+          "anyOf": [ { "$ref": "#/$defs/lex_id" }, { "type": "null" } ],
+          "description": "マッチした語彙エントリID。Wordlist照合以外（allowlist・免除・辞書外）は null。"
+        },
+        "level": {
+          "anyOf": [ { "$ref": "#/$defs/cefr_value" }, { "type": "null" } ],
+          "description": "マッチしたエントリのCEFRレベル。マッチなしは null。"
+        },
+        "exemption_class": {
+          "enum": ["punct_sym_space", "numeric", "possessive", "contraction_fragment", null],
+          "description": "免除区分（decision=exempt のときのみ非null）。punct_sym_space=句読点・記号・空白 / numeric=数値表記 / possessive=所有格 's / contraction_fragment=縮約分割断片。"
+        }
+      }
+    },
+    "text_stat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "text", "sentence_count", "word_count", "tokens"],
+      "description": "英文検査対象1件の計測結果。",
+      "properties": {
+        "field": { "type": "string", "minLength": 1, "description": "検査対象テキストの所在（candidate 内のフィールドパス。例 \"body.stem\"、\"body.sentence_complete\"）。" },
+        "text": { "type": "string", "minLength": 1, "description": "検査した英文（完成文）。" },
+        "sentence_count": { "type": "integer", "minimum": 0, "description": "spaCy doc.sents による文数。" },
+        "word_count": { "type": "integer", "minimum": 0, "description": "語数（句読点を除くトークン数。MC-09 の定義）。" },
+        "tokens": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/token_stat" },
+          "description": "トークンごとの照合結果の表。レビュアー入力封筒に含める。"
+        }
+      }
+    },
+    "stats_question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["texts", "explanation_char_count"],
+      "description": "1問検査の計測統計（MC-30）。",
+      "properties": {
+        "texts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/text_stat" },
+          "description": "英文検査対象ごとの計測結果。"
+        },
+        "explanation_char_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "解説の字数（NFC正規化後の全Unicodeコードポイント数。空白・句読点を含む。MC-09 の定義）。解説を持たない語彙4形式では null。"
+        }
+      }
+    },
+    "question_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "data_version", "generated_at", "scope", "set_id",
+        "question_id", "generation", "format", "level",
+        "spacy_model", "spacy_model_version", "verdict", "violations", "warnings", "stats"
+      ],
+      "description": "machine_check.py による1問検査のレポート。",
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schema_version", "description": "スキーマ版。" },
+        "data_version": { "$ref": "#/$defs/data_version", "description": "データ版。" },
+        "generated_at": { "$ref": "#/$defs/generated_at", "description": "レポート生成日時。" },
+        "scope": { "const": "question", "description": "レポート範囲。1問検査は question 固定。" },
+        "set_id": { "$ref": "#/$defs/set_id", "description": "セットID。" },
+        "question_id": { "$ref": "#/$defs/question_id", "description": "検査対象の問題ID。" },
+        "generation": { "$ref": "#/$defs/generation", "description": "検査対象候補の世代。" },
+        "format": {
+          "enum": [
+            "vocab_mcq_en2ja", "vocab_mcq_ja2en", "vocab_flashcard_en2ja", "vocab_flashcard_ja2en",
+            "grammar_mcq", "grammar_cloze", "grammar_reorder", "grammar_rewrite", "grammar_example_selfcheck"
+          ],
+          "description": "検査対象の形式コード。"
+        },
+        "level": {
+          "oneOf": [ { "$ref": "#/$defs/level_cefr" }, { "$ref": "#/$defs/level_cefrj" } ],
+          "description": "検査対象の指定レベル。"
+        },
+        "spacy_model": { "const": "en_core_web_sm", "description": "使用したspaCyモデル名（固定）。" },
+        "spacy_model_version": { "type": "string", "minLength": 1, "description": "使用したspaCyモデルのバージョン。" },
+        "verdict": { "$ref": "#/$defs/verdict", "description": "機械検査の判定。" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/violation_question" },
+          "description": "検出した全違反。途中打ち切りをせず検出可能な全件を列挙する（MC-04）。"
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/warning" },
+          "description": "検出した全警告（verdict に影響しない）。"
+        },
+        "stats": { "$ref": "#/$defs/stats_question", "description": "計測統計。" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "verdict": { "const": "pass" } } },
+          "then": { "properties": { "violations": { "maxItems": 0 } } },
+          "else": { "properties": { "violations": { "minItems": 1 } } }
+        },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "format": { "enum": ["vocab_mcq_en2ja", "vocab_mcq_ja2en", "vocab_flashcard_en2ja", "vocab_flashcard_ja2en"] },
+                "level": { "$ref": "#/$defs/level_cefr" }
+              }
+            },
+            {
+              "properties": {
+                "format": { "enum": ["grammar_mcq", "grammar_cloze", "grammar_reorder", "grammar_rewrite", "grammar_example_selfcheck"] },
+                "level": { "$ref": "#/$defs/level_cefrj" }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "set_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "data_version", "generated_at", "scope", "set_id",
+        "target_question_id", "checked_question_ids", "verdict", "violations", "warnings"
+      ],
+      "description": "set_check.py によるセット横断検査のレポート。増分検査（確定済み問題×当該候補）と全体最終検査の両方に用いる。",
+      "properties": {
+        "schema_version": { "$ref": "#/$defs/schema_version", "description": "スキーマ版。" },
+        "data_version": { "$ref": "#/$defs/data_version", "description": "データ版。" },
+        "generated_at": { "$ref": "#/$defs/generated_at", "description": "レポート生成日時。" },
+        "scope": { "const": "set", "description": "レポート範囲。セット横断検査は set 固定。" },
+        "set_id": { "$ref": "#/$defs/set_id", "description": "検査対象のセットID。" },
+        "target_question_id": {
+          "anyOf": [ { "$ref": "#/$defs/question_id" }, { "type": "null" } ],
+          "description": "増分検査で新たに加えた候補の問題ID。全体最終検査（review/set_check.final.json）では null。"
+        },
+        "checked_question_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/question_id" },
+          "description": "検査範囲に含めた問題IDの一覧（昇順）。"
+        },
+        "verdict": { "$ref": "#/$defs/verdict", "description": "セット横断検査の判定。" },
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/violation_set" },
+          "description": "検出した全違反（V-SET-01〜03）。"
+        },
+        "warnings": {
+          "type": "array",
+          "maxItems": 0,
+          "items": { "$ref": "#/$defs/warning" },
+          "description": "セット横断検査は警告を発しない（常に空配列）。"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "verdict": { "const": "pass" } } },
+          "then": { "properties": { "violations": { "maxItems": 0 } } },
+          "else": { "properties": { "violations": { "minItems": 1 } } }
+        }
+      ]
+    }
+  }
+}

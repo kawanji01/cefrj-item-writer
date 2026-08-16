@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/review_result/1.0.0",
+  "title": "review_result",
+  "description": "独立レビュアーの出力。記入規則の正は docs/subagent-review-spec.md（RC-13・RR-01〜RR-05・FP-01〜FP-05）、フィールドの正は docs/json-output-spec.md。checks は CHK-01〜CHK-19 の全19項目をちょうど1件ずつ含まなければならない。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "set_id", "question_id", "generation", "verdict",
+    "checks", "sentence_grammar_inventory", "violations", "machine_check_disputes"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する review_result スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "set_id": {
+      "type": "string",
+      "pattern": "^\\d{8}-\\d{6}-[a-z0-9]{4}$",
+      "description": "セットID。"
+    },
+    "question_id": {
+      "type": "string",
+      "pattern": "^q(0[1-9]|1[0-9]|20)$",
+      "description": "レビュー対象の問題ID。"
+    },
+    "generation": {
+      "enum": ["gen1", "gen2", "gen3"],
+      "description": "レビュー対象候補の世代。"
+    },
+    "verdict": {
+      "enum": ["pass", "fail"],
+      "description": "レビュアー担当項目のみについての判定。機械検査違反の写しを理由に fail としてはならない（RC-13）。世代判定の合成はオーケストレータの責務。"
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": { "$ref": "#/$defs/check_record" },
+      "allOf": [
+        { "contains": { "properties": { "check_id": { "const": "CHK-01" } }, "required": ["check_id"] }, "description": "CHK-01 を必ず1件含む。" },
+        { "contains": { "properties": { "check_id": { "const": "CHK-02" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-03" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-04" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-05" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-06" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-07" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-08" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-09" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-10" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-11" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-12" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-13" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-14" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-15" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-16" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-17" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-18" } }, "required": ["check_id"] } },
+        { "contains": { "properties": { "check_id": { "const": "CHK-19" } }, "required": ["check_id"] } }
+      ],
+      "description": "チェックリスト実施記録。CHK-01〜CHK-19 の全項目をちょうど1件ずつ含む（RR-01。件数19と各IDの contains 制約の組で一意性を強制する）。適用外の項目は not_applicable とする。"
+    },
+    "sentence_grammar_inventory": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/inventory_item" },
+      "description": "例文文法構造インベントリ（CHK-03 の列挙結果。RR-02〜RR-03）。合格・不合格を問わず記録する。kyoinban と reviewer_estimate は level_source で常に機械的に区別可能。"
+    },
+    "violations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/violation" },
+      "description": "レビュー違反。verdict が fail のとき1件以上、pass のとき0件（RC-13。本スキーマの if/then で強制）。"
+    },
+    "machine_check_disputes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dispute" },
+      "description": "機械検査誤検出疑いの報告（FP-01〜FP-02）。該当がなければ空配列。報告があっても機械検査の fail は覆らない。"
+    }
+  },
+  "if": {
+    "properties": { "verdict": { "const": "pass" } }
+  },
+  "then": {
+    "properties": { "violations": { "maxItems": 0 } }
+  },
+  "else": {
+    "properties": { "violations": { "minItems": 1 } }
+  },
+  "$defs": {
+    "cefrj_value": {
+      "enum": ["A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"],
+      "description": "cefrjスケールのレベル値。"
+    },
+    "level_or_null": {
+      "enum": [
+        "A1", "A2", "B1", "B2",
+        "A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2",
+        null
+      ],
+      "description": "レベル値（cefr 4値または cefrj 9値）。レベルと無関係な違反では null。"
+    },
+    "gp_id": {
+      "type": "string",
+      "pattern": "^gp:[0-9]+(-[0-9]+)?$",
+      "description": "文法項目ID。"
+    },
+    "level_raw": {
+      "type": "string",
+      "pattern": "^(A1\\.[123]|A2\\.[12]|B1\\.[12]|B2\\.[12])(-(A1\\.[123]|A2\\.[12]|B1\\.[12]|B2\\.[12]))?$",
+      "description": "教員版レベル値（単一値または範囲値。範囲値は範囲のまま引用する）。"
+    },
+    "check_record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["check_id", "result", "note"],
+      "description": "チェック項目1件の実施記録。",
+      "properties": {
+        "check_id": {
+          "enum": [
+            "CHK-01", "CHK-02", "CHK-03", "CHK-04", "CHK-05", "CHK-06", "CHK-07",
+            "CHK-08", "CHK-09", "CHK-10", "CHK-11", "CHK-12", "CHK-13", "CHK-14",
+            "CHK-15", "CHK-16", "CHK-17", "CHK-18", "CHK-19"
+          ],
+          "description": "チェック項目ID（docs/subagent-review-spec.md 第3節）。"
+        },
+        "result": {
+          "enum": ["pass", "fail", "not_applicable"],
+          "description": "チェック結果。適用外形式・条件不成立は not_applicable。CHK-18 に fail は存在しない（誤検出疑いは machine_check_disputes に記録する）。"
+        },
+        "note": { "type": "string", "minLength": 1, "description": "所見（日本語1〜3文）。not_applicable の場合はその理由を記す。" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "check_id": { "const": "CHK-18" } } },
+          "then": { "properties": { "result": { "enum": ["pass", "not_applicable"] } } }
+        }
+      ]
+    },
+    "inventory_item": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["structure", "span", "level_source", "grammar_item_id", "level", "evidence"],
+          "description": "教員版に該当項目がある構造（level_source=kyoinban）。",
+          "properties": {
+            "structure": { "type": "string", "minLength": 1, "description": "構造の名称（教員版の文法項目名をそのまま使用）。" },
+            "span": { "type": "string", "minLength": 1, "description": "例文中の該当スパン（語列の引用）。" },
+            "level_source": { "const": "kyoinban", "description": "レベル根拠の種別。教員版由来。" },
+            "grammar_item_id": { "$ref": "#/$defs/gp_id", "description": "該当する文法項目ID。" },
+            "level": { "$ref": "#/$defs/level_raw", "description": "教員版のCEFR-J level値（範囲値は範囲のまま引用）。導入レベルは下限。" },
+            "evidence": { "type": "string", "minLength": 1, "description": "根拠（教員版IDとレベル値の引用。継承時は親IDと継承の旨）。" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["structure", "span", "level_source", "grammar_item_id", "level", "evidence"],
+          "description": "教員版に該当項目がない構造（level_source=reviewer_estimate）。",
+          "properties": {
+            "structure": { "type": "string", "minLength": 1, "description": "構造の名称（レビュアーの命名）。" },
+            "span": { "type": "string", "minLength": 1, "description": "例文中の該当スパン（語列の引用）。" },
+            "level_source": { "const": "reviewer_estimate", "description": "レベル根拠の種別。レビュアーの推定。" },
+            "grammar_item_id": { "type": "null", "description": "教員版に該当項目がないため null。" },
+            "level": { "$ref": "#/$defs/cefrj_value", "description": "推定した導入レベル（9段階の1値）。" },
+            "evidence": { "type": "string", "minLength": 1, "description": "推定根拠の記述（日本語。EFL傍証を使った場合はその数値を引用）。" }
+          }
+        }
+      ],
+      "description": "例文文法構造インベントリの1件（RR-02）。"
+    },
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "location", "evidence", "expected_level", "actual_level", "suggestion"],
+      "description": "レビュー違反1件（RR-04）。",
+      "properties": {
+        "code": {
+          "enum": [
+            "CHK-01", "CHK-02", "CHK-03", "CHK-04", "CHK-05", "CHK-06", "CHK-07",
+            "CHK-08", "CHK-09", "CHK-10", "CHK-11", "CHK-12", "CHK-13", "CHK-14",
+            "CHK-15", "CHK-16", "CHK-17", "CHK-19"
+          ],
+          "description": "違反を検出したチェック項目ID。CHK-18 は violation を生成しない。機械検査の違反コード（V-系）を使ってはならない。"
+        },
+        "location": { "type": "string", "minLength": 1, "description": "候補内の違反箇所（フィールド名と該当語列の引用を併記）。" },
+        "evidence": { "type": "string", "minLength": 1, "description": "根拠。原本参照（lex:/gp: IDとレベル値の引用）または推定根拠。どちらであるかが読み取れる書き方をする。" },
+        "expected_level": { "$ref": "#/$defs/level_or_null", "description": "許容されるレベル上限。レベル系違反（CHK-02/03/04/07/13）では必須記入、それ以外は null。" },
+        "actual_level": { "$ref": "#/$defs/level_or_null", "description": "検出された導入レベル。レベル系違反では必須記入、それ以外は null。" },
+        "suggestion": { "type": "string", "minLength": 1, "description": "再生成側がそのまま採用できる具体的な修正案（修正後の文・選択肢・訳・解説の文案）。" }
+      }
+    },
+    "dispute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["machine_violation_code", "location", "dispute_type", "claim", "evidence", "suggested_correction"],
+      "description": "機械検査誤検出疑いの報告1件（FP-02）。",
+      "properties": {
+        "machine_violation_code": {
+          "enum": [
+            "V-SENT-01", "V-LEN-01", "V-TGT-01", "V-TGT-02", "V-TGT-03",
+            "V-CHO-01", "V-ORD-01", "V-ORD-02", "V-CLZ-01", "V-CLZ-02",
+            "V-RWT-01", "V-LEX-01", "V-LEX-02", "V-DIS-01", "V-DIS-02",
+            "V-DIS-03", "V-EXP-01", "V-JPN-01"
+          ],
+          "description": "疑い対象の機械検査違反コード（machine_report の code をそのまま引用）。"
+        },
+        "location": { "type": "string", "minLength": 1, "description": "疑い対象の箇所（機械検査レポートの指摘箇所の引用）。" },
+        "dispute_type": {
+          "enum": ["lemmatization", "pos_tagging", "multiword_match", "exemption", "measurement"],
+          "description": "疑いの分類（FP-01 の1〜5に対応）。"
+        },
+        "claim": { "type": "string", "minLength": 1, "description": "誤検出と疑う理由（日本語。「正しくは〜であるはず」という形で具体的に）。" },
+        "evidence": { "type": "string", "minLength": 1, "description": "根拠（正規化データの該当エントリの引用、または言語学的事実の記述）。" },
+        "suggested_correction": { "type": "string", "minLength": 1, "description": "機械検査側の修正示唆。" }
+      }
+    }
+  }
+}

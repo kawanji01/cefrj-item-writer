@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/normalized_grammar/1.0.0",
+  "title": "normalized_grammar",
+  "description": "正規化済み文法データ data/normalized/grammar.json の構造。変換規則（ITEM LIST⊕教員版結合・枝番レベル継承・EFL傍証）の正は docs/cefrj-validation-spec.md の正規化仕様（NRM-15〜NRM-28）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "data_version", "efl_corpus", "entries"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する normalized_grammar スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "data_version": {
+      "type": "string",
+      "pattern": "^wl[0-9A-Za-z.\\-]+\\+gp[0-9A-Za-z.\\-]+\\+norm\\d+\\.\\d+\\.\\d+$",
+      "description": "データ版文字列（docs/architecture.md VER-04）。data/normalized/meta.json の値と一致しなければならない。"
+    },
+    "efl_corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["words", "books"],
+      "description": "EFL SUMMARY (FULL) のコーパス母数（NRM-27）。RANGE の解釈（分母=教科書数）の提示に用いる。",
+      "properties": {
+        "words": { "$ref": "#/$defs/level_counts", "description": "レベル別総語数。" },
+        "books": { "$ref": "#/$defs/level_counts", "description": "レベル別教科書数。" }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "description": "文法項目エントリの配列（ITEM LIST 全501項目）。並び順は (親番号N昇順, 親自身→枝番M昇順)（NRM-25）。",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "gp_id": {
+      "type": "string",
+      "pattern": "^gp:[0-9]+(-[0-9]+)?$",
+      "description": "文法項目ID。書式 gp:<ID>（例 gp:13、枝番 gp:1-1。docs/json-output-spec.md のID規則）。"
+    },
+    "cefrj_value": {
+      "enum": ["A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"],
+      "description": "文法レベル（cefrjスケール9値）。"
+    },
+    "level_raw": {
+      "type": "string",
+      "pattern": "^(A1\\.[123]|A2\\.[12]|B1\\.[12]|B2\\.[12])(-(A1\\.[123]|A2\\.[12]|B1\\.[12]|B2\\.[12]))?$",
+      "description": "教員版 CEFR-J level 列の原文値。単一値または範囲値（32値表 LVL-05）。"
+    },
+    "level_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A1", "A2", "B1", "B2", "C1"],
+      "description": "A1〜C1 のレベル別整数値。",
+      "properties": {
+        "A1": { "type": "integer", "minimum": 0, "description": "A1の値。" },
+        "A2": { "type": "integer", "minimum": 0, "description": "A2の値。" },
+        "B1": { "type": "integer", "minimum": 0, "description": "B1の値。" },
+        "B2": { "type": "integer", "minimum": 0, "description": "B2の値。" },
+        "C1": { "type": "integer", "minimum": 0, "description": "C1の値。" }
+      }
+    },
+    "efl_numbers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A1", "A2", "B1", "B2", "C1"],
+      "description": "A1〜C1 のレベル別数値（相対頻度）。セルが空の場合は null。",
+      "properties": {
+        "A1": { "type": ["number", "null"], "description": "A1の値。" },
+        "A2": { "type": ["number", "null"], "description": "A2の値。" },
+        "B1": { "type": ["number", "null"], "description": "B1の値。" },
+        "B2": { "type": ["number", "null"], "description": "B2の値。" },
+        "C1": { "type": ["number", "null"], "description": "C1の値。" }
+      }
+    },
+    "efl_integers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A1", "A2", "B1", "B2", "C1"],
+      "description": "A1〜C1 のレベル別整数値（教科書RANGE）。セルが空の場合は null。",
+      "properties": {
+        "A1": { "type": ["integer", "null"], "description": "A1の値。" },
+        "A2": { "type": ["integer", "null"], "description": "A2の値。" },
+        "B1": { "type": ["integer", "null"], "description": "B1の値。" },
+        "B2": { "type": ["integer", "null"], "description": "B2の値。" },
+        "C1": { "type": ["integer", "null"], "description": "C1の値。" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "item_list_id", "parent_id", "display_name", "target_eligible",
+        "item_list", "kyoinban", "level", "efl"
+      ],
+      "description": "文法項目エントリ1件。",
+      "properties": {
+        "id": { "$ref": "#/$defs/gp_id", "description": "文法項目ID（gp:<ID>）。" },
+        "item_list_id": { "type": "string", "pattern": "^[0-9]+(-[0-9]+)?$", "description": "ITEM LIST の ID 列原文（例 `13`、`1-1`）。" },
+        "parent_id": {
+          "anyOf": [ { "$ref": "#/$defs/gp_id" }, { "type": "null" } ],
+          "description": "枝番ID（N-M）の親項目ID（gp:N）。親項目自身は null（NRM-20）。"
+        },
+        "display_name": { "type": "string", "minLength": 1, "description": "教師向け表示名。教員版行があれば kyoinban.name_simple_ja、なければ item_list.name_ja の値（NRM-24）。" },
+        "target_eligible": { "type": "boolean", "description": "ターゲット適格フラグ。教員版行がある256項目のみ true（NRM-22）。" },
+        "item_list": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name_ja", "sentence_type_ja", "shorthand_code", "grammatical_item_en",
+            "sentence_type_en", "note", "pattern_shorthand", "regex_treetagger"
+          ],
+          "description": "ITEM LIST シート由来の属性（NRM-17）。",
+          "properties": {
+            "name_ja": { "type": "string", "minLength": 1, "description": "文法項目名（日本語）。" },
+            "sentence_type_ja": { "type": ["string", "null"], "minLength": 1, "description": "文タイプ（日本語）。不問（空欄）は null。" },
+            "shorthand_code": { "type": ["string", "null"], "minLength": 1, "description": "Shorthand Code。空欄は null。" },
+            "grammatical_item_en": { "type": ["string", "null"], "minLength": 1, "description": "Grammatical Item（英語名）。空欄は null。" },
+            "sentence_type_en": { "type": ["string", "null"], "minLength": 1, "description": "Sentence Type（英語）。空欄は null。" },
+            "note": { "type": ["string", "null"], "minLength": 1, "description": "備考。空欄は null。" },
+            "pattern_shorthand": { "type": ["string", "null"], "minLength": 1, "description": "パターン略記。対象構造実現のLLM照合根拠（MC-25）。空欄は null。" },
+            "regex_treetagger": { "type": ["string", "null"], "minLength": 1, "description": "TreeTaggerベース正規表現。保持のみ（機械照合はv2課題）。空欄は null。" }
+          }
+        },
+        "kyoinban": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["present", "name_ja", "name_simple_ja", "name_en", "level_raw"],
+              "description": "教員版行がある場合（256項目）。",
+              "properties": {
+                "present": { "const": true, "description": "教員版行の有無。この分岐では true。" },
+                "name_ja": { "type": "string", "minLength": 1, "description": "教員版の文法項目名。" },
+                "name_simple_ja": { "type": "string", "minLength": 1, "description": "文法項目(平易版)。教師向け表示名の正。" },
+                "name_en": { "type": ["string", "null"], "minLength": 1, "description": "Grammatical item (English)。空欄は null。" },
+                "level_raw": { "$ref": "#/$defs/level_raw", "description": "CEFR-J level 列の原文値（単一値または範囲値）。" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["present", "name_ja", "name_simple_ja", "name_en", "level_raw"],
+              "description": "教員版行がない場合。",
+              "properties": {
+                "present": { "const": false, "description": "教員版行の有無。この分岐では false。" },
+                "name_ja": { "type": "null", "description": "教員版行がないため null。" },
+                "name_simple_ja": { "type": "null", "description": "教員版行がないため null。" },
+                "name_en": { "type": "null", "description": "教員版行がないため null。" },
+                "level_raw": { "type": "null", "description": "教員版行がないため null。" }
+              }
+            }
+          ],
+          "description": "教員版シート由来の属性（NRM-18〜NRM-19）。"
+        },
+        "level": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["min", "max", "source", "inherited_from"],
+              "description": "自身に教員版行がある場合のレベル（NRM-21-1）。",
+              "properties": {
+                "min": { "$ref": "#/$defs/cefrj_value", "description": "導入レベル（範囲値の下限。単一値は同値）。" },
+                "max": { "$ref": "#/$defs/cefrj_value", "description": "定着レベル（範囲値の上限。単一値は同値）。" },
+                "source": { "const": "kyoinban_direct", "description": "レベルの由来。自身の教員版行。" },
+                "inherited_from": { "type": "null", "description": "直接付与のため null。" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["min", "max", "source", "inherited_from"],
+              "description": "枝番が親の教員版レベルを継承する場合（NRM-21-2）。",
+              "properties": {
+                "min": { "$ref": "#/$defs/cefrj_value", "description": "継承した導入レベル。" },
+                "max": { "$ref": "#/$defs/cefrj_value", "description": "継承した定着レベル。" },
+                "source": { "const": "kyoinban_inherited", "description": "レベルの由来。親項目の教員版行からの継承。" },
+                "inherited_from": { "$ref": "#/$defs/gp_id", "description": "継承元の親項目ID。" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["min", "max", "source", "inherited_from"],
+              "description": "レベル未付与の場合（NRM-21-3。未付与16項目とその枝番）。",
+              "properties": {
+                "min": { "type": "null", "description": "レベル未付与のため null。" },
+                "max": { "type": "null", "description": "レベル未付与のため null。" },
+                "source": { "type": "null", "description": "レベル未付与のため null。" },
+                "inherited_from": { "type": "null", "description": "レベル未付与のため null。" }
+              }
+            }
+          ],
+          "description": "エントリのレベルブロック（NRM-21）。"
+        },
+        "efl": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rel_freq", "range"],
+              "description": "EFL SUMMARY (FULL) 由来の傍証データ（NRM-26）。",
+              "properties": {
+                "rel_freq": { "$ref": "#/$defs/efl_numbers", "description": "百万語あたり相対頻度（A1〜C1）。" },
+                "range": { "$ref": "#/$defs/efl_integers", "description": "教科書RANGE（レベル別出現教科書数、A1〜C1）。" }
+              }
+            }
+          ],
+          "description": "EFL傍証。EFL SUMMARY に行が存在しない項目は null（NRM-28）。"
+        }
+      }
+    }
+  }
+}

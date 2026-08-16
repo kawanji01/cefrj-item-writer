@@ -1,0 +1,702 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/set/1.0.0",
+  "title": "set",
+  "description": "問題データの正本 output/<set_id>/set.json の構造。合格問題のみを含む。フィールドの正は docs/json-output-spec.md。1セット=1形式であり、format と questions[] の全要素の形式は oneOf の同一分岐で拘束される。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "set_id", "format", "level", "mode", "requested_count",
+    "topic", "preferred_proper_nouns", "created_at", "tool", "model",
+    "data_version", "source_checksums", "config_snapshot", "attribution", "questions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する set スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "set_id": {
+      "type": "string",
+      "pattern": "^\\d{8}-\\d{6}-[a-z0-9]{4}$",
+      "description": "セットID（例 20260816-142530-k7x2）。output/<set_id>/ のディレクトリ名と一致する。"
+    },
+    "format": {
+      "enum": [
+        "vocab_mcq_en2ja", "vocab_mcq_ja2en", "vocab_flashcard_en2ja", "vocab_flashcard_ja2en",
+        "grammar_mcq", "grammar_cloze", "grammar_reorder", "grammar_rewrite", "grammar_example_selfcheck"
+      ],
+      "description": "セットの形式コード（9値）。questions[] の全要素の format と一致する。"
+    },
+    "level": {
+      "oneOf": [ { "$ref": "#/$defs/level_cefr" }, { "$ref": "#/$defs/level_cefrj" } ],
+      "description": "セットの指定レベル。語彙4形式は cefr、文法5形式は cefrj。questions[] の全要素の level と一致する。"
+    },
+    "mode": {
+      "enum": ["explicit", "proposal"],
+      "description": "対象選定モード。explicit=教師の明示指定、proposal=エージェント提案。"
+    },
+    "requested_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "教師が要求した問題数（1〜limits.json の set_question_max）。減数があった場合、questions[] の要素数はこれを下回る。"
+    },
+    "topic": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "教師が指定した例文トピック。未指定は null。null でない場合のみHTMLのセットメタ表示に出力される。"
+    },
+    "preferred_proper_nouns": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "description": "優先使用の固有名詞1語。" },
+      "description": "教師が優先使用を指定した固有名詞の一覧（allowlist収録済み語のみ）。指定なしは空配列。"
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$",
+      "description": "セット作成日時（ISO 8601、秒精度、タイムゾーン付き。例 2026-08-16T14:25:30+09:00）。HTMLは整形せずそのまま転記する（docs/html-output-spec.md LAY-04）。"
+    },
+    "tool": {
+      "enum": ["claude_code", "codex"],
+      "description": "実行ホストツール。claude_code または codex。"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "生成・レビューに使用したLLMモデル名（ホストツールが報告する文字列）。"
+    },
+    "data_version": {
+      "type": "string",
+      "pattern": "^wl[0-9A-Za-z.\\-]+\\+gp[0-9A-Za-z.\\-]+\\+norm\\d+\\.\\d+\\.\\d+$",
+      "description": "使用した正規化データのデータ版文字列（docs/architecture.md VER-04）。data/normalized/meta.json から転記。"
+    },
+    "source_checksums": {
+      "type": "object",
+      "minProperties": 2,
+      "maxProperties": 2,
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "当該原本xlsxファイルのSHA-256（16進小文字64桁）。" },
+      "description": "原本xlsx 2ファイルのSHA-256。キーはファイル名（E-DATA-01 の固定名）、値はチェックサム。data/normalized/meta.json から転記。"
+    },
+    "config_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limits", "proper_nouns"],
+      "description": "セット生成時に適用された設定ファイルのスナップショット。",
+      "properties": {
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "sentence_word_limits", "explanation_char_limits", "distractor_reuse_max", "generation_max", "set_question_max", "review_timeout_seconds"],
+          "description": "data/config/limits.json の全内容の写し（config_limits.schema.json と同一構造）。",
+          "properties": {
+            "schema_version": { "type": "string", "pattern": "^1\\.\\d+\\.\\d+$", "description": "limits.json の schema_version。" },
+            "sentence_word_limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["A1", "A2", "B1", "B2"],
+              "description": "レベル帯別の語数上限。",
+              "properties": {
+                "A1": { "type": "integer", "minimum": 1, "description": "A1帯の語数上限。" },
+                "A2": { "type": "integer", "minimum": 1, "description": "A2帯の語数上限。" },
+                "B1": { "type": "integer", "minimum": 1, "description": "B1帯の語数上限。" },
+                "B2": { "type": "integer", "minimum": 1, "description": "B2帯の語数上限。" }
+              }
+            },
+            "explanation_char_limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["brief", "detailed"],
+              "description": "解説の字数上限。",
+              "properties": {
+                "brief": { "type": "integer", "minimum": 1, "description": "簡潔解説の字数上限。" },
+                "detailed": { "type": "integer", "minimum": 1, "description": "詳細解説の字数上限。" }
+              }
+            },
+            "distractor_reuse_max": { "type": "integer", "minimum": 1, "description": "誤答再利用の上限問題数。" },
+            "generation_max": { "type": "integer", "minimum": 1, "description": "1問あたりの世代上限。" },
+            "set_question_max": { "type": "integer", "minimum": 1, "maximum": 20, "description": "1セットの問題数上限。" },
+            "review_timeout_seconds": { "type": "integer", "minimum": 1, "description": "独立レビュー1実行のタイムアウト秒数（docs/subagent-review-spec.md INF-07）。" }
+          }
+        },
+        "proper_nouns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "description": "固有名詞1語。" },
+          "description": "data/config/proper_nouns.json の words 配列の写し（allowlist全文）。"
+        }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wordlist", "grammar_profile"],
+      "description": "CEFR-J出典ブロック。両原本の引用を記録する。HTMLフッターは citation_ja を改変せず表示する。",
+      "properties": {
+        "wordlist": { "$ref": "#/$defs/attribution_source", "description": "CEFR-J Wordlist の出典。" },
+        "grammar_profile": { "$ref": "#/$defs/attribution_source", "description": "CEFR-J Grammar Profile の出典。" }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "合格問題の配列。question_id の昇順。減数があった場合、question_id は連番でなくてもよい（欠番を許す）。",
+      "items": { "type": "object" }
+    }
+  },
+  "oneOf": [
+    {
+      "description": "形式① vocab_mcq_en2ja のセット。",
+      "properties": {
+        "format": { "const": "vocab_mcq_en2ja" },
+        "level": { "$ref": "#/$defs/level_cefr" },
+        "questions": { "items": { "$ref": "#/$defs/q_vocab_mcq_en2ja" } }
+      }
+    },
+    {
+      "description": "形式② vocab_mcq_ja2en のセット。",
+      "properties": {
+        "format": { "const": "vocab_mcq_ja2en" },
+        "level": { "$ref": "#/$defs/level_cefr" },
+        "questions": { "items": { "$ref": "#/$defs/q_vocab_mcq_ja2en" } }
+      }
+    },
+    {
+      "description": "形式③ vocab_flashcard_en2ja のセット。",
+      "properties": {
+        "format": { "const": "vocab_flashcard_en2ja" },
+        "level": { "$ref": "#/$defs/level_cefr" },
+        "questions": { "items": { "$ref": "#/$defs/q_vocab_flashcard_en2ja" } }
+      }
+    },
+    {
+      "description": "形式④ vocab_flashcard_ja2en のセット。",
+      "properties": {
+        "format": { "const": "vocab_flashcard_ja2en" },
+        "level": { "$ref": "#/$defs/level_cefr" },
+        "questions": { "items": { "$ref": "#/$defs/q_vocab_flashcard_ja2en" } }
+      }
+    },
+    {
+      "description": "形式⑤ grammar_mcq のセット。",
+      "properties": {
+        "format": { "const": "grammar_mcq" },
+        "level": { "$ref": "#/$defs/level_cefrj" },
+        "questions": { "items": { "$ref": "#/$defs/q_grammar_mcq" } }
+      }
+    },
+    {
+      "description": "形式⑥ grammar_cloze のセット。",
+      "properties": {
+        "format": { "const": "grammar_cloze" },
+        "level": { "$ref": "#/$defs/level_cefrj" },
+        "questions": { "items": { "$ref": "#/$defs/q_grammar_cloze" } }
+      }
+    },
+    {
+      "description": "形式⑦ grammar_reorder のセット。",
+      "properties": {
+        "format": { "const": "grammar_reorder" },
+        "level": { "$ref": "#/$defs/level_cefrj" },
+        "questions": { "items": { "$ref": "#/$defs/q_grammar_reorder" } }
+      }
+    },
+    {
+      "description": "形式⑧ grammar_rewrite のセット。",
+      "properties": {
+        "format": { "const": "grammar_rewrite" },
+        "level": { "$ref": "#/$defs/level_cefrj" },
+        "questions": { "items": { "$ref": "#/$defs/q_grammar_rewrite" } }
+      }
+    },
+    {
+      "description": "形式⑨ grammar_example_selfcheck のセット。",
+      "properties": {
+        "format": { "const": "grammar_example_selfcheck" },
+        "level": { "$ref": "#/$defs/level_cefrj" },
+        "questions": { "items": { "$ref": "#/$defs/q_grammar_example_selfcheck" } }
+      }
+    }
+  ],
+  "$defs": {
+    "question_id": {
+      "type": "string",
+      "pattern": "^q(0[1-9]|1[0-9]|20)$",
+      "description": "問題ID。q01〜q20（ゼロ埋め2桁連番）。"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1,
+      "description": "空であってはならない文字列。"
+    },
+    "nullable_string": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "description": "非空文字列または null。"
+    },
+    "sentence_with_blank": {
+      "type": "string",
+      "pattern": "^[^_]*____[^_]*$",
+      "description": "空欄記号 ____（半角アンダースコア4連）をちょうど1箇所含む英文。空欄以外にアンダースコアを含んではならない。"
+    },
+    "cefr_value": {
+      "enum": ["A1", "A2", "B1", "B2"],
+      "description": "cefrスケールのレベル値（語彙問題用4値）。"
+    },
+    "cefrj_value": {
+      "enum": ["A1.1", "A1.2", "A1.3", "A2.1", "A2.2", "B1.1", "B1.2", "B2.1", "B2.2"],
+      "description": "cefrjスケールのレベル値（文法問題用9値）。"
+    },
+    "level_cefr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "語彙問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefr", "description": "レベルスケール。語彙問題は cefr 固定。" },
+        "value": { "$ref": "#/$defs/cefr_value", "description": "指定レベル（A1〜B2）。" }
+      }
+    },
+    "level_cefrj": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "value"],
+      "description": "文法問題のレベル指定。",
+      "properties": {
+        "scale": { "const": "cefrj", "description": "レベルスケール。文法問題は cefrj 固定。" },
+        "value": { "$ref": "#/$defs/cefrj_value", "description": "指定レベル（A1.1〜B2.2）。" }
+      }
+    },
+    "pos15": {
+      "enum": [
+        "noun", "verb", "adjective", "adverb", "pronoun", "preposition",
+        "determiner", "conjunction", "number", "modal auxiliary", "be-verb",
+        "interjection", "do-verb", "have-verb", "infinitive-to"
+      ],
+      "description": "Wordlist の品詞15種（原文表記のまま）。"
+    },
+    "lex_id": {
+      "type": "string",
+      "pattern": "^lex:[^:]+:(noun|verb|adjective|adverb|pronoun|preposition|determiner|conjunction|number|modal-auxiliary|be-verb|interjection|do-verb|have-verb|infinitive-to)$",
+      "description": "語彙エントリID。書式 lex:<headword>:<pos'>（pos' は空白を `-` に置換）。"
+    },
+    "gp_id": {
+      "type": "string",
+      "pattern": "^gp:[0-9]+(-[0-9]+)?$",
+      "description": "文法項目ID。書式 gp:<ID>（例 gp:13、枝番 gp:1-1）。"
+    },
+    "attribution_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["citation_ja", "citation_en", "url", "retrieved_date", "version_label"],
+      "description": "原本1点の出典記録。組み立て規則の正は docs/json-output-spec.md の出典ブロック仕様。",
+      "properties": {
+        "citation_ja": { "type": "string", "minLength": 1, "description": "日本語引用文（HTMLフッターに改変せず表示される文字列）。" },
+        "citation_en": { "type": "string", "minLength": 1, "description": "英語引用文。" },
+        "url": { "type": "string", "minLength": 1, "pattern": "^https?://", "description": "原本の入手URL（data/normalized/meta.json から転記）。" },
+        "retrieved_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "原本のダウンロード日（YYYY-MM-DD。meta.json から転記）。" },
+        "version_label": { "type": "string", "minLength": 1, "description": "原本の版表示（例 \"1.6\"、\"20200220\"）。" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "candidate_ref", "machine_report_ref", "review_ref"],
+      "description": "合格世代の監査参照。finalize_set.py が構築する。参照先が欠けても set.json 単体で自立解釈可能でなければならない。",
+      "properties": {
+        "generation": { "enum": ["gen1", "gen2", "gen3"], "description": "合格した世代（世代表記の正は docs/json-output-spec.md ID-03）。" },
+        "candidate_ref": {
+          "type": "string",
+          "pattern": "^review/q(0[1-9]|1[0-9]|20)\\.gen[1-3]\\.candidate\\.json$",
+          "description": "合格世代の候補JSONへの相対パス（set.json と同ディレクトリ起点）。"
+        },
+        "machine_report_ref": {
+          "type": "string",
+          "pattern": "^review/q(0[1-9]|1[0-9]|20)\\.gen[1-3]\\.machine\\.json$",
+          "description": "合格世代の機械検査レポートへの相対パス。"
+        },
+        "review_ref": {
+          "type": "string",
+          "pattern": "^review/q(0[1-9]|1[0-9]|20)\\.gen[1-3]\\.review\\.json$",
+          "description": "合格世代のレビュー結果への相対パス。"
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_id", "headword", "pos", "level"],
+      "description": "語彙4択の選択肢の由来（Wordlist実在エントリ）。",
+      "properties": {
+        "entry_id": { "$ref": "#/$defs/lex_id", "description": "由来エントリのID。" },
+        "headword": { "$ref": "#/$defs/nonempty", "description": "由来エントリの見出し語。" },
+        "pos": { "$ref": "#/$defs/pos15", "description": "由来エントリの品詞。" },
+        "level": { "$ref": "#/$defs/cefr_value", "description": "由来エントリのCEFRレベル。" }
+      }
+    },
+    "vocab_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "is_correct", "anchor", "gloss"],
+      "description": "語彙4択の選択肢1件。",
+      "properties": {
+        "text": { "$ref": "#/$defs/nonempty", "description": "表示文字列。①では日本語語義（gloss と同一）、②ではアンカーの headword。" },
+        "is_correct": { "type": "boolean", "description": "正解フラグ。4肢中ちょうど1肢が true。" },
+        "anchor": { "$ref": "#/$defs/anchor", "description": "選択肢の由来エントリ。" },
+        "gloss": { "$ref": "#/$defs/nonempty", "description": "アンカー語の日本語語義（GEN-18）。" }
+      }
+    },
+    "vocab_choices4": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/vocab_choice" },
+      "contains": {
+        "type": "object",
+        "required": ["is_correct"],
+        "properties": { "is_correct": { "const": true } }
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "description": "語彙4択の選択肢配列。正確に4肢・正解は正確に1肢。保存順のまま表示する（再シャッフル禁止）。"
+    },
+    "grammar_choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "is_correct"],
+      "description": "文法4択の選択肢1件。",
+      "properties": {
+        "text": { "$ref": "#/$defs/nonempty", "description": "空欄に入れる語形・語列。" },
+        "is_correct": { "type": "boolean", "description": "正解フラグ。4肢中ちょうど1肢が true。" }
+      }
+    },
+    "grammar_choices4": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/grammar_choice" },
+      "contains": {
+        "type": "object",
+        "required": ["is_correct"],
+        "properties": { "is_correct": { "const": true } }
+      },
+      "minContains": 1,
+      "maxContains": 1,
+      "description": "文法4択の選択肢配列。正確に4肢・正解は正確に1肢。保存順のまま表示する（再シャッフル禁止）。"
+    },
+    "example_enja": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["en", "ja"],
+      "description": "英文と日本語訳の対。",
+      "properties": {
+        "en": { "$ref": "#/$defs/nonempty", "description": "英例文。" },
+        "ja": { "$ref": "#/$defs/nonempty", "description": "日本語訳（です・ます調基本。GEN-19）。" }
+      }
+    },
+    "reorder_token": {
+      "type": "string",
+      "pattern": "^[^A-Z\\s]+$",
+      "description": "整序トークン1件。全小文字・空白なし・句読点除去済み（アポストロフィを含む語は1トークンのまま保持）。"
+    },
+    "answer_equivalents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonempty" },
+      "description": "answer 以外に正答として受理する全表記の列挙。該当がなければ空配列。"
+    },
+    "explanation_brief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "description": "簡潔解説（⑤⑥⑦⑧。字数上限は limits.json の brief 値、既定200字）。",
+      "properties": {
+        "type": { "const": "brief", "description": "解説の詳細度。この形式では brief 固定。" },
+        "text": { "$ref": "#/$defs/nonempty", "description": "解説本文（日本語・です・ます調。内容要件は GEN-24）。" }
+      }
+    },
+    "explanation_detailed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "text"],
+      "description": "詳細解説（⑨。字数上限は limits.json の detailed 値、既定400字）。",
+      "properties": {
+        "type": { "const": "detailed", "description": "解説の詳細度。この形式では detailed 固定。" },
+        "text": { "$ref": "#/$defs/nonempty", "description": "解説本文（機能→適用→注意点の3部構成。GEN-23）。" }
+      }
+    },
+    "target_lexical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref", "display_name"],
+      "description": "語彙問題の対象参照。",
+      "properties": {
+        "type": { "const": "lexical", "description": "対象タイプ。語彙問題は lexical 固定。" },
+        "ref": { "$ref": "#/$defs/lex_id", "description": "対象語彙エントリID（原本参照）。" },
+        "display_name": { "$ref": "#/$defs/nonempty", "description": "教師向け表示名。語彙では headword の値。" }
+      }
+    },
+    "target_grammar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref", "display_name"],
+      "description": "文法問題の対象参照。",
+      "properties": {
+        "type": { "const": "grammar", "description": "対象タイプ。文法問題は grammar 固定。" },
+        "ref": { "$ref": "#/$defs/gp_id", "description": "対象文法項目ID（原本参照。教員版256項目のみ適格）。" },
+        "display_name": { "$ref": "#/$defs/nonempty", "description": "教師向け表示名。文法では教員版「文法項目(平易版)」の値。" }
+      }
+    },
+    "body_vocab_mcq_en2ja": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem", "target_surface", "stem_ja", "choices", "pos_pool_relaxed"],
+      "description": "形式① vocab_mcq_en2ja のペイロード。",
+      "properties": {
+        "stem": { "$ref": "#/$defs/nonempty", "description": "対象語をちょうど1回含む英例文。" },
+        "target_surface": { "$ref": "#/$defs/nonempty", "description": "stem 中の対象語の表層形（活用形を含む）。" },
+        "stem_ja": { "$ref": "#/$defs/nonempty", "description": "stem の日本語訳。解答後表示用。" },
+        "choices": { "$ref": "#/$defs/vocab_choices4", "description": "日本語語義の4択選択肢。" },
+        "pos_pool_relaxed": { "type": "boolean", "description": "誤答プールを互換品詞群に緩和した場合 true（GEN-15）。" }
+      }
+    },
+    "body_vocab_mcq_ja2en": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem", "sentence_with_blank", "sentence_complete", "target_surface", "sentence_ja", "choices", "pos_pool_relaxed"],
+      "description": "形式② vocab_mcq_ja2en のペイロード。",
+      "properties": {
+        "stem": { "$ref": "#/$defs/nonempty", "description": "対象語の日本語語義（設問として提示）。" },
+        "sentence_with_blank": { "$ref": "#/$defs/sentence_with_blank", "description": "空欄 ____ を1箇所含む英例文。" },
+        "sentence_complete": { "$ref": "#/$defs/nonempty", "description": "空欄を target_surface で置換した完成文（GEN-29）。" },
+        "target_surface": { "$ref": "#/$defs/nonempty", "description": "空欄に入る表層形。本形式では headword と同一（GEN-29）。" },
+        "sentence_ja": { "$ref": "#/$defs/nonempty", "description": "完成文の日本語訳。解答後表示用。" },
+        "choices": { "$ref": "#/$defs/vocab_choices4", "description": "英単語（headword）の4択選択肢。" },
+        "pos_pool_relaxed": { "type": "boolean", "description": "誤答プールを互換品詞群に緩和した場合 true（GEN-15）。" }
+      }
+    },
+    "body_vocab_flashcard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headword", "pos", "gloss", "example", "target_surface"],
+      "description": "形式③④ vocab_flashcard_en2ja / vocab_flashcard_ja2en のペイロード（両形式共通構造）。",
+      "properties": {
+        "headword": { "$ref": "#/$defs/nonempty", "description": "対象語の見出し語。target.ref と一致（GEN-08・§2.3）。" },
+        "pos": { "$ref": "#/$defs/pos15", "description": "対象語の品詞（Wordlist 15種の値そのまま）。" },
+        "gloss": { "$ref": "#/$defs/nonempty", "description": "日本語語義（GEN-18）。" },
+        "example": { "$ref": "#/$defs/example_enja", "description": "対象語をちょうど1回含む英例文とその日本語訳。" },
+        "target_surface": { "$ref": "#/$defs/nonempty", "description": "example.en 中の対象語の表層形。" }
+      }
+    },
+    "body_grammar_mcq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sentence_with_blank", "choices", "example_ja", "context_sentence", "context_required_by"],
+      "description": "形式⑤ grammar_mcq のペイロード。",
+      "properties": {
+        "sentence_with_blank": { "$ref": "#/$defs/sentence_with_blank", "description": "空欄 ____ を1箇所含む英文（GEN-26）。" },
+        "choices": { "$ref": "#/$defs/grammar_choices4", "description": "空欄に入る語形・語列の4択選択肢。" },
+        "example_ja": { "$ref": "#/$defs/nonempty", "description": "完成文（context_sentence 含む）の日本語訳。" },
+        "context_sentence": { "$ref": "#/$defs/nullable_string", "description": "2文例外時の先行文脈1文（GEN-06）。該当なしは null。" },
+        "context_required_by": { "$ref": "#/$defs/nullable_string", "description": "2文例外の要求元文タイプ（ITEM LIST 文タイプ列の文字列そのまま）。該当なしは null。" }
+      }
+    },
+    "body_grammar_cloze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sentence_with_blank", "cue", "answer", "answer_equivalents", "example_ja", "context_sentence", "context_required_by"],
+      "description": "形式⑥ grammar_cloze のペイロード。",
+      "properties": {
+        "sentence_with_blank": { "$ref": "#/$defs/sentence_with_blank", "description": "空欄 ____ を1箇所含む英文（GEN-30）。" },
+        "cue": { "$ref": "#/$defs/nullable_string", "description": "空欄に入る内容語の原形ヒント（GEN-30a）。不要なら null。" },
+        "answer": { "$ref": "#/$defs/nonempty", "description": "正解の代表形（正書法どおり）。" },
+        "answer_equivalents": { "$ref": "#/$defs/answer_equivalents", "description": "正答として受理する他の全表記。" },
+        "example_ja": { "$ref": "#/$defs/nonempty", "description": "完成文（context_sentence 含む）の日本語訳。" },
+        "context_sentence": { "$ref": "#/$defs/nullable_string", "description": "2文例外時の先行文脈1文（GEN-06）。該当なしは null。" },
+        "context_required_by": { "$ref": "#/$defs/nullable_string", "description": "2文例外の要求元文タイプ。該当なしは null。" }
+      }
+    },
+    "body_grammar_reorder_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tokens_shuffled", "answer_tokens", "answer_sentence", "example_ja"],
+      "description": "形式⑦ grammar_reorder のペイロード（set.json）。candidate のペイロードに、finalize_set.py が answer_sentence から決定的に導出した answer_tokens を加えた形。",
+      "properties": {
+        "tokens_shuffled": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "$ref": "#/$defs/reorder_token" },
+          "description": "シャッフル済みトークン列（全小文字・句読点なし）。この配列順のまま提示する（再シャッフル禁止）。"
+        },
+        "answer_tokens": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "$ref": "#/$defs/reorder_token" },
+          "description": "正解順トークン列（全小文字・句読点なし）。HTMLの判定はこの配列との位置ごとの完全一致による。tokens_shuffled と多重集合として一致する。"
+        },
+        "answer_sentence": { "$ref": "#/$defs/nonempty", "description": "正書法どおりの正解文（大文字・句読点あり）。解答表示用。" },
+        "example_ja": { "$ref": "#/$defs/nonempty", "description": "answer_sentence の日本語訳。" }
+      }
+    },
+    "body_grammar_rewrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_sentence", "instruction", "target_sentence_with_blank", "answer", "answer_equivalents", "source_ja", "target_ja"],
+      "description": "形式⑧ grammar_rewrite のペイロード。",
+      "properties": {
+        "source_sentence": { "$ref": "#/$defs/nonempty", "description": "元文。対象構造を含まない（GEN-33）。" },
+        "instruction": { "$ref": "#/$defs/nonempty", "description": "書き換え指示（日本語。GEN-33）。" },
+        "target_sentence_with_blank": { "$ref": "#/$defs/sentence_with_blank", "description": "空欄 ____ を1箇所含む目標文。" },
+        "answer": { "$ref": "#/$defs/nonempty", "description": "空欄に入る語列の代表形。" },
+        "answer_equivalents": { "$ref": "#/$defs/answer_equivalents", "description": "正答として受理する他の全表記。" },
+        "source_ja": { "$ref": "#/$defs/nonempty", "description": "元文の日本語訳。" },
+        "target_ja": { "$ref": "#/$defs/nonempty", "description": "目標文完成形の日本語訳。" }
+      }
+    },
+    "body_grammar_example_selfcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["example", "context_sentence", "context_required_by"],
+      "description": "形式⑨ grammar_example_selfcheck のペイロード。",
+      "properties": {
+        "example": { "$ref": "#/$defs/example_enja", "description": "対象構造を実現する英例文とその日本語訳。" },
+        "context_sentence": { "$ref": "#/$defs/nullable_string", "description": "2文例外時の先行文脈1文（GEN-06）。該当なしは null。" },
+        "context_required_by": { "$ref": "#/$defs/nullable_string", "description": "2文例外の要求元文タイプ。該当なしは null。" }
+      }
+    },
+    "q_vocab_mcq_en2ja": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "provenance"],
+      "description": "形式① 英単語→日本語の意味4択の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "vocab_mcq_en2ja", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefr", "description": "指定レベル（cefrスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_lexical", "description": "対象語彙の参照。" },
+        "body": { "$ref": "#/$defs/body_vocab_mcq_en2ja", "description": "形式別ペイロード。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_vocab_mcq_ja2en": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "provenance"],
+      "description": "形式② 日本語の意味→英単語4択の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "vocab_mcq_ja2en", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefr", "description": "指定レベル（cefrスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_lexical", "description": "対象語彙の参照。" },
+        "body": { "$ref": "#/$defs/body_vocab_mcq_ja2en", "description": "形式別ペイロード。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_vocab_flashcard_en2ja": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "provenance"],
+      "description": "形式③ 例文フラッシュカード英→日の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "vocab_flashcard_en2ja", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefr", "description": "指定レベル（cefrスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_lexical", "description": "対象語彙の参照。" },
+        "body": { "$ref": "#/$defs/body_vocab_flashcard", "description": "形式別ペイロード。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_vocab_flashcard_ja2en": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "provenance"],
+      "description": "形式④ 例文フラッシュカード日→英の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "vocab_flashcard_ja2en", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefr", "description": "指定レベル（cefrスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_lexical", "description": "対象語彙の参照。" },
+        "body": { "$ref": "#/$defs/body_vocab_flashcard", "description": "形式別ペイロード。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_grammar_mcq": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "explanation", "provenance"],
+      "description": "形式⑤ 選択問題（空欄4択）の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "grammar_mcq", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefrj", "description": "指定レベル（cefrjスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_grammar", "description": "対象文法項目の参照。" },
+        "body": { "$ref": "#/$defs/body_grammar_mcq", "description": "形式別ペイロード。" },
+        "explanation": { "$ref": "#/$defs/explanation_brief", "description": "簡潔解説（正解の理由と各誤答の排除理由）。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_grammar_cloze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "explanation", "provenance"],
+      "description": "形式⑥ 穴埋め（空欄自由入力）の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "grammar_cloze", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefrj", "description": "指定レベル（cefrjスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_grammar", "description": "対象文法項目の参照。" },
+        "body": { "$ref": "#/$defs/body_grammar_cloze", "description": "形式別ペイロード。" },
+        "explanation": { "$ref": "#/$defs/explanation_brief", "description": "簡潔解説（正解形が要求される文法的理由）。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_grammar_reorder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "explanation", "provenance"],
+      "description": "形式⑦ 語句整序の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "grammar_reorder", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefrj", "description": "指定レベル（cefrjスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_grammar", "description": "対象文法項目の参照。" },
+        "body": { "$ref": "#/$defs/body_grammar_reorder_set", "description": "形式別ペイロード（answer_tokens を含む）。" },
+        "explanation": { "$ref": "#/$defs/explanation_brief", "description": "簡潔解説（その語順になる根拠）。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_grammar_rewrite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "explanation", "provenance"],
+      "description": "形式⑧ 書き換えの問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "grammar_rewrite", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefrj", "description": "指定レベル（cefrjスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_grammar", "description": "対象文法項目の参照。" },
+        "body": { "$ref": "#/$defs/body_grammar_rewrite", "description": "形式別ペイロード。" },
+        "explanation": { "$ref": "#/$defs/explanation_brief", "description": "簡潔解説（元文と目標文の文法的関係）。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    },
+    "q_grammar_example_selfcheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "format", "level", "target", "body", "explanation", "provenance"],
+      "description": "形式⑨ 例文問題（訳想起→自己採点）の問題オブジェクト。",
+      "properties": {
+        "question_id": { "$ref": "#/$defs/question_id", "description": "問題ID。" },
+        "format": { "const": "grammar_example_selfcheck", "description": "形式コード。" },
+        "level": { "$ref": "#/$defs/level_cefrj", "description": "指定レベル（cefrjスケール）。セットの level と一致する。" },
+        "target": { "$ref": "#/$defs/target_grammar", "description": "対象文法項目の参照。" },
+        "body": { "$ref": "#/$defs/body_grammar_example_selfcheck", "description": "形式別ペイロード。" },
+        "explanation": { "$ref": "#/$defs/explanation_detailed", "description": "詳細解説（機能→適用→注意点の3部構成）。" },
+        "provenance": { "$ref": "#/$defs/provenance", "description": "合格世代の監査参照。" }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cefr-j-agents.local/schemas/config_proper_nouns/1.0.0",
+  "title": "config_proper_nouns",
+  "description": "固有名詞allowlist設定ファイル data/config/proper_nouns.json の構造。選定基準（学習者への馴染み・文化的中立）と照合規則の正は docs/cefrj-validation-spec.md、追加手順の正は docs/architecture.md の OPS-02。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "words"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "本文書が準拠する config_proper_nouns スキーマの semver。メジャー番号は本スキーマのメジャー（1）と一致しなければならない。"
+    },
+    "words": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "使用を許可する固有名詞の一覧。正書法どおりの表記（大文字を含む）で登録する。機械検査（MC-18 の allowlist 段）は表層トークンと大文字小文字を区別する完全一致で照合する。総語数は50〜100語の範囲を維持すべきである（docs/architecture.md OPS-02）。",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^\\S+$",
+        "description": "固有名詞1語。空白を含んではならない（機械検査の allowlist 照合は1トークン単位で行うため）。"
+      }
+    }
+  }
+}
