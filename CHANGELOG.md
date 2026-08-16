@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## 2026-08-16 — M2 機械検査
+
+### 実装
+
+- `scripts/lookup.py` を追加し、語彙・文法の通常照会、併記グループ展開、複数条件AND、誤答プールのカテゴリ優先順、CEFR-J範囲包含、文脈要求項目除外を、正規化データの決定的順序を保って実装した。
+- `scripts/machine_check.py` を追加し、9形式の検査対象抽出、spaCy文数・語数計測、POS 15種対応、複数語最長一致、Wordlist・allowlist・4免除クラス照合、ターゲット・選択肢・誤答由来・整序・穴埋め・書き換え検査、および `machine_report` 生成を実装した。
+- 両CLIでCLI-08の【基本】【データ】を実施し、原本xlsx・原本SHA-256・正規化3ファイル・設定2ファイルを処理前に検証するfail-closed境界を共通化した。`machine_check.py` は加えてspaCyモデル版とcandidateスキーマを検証する。
+- 正常JSON・定義済みエラーJSONを正準形UTF-8で出力し、`machine_check.py` は検査結果がfailでも終了コード0、定義済み停止は終了コード1、内部例外は2とした。監査ファイルは書き込まない。
+- PLN-05で承認されたM2D-01〜M2D-08を `DECISIONS.md` へ記録し、`IMPLEMENTATION_PLAN.md` と影響する設計文書を承認内容どおりに改訂した。`schemas/` は変更していない。
+
+### M2 DoD実行記録（4/4 pass）
+
+1. 機械検査マトリクス（CI-MCH-01〜15）
+   - コマンド: `.venv/bin/python - <<'PY' ... 正規化データから実在アンカーを組み立て、machine_checkの手元候補を検査 ... PY`。CLI入出力経路は `.venv/bin/python scripts/machine_check.py --candidate - --set-id 20260816-142530-k7x2 --generation gen1` のsubprocess実行でも確認した。
+   - 結果: 15/15 pass。11語で`V-LEN-01`・10語境界で違反なし、`Helsinki`で`V-LEX-01`・`Tokyo`でallowlist、`can't`の`ca`/`n't`レンマ照合と数字・句読点免除、A1文中`abandon`でactual B1の`V-LEX-02`、対象0回/2回と活用形1回、`CD player`の最長一致、POS対応表全行・15品詞被覆、`V-DIS-01/02`、文脈対、`V-ORD-02`を合否条件どおり確認した。
+2. 照会マトリクス（CI-LKP-01〜04）
+   - コマンド: `.venv/bin/python - <<'PY' ... scripts/lookup.pyをsubprocessでlex/gp照会 ... PY`。
+   - 結果: 4/4 pass。`abandon`はB1 verbを返しA1指定は0件、`Tokyo`はWordlist 0件、`watch`はA1 noun/verbの両方、`gp:13`と`gp:1-1`は表示名・パターン略記・レベルを返し、枝番は`gp:1`からの継承を保持した。
+3. machine_reportスキーマ適合
+   - コマンド: `.venv/bin/python - <<'PY' ... machine_check出力をjsonschema.Draft202012Validatorでschemas/machine_report.schema.jsonへ直接検証 ... PY`。
+   - 結果: question scopeの全必須フィールド、token統計、違反・警告列挙を含む出力がスキーマ1.0.0に適合した。`generated_at`はUTC・秒精度・末尾`Z`だった。
+4. 決定性
+   - コマンド: `.venv/bin/python - <<'PY' ... 同一candidateを2回検査しgenerated_atだけを除去後、sort_keys・indent 2・UTF-8の正準バイト列を比較 ... PY`。
+   - 結果: 2回の出力がバイト一致した。
+
+### 追加確認
+
+- 語彙4形式・文法5形式の全9形式で検査対象テキストを抽出し、`machine_report.schema.json` 適合出力を生成できることを確認した。
+- `lookup.py` の併記グループ展開、複数条件AND、誤答プールの対象除外・カテゴリ優先順、文法keyword NFC/casefold、先行文脈要求除外、limit適用前totalを確認した。
+- 一時リポジトリで原本1バイト改変を両CLIが`E-DATA-02`、config欠落を`E-DATA-05`、正規化データ欠落を`E-DATA-03`で拒否し、stdoutへ結果を出さず終了コード1となることを確認した。
+- 両CLIの `--help` は日本語で終了コード0。未知・欠落引数は`E-INPUT-01`、limit・generation・ID値域外は`E-INPUT-04`、set_id不正は`E-INPUT-05`、candidate不存在は`E-INPUT-02`、JSON構文不正は位置情報付き`E-INPUT-03`、candidateスキーマ不通過は`E-CONTRACT-01`で終了コード1となった。
+- `.venv/bin/python -m py_compile scripts/lookup.py scripts/machine_check.py`、`.venv/bin/python scripts/doctor.py`（12/12 pass）、`git diff --check` が合格した。
+
 ## 2026-08-16 — M1 正規化＋doctor
 
 ### 実装

@@ -812,3 +812,49 @@
 - **決定**: 通常ビルドでは、lexicon・grammar・metaの各最終パスは欠落または通常ファイルの場合だけ書込みを許可し、それ以外は最初の書込み前にE-ENV-05で停止する。3つの一時ファイルを同一出力ディレクトリ内へ全て作成してflush・fsyncした後に確定し、2件目以降を含む確定途中の失敗時は、確定済みファイルを全て更新前の内容または欠落状態へ戻してE-ENV-05・終了コード1とする。復元自体に失敗した場合もE-ENV-05とし、失敗パスをdetailへ列挙する。
 - **理由**: 予測可能な最終パス不正を処理前に拒否し、複数ファイル確定中のI/O失敗で異なるdata_versionの正規化成果物が混在することを防ぐため。
 - **影響先**: `scripts/build_normalized.py`、M1正規化ビルド。
+
+---
+
+## 5. M2実装前の承認決定（M2D-01〜M2D-08）
+
+2026-08-16、PLN-05に基づくM2実装前確認で発見した次の8件について、作問者が推奨案を承認した。
+
+### M2D-01 machine_check識別情報のCLI入力
+- **決定**: `machine_check.py` に必須引数 `--set-id` と `--generation` を追加する。`question_id`はcandidateから取得する。`set_id`書式不正はE-INPUT-05、`generation`が`gen1|gen2|gen3`以外の場合はE-INPUT-04とする。
+- **理由**: `machine_report.schema.json`が必須とする`set_id`と`generation`はcandidateに存在せず、stdin入力ではパスからも導出できないため。candidateスキーマを変更せずstdin契約を維持する最小変更である。
+- **影響先**: `docs/architecture.md`、M2機械検査実装、M4・M5呼び出し側。
+
+### M2D-02 machine_check・lookupの前提検査
+- **決定**: M2の`machine_check.py`と`lookup.py`は`docs/architecture.md` CLI-08の【データ】を全て実施し、原本xlsx存在・原本チェックサム・正規化データ・設定のいずれかに不備があればfail-closedで停止する。
+- **理由**: CLI契約の正であるarchitectureとPLN-08に従い、原本改変時にも決定的処理を続行しない最も保守的な境界とするため。
+- **影響先**: `docs/cefrj-validation-spec.md` NRM-30、M2両CLI。
+
+### M2D-03 M2でのmachine_reportスキーマ適合確認
+- **決定**: M2ではjsonschemaライブラリを直接呼び出して`machine_report.schema.json`適合を確認する。`validate.py`経由のCI-MCH-12はM3で再確認する。
+- **理由**: `validate.py`はM3成果物であり、M2で先行実装するとPLN-01のマイルストーン順に反するため。
+- **影響先**: `IMPLEMENTATION_PLAN.md`、`docs/testing-and-acceptance.md`、M2・M3 DoD。
+
+### M2D-04 CI-MCH-03の辞書外語
+- **決定**: CI-MCH-03の辞書外語を`Tokyo`から`Helsinki`へ変更する。CI-LKP-02の`Tokyo`はWordlist非収録照会でありallowlist判定と無関係なので変更しない。
+- **理由**: `Tokyo`はM1D-05で承認済みのallowlistに含まれ、MC-18により辞書外違反にならないため。`Helsinki`は現行Wordlist・allowlistの双方に存在しない。
+- **影響先**: `docs/testing-and-acceptance.md` CI-MCH-03、M2手動フィクスチャ。
+
+### M2D-05 lookupの絞り込み・返却順
+- **決定**: 通常照会はlexiconをNRM-13順、grammarをNRM-25順のまま返す。複数条件はlex/gpともANDとする。lexのheadword一致は同一グループを展開後に他条件で絞る。`--pool-for`は対象自身を除外し、対象側が非nullのカテゴリだけをGEN-14順で評価し、同順位はNRM-13順とする。gpの`--keyword`はNFC・casefold後の部分一致を`item_list.name_ja`と非nullの`kyoinban.name_simple_ja`へ適用する。
+- **理由**: 正規化成果物の既存の決定的順序を再利用し、提案・補充・誤答プールの順を環境非依存にするため。
+- **影響先**: `docs/architecture.md` CLI-29〜31、`docs/question-generation-spec.md` GEN-14、M2照会実装、M4・M5候補選定。
+
+### M2D-06 vocab_mcq_ja2enの完成文整合
+- **決定**: `vocab_mcq_ja2en`は`target_surface`が`target.ref`の実エントリ`headword`と一致し、`sentence_with_blank`の`____`を`target_surface`で置換した文字列が`sentence_complete`と完全一致しなければならない。不一致は既存のV-TGT-02とする。
+- **理由**: MC-07が要求する完成文整合を、新しい違反コードやスキーマ変更なしでGEN-29の生成規則へ一致させるため。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-19、M2機械検査実装。
+
+### M2D-07 machine_report生成日時
+- **決定**: `generated_at`はUTC・秒精度・末尾`Z`のISO 8601文字列で出力する。
+- **理由**: 実行環境のローカルタイムゾーン依存を排除し、唯一の可変フィールドの表現をOS間で統一するため。
+- **影響先**: `docs/json-output-spec.md` JS-03、M2・M5のmachine_report生成、ゴールデン比較。
+
+### M2D-08 複数語ターゲットのtoken decision
+- **決定**: 複数語ターゲットに一致した区間の全トークンを`decision="target"`とし、全トークンに同じ対象entry IDとlevelを記録する。非ターゲット複数語の一致区間だけを`decision="multiword_match"`とする。
+- **理由**: MC-19の対象語一次資料を区間全体で明示しつつ、非ターゲットの複数語照合と機械判別できるため。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-19・MC-30、M2機械検査実装、CI-MCH-08。

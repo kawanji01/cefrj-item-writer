@@ -334,7 +334,7 @@ SHA-256は原本xlsxファイル全体に対して計算した小文字16進64�
 3. `lexicon.json` / `grammar.json` が各スキーマに適合する。
 4. `meta.json` の `counts` が `entries` / `groups` の実要素数と一致する。
 
-原本xlsxとのSHA-256照合（原本改変・陳腐化の検出）は `doctor.py` と `build_normalized.py` の担当であり、上記CLIは正規化データの自己整合のみを検証する。
+M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`docs/architecture.md` CLI-08の【データ】を全て実施し、原本xlsx存在・原本SHA-256・設定ファイルも検証する。その他のCLIの前提検査範囲は同文書第5.1節の契約一覧を正とする。
 
 ### 2.6 ビルド時整合検査（NRM-31）
 
@@ -518,8 +518,9 @@ SHA-256は原本xlsxファイル全体に対して計算した小文字16進64�
 **MC-19（語彙ターゲット照合）** 語彙4形式では、candidateが宣言するターゲット語彙エントリID（`target.ref`）について次を検査する。
 
 1. lexiconに存在し、`level` = 指定レベル `L` である（LVL-12）。不一致・不存在は `V-TGT-03`。
-2. 対象語出現照合（MC-07の対象フィールド）: 出現回数がちょうど1回である（Q12）。回数の定義: 単一語エントリはレンマ照合（MC-15の照合キー）でheadwordに一致したトークン数、複数語エントリはMC-14で当該エントリに消費された区間数。0回または2回以上は `V-TGT-02`。活用形（`watch` → `watched`）はレンマ一致により1回と数える。対象語として一致したトークンの `decision` は `target` と記録する（MC-30）。
+2. 対象語出現照合（MC-07の対象フィールド）: 出現回数がちょうど1回である（Q12）。回数の定義: 単一語エントリはレンマ照合（MC-15の照合キー）でheadwordに一致したトークン数、複数語エントリはMC-14で当該エントリに消費された区間数。0回または2回以上は `V-TGT-02`。活用形（`watch` → `watched`）はレンマ一致により1回と数える。対象語として一致したトークンの `decision` は `target` と記録する（MC-30）。複数語ターゲットでは一致区間の全トークンを`target`とし、全トークンに同じ対象entry IDとlevelを記録する。`multiword_match`は非ターゲット複数語の一致区間だけに用いる。
 3. `body.target_surface` が対象フィールドの部分文字列として存在する。不成立は `V-TGT-02`。
+4. `vocab_mcq_ja2en`では、`body.target_surface`が対象エントリの`headword`と一致し、`body.sentence_with_blank`の`____`を`target_surface`で置換した文字列が`body.sentence_complete`と完全一致しなければならない。不成立は`V-TGT-02`。
 
 **MC-20（文法ターゲット照合）** 文法5形式では、candidateが宣言するターゲット文法項目ID（`target.ref`）について次を検査する。
 

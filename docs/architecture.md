@@ -120,7 +120,7 @@ cefr_j_agents/
 |---|---|---|---|---|---|---|
 | `doctor.py` | 環境・データ・配線の一括診断 | なし | 使わない | 診断レポートJSON（5.2） | 0=全項目pass / 1=failあり / 2=内部エラー | なし（自身が検査そのもの） |
 | `build_normalized.py` | 原本xlsx→正規化JSONの決定的ビルド | `--source-dir`(既定 `data/source`) / `--out-dir`(既定 `data/normalized`) / `--diff` / `--dry-run` / `--accept-source-change` | 使わない | ビルドサマリーJSON（5.3） | 0/1/2 | 【基本】+ E-DATA-01・E-DATA-02・E-DATA-06 + spaCy（E-ENV-03）+ 通常ビルド時の出力先書込み（E-ENV-05） |
-| `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >`（必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
+| `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >` / `--set-id <set_id>` / `--generation <gen1\|gen2\|gen3>`（全て必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
 | `set_check.py` | セット横断の決定的検査 | `--set-dir <path>`（必須。`output/<set_id>`） | 使わない | セット横断machine_report JSON（5.5） | 0=検査完遂 / 1/2 | 【基本】【データ】+ 監査配置（E-CONTRACT-03）+ set_id形式（E-INPUT-05） |
 | `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | セットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-CONTRACT-03/04/05 + E-INPUT-03/05 |
 | `build_html.py` | set.json→単一自己完結HTMLの決定的生成 | `--set <path>`（必須。set.json） / `--out <path>`(既定: 入力と同ディレクトリの `index.html`) | 使わない | 生成サマリーJSON（5.7） | 0/1/2 | 【基本】+ 入力スキーマ（E-CONTRACT-01）+ メジャー一致（E-CONTRACT-02） |
@@ -155,7 +155,7 @@ cefr_j_agents/
 
 ### 5.4 machine_check.py
 
-- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分とする(MUST)。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。
+- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分と、必須引数`--set-id <set_id>`・`--generation <gen1|gen2|gen3>`とする(MUST)。`set_id`書式不正はE-INPUT-05、generation値域外はE-INPUT-04で停止する。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。machine_reportの`question_id`・`format`・`level`はcandidateから、`set_id`・`generation`は引数から転記する。
 - **CLI-17** stdout は `machine_report.schema.json` 準拠のJSONとする(MUST)。検査段・違反判定・免除規則・レポート内容の正は `docs/cefrj-validation-spec.md` の機械検査仕様である。verdict が `fail` でも終了コードは 0 とする(MUST)（CLI-02）。
 - **CLI-18** 本CLIは監査ファイルを書き込んではならない(MUST NOT)。監査保存（`review/<question_id>.<gen>.machine.json`）は呼び出し側（オーケストレータ）の責務とする（配置の正は `docs/subagent-review-spec.md`）。
 
@@ -206,7 +206,8 @@ cefr_j_agents/
   - `--keyword <文字列>`: 「文法項目」「文法項目(平易版)」への部分一致。
   - `--exclude-context-required`（真偽フラグ）: 文タイプが先行文脈要求の2値（`前文が肯定平叙` / `前文が否定平叙`。正は `docs/question-generation-spec.md` GEN-06）である項目を結果から除外する。`grammar_reorder` / `grammar_rewrite` の対象選定（`docs/interaction-flow.md` IF-20 類型4・IF-30）で使用する。
   - `--limit <1..200>`(既定 20)。
-- **CLI-31** stdout: `{"matches": [<正規化データのエントリ形式（normalized_lexicon / normalized_grammar のエントリ定義に従う）>], "total": <int>}`。`total` は limit 適用前の総件数とする(MUST)。0件は正常（終了コード0・`matches` 空配列）とする(MUST)。
+  - 複数オプションはAND条件とする(MUST)。`--keyword`は検索語と対象文字列をNFC正規化・casefoldした後、`item_list.name_ja`および非nullの`kyoinban.name_simple_ja`に部分一致させる。
+- **CLI-31** stdout: `{"matches": [<正規化データのエントリ形式（normalized_lexicon / normalized_grammar のエントリ定義に従う）>], "total": <int>}`。`total` は limit 適用前の総件数とする(MUST)。0件は正常（終了コード0・`matches` 空配列）とする(MUST)。通常照会の返却順はlex=`docs/cefrj-validation-spec.md` NRM-13順、gp=同NRM-25順を維持する。lexの`--headword`は一致エントリと同一グループのエントリへ展開した後に他条件で絞り込む。`--pool-for`は指定対象自身を除外し、`docs/question-generation-spec.md` GEN-14のカテゴリ優先順位で整列する。同順位はNRM-13順とする。
 
 ## 6. エラーコード目録（正）
 

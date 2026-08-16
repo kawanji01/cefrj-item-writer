@@ -27,7 +27,7 @@
   4. インデントは半角スペース2個。
   5. 改行は LF。ファイル末尾に改行1個。
 - **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。スキーマ検証を通過したLLM出力を監査ファイルとして保存する際、オーケストレータは正準形に再直列化して保存しなければならない(MUST)（監査ファイルのバイト再現性のため）。
-- **JS-03（実行毎に変わるフィールド）**: 決定的CLIが書き出すJSONのうち、実行毎に値が変わるフィールドは machine_report（scope=question / scope=set とも）の `generated_at` のみとしなければならない(MUST)。テストのバイト比較（`docs/testing-and-acceptance.md`）は本フィールドのみを比較から除外する。これ以外のフィールドに実行時刻・乱数・環境依存値を書き込んではならない(MUST NOT)（`set_id` と `created_at` は入力として与えられる値であり、この禁止の対象外である）。
+- **JS-03（実行毎に変わるフィールド）**: 決定的CLIが書き出すJSONのうち、実行毎に値が変わるフィールドは machine_report（scope=question / scope=set とも）の `generated_at` のみとしなければならない(MUST)。`generated_at`はUTC・秒精度・末尾`Z`のISO 8601文字列とする。テストのバイト比較（`docs/testing-and-acceptance.md`）は本フィールドのみを比較から除外する。これ以外のフィールドに実行時刻・乱数・環境依存値を書き込んではならない(MUST NOT)（`set_id` と `created_at` は入力として与えられる値であり、この禁止の対象外である）。
 - **JS-04（数値の表現）**: 整数はJSONの整数リテラル、実数は入力（原本xlsx）の値をPython `json` モジュールの既定の表現で保持する。丸め・指数表記への変換を行ってはならない(MUST NOT)。
 
 ## 2. ID規則（正）

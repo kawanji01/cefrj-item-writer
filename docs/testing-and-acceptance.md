@@ -69,7 +69,7 @@
 |---|---|---|---|
 | CI-MCH-01 | 語数上限違反の検出 | A1語彙候補、例文が句読点除き11トークン | verdict `fail`、`violations[]` に語数上限違反（`limits.json` のA1上限10超過）が含まれること |
 | CI-MCH-02 | 語数上限の境界 | A1語彙候補、例文が句読点除きちょうど10トークン | 語数上限違反が `violations[]` に含まれないこと |
-| CI-MCH-03 | 辞書外語違反の検出 | 例文にWordlist非収録かつallowlist外の語（`Tokyo`）を含む候補 | verdict `fail`、当該語を `location` に持つ辞書外語違反が含まれること |
+| CI-MCH-03 | 辞書外語違反の検出 | 例文にWordlist非収録かつallowlist外の語（`Helsinki`）を含む候補 | verdict `fail`、当該語を `location` に持つ辞書外語違反が含まれること |
 | CI-MCH-04 | allowlist免除 | 例文に `data/config/proper_nouns.json` 収録語のみを辞書外語として含む候補 | 辞書外語違反が含まれないこと |
 | CI-MCH-05 | 機械的免除（数字・記号・句読点・縮約） | 例文に数字・記号・句読点・縮約形（`can't` 系）を含む候補 | これらを理由とする違反が含まれず、縮約はレンマ展開されて照合されること |
 | CI-MCH-06 | 語彙レベル超過の検出 | A1語彙候補、例文にB1語 `abandon`（verb）を含む | verdict `fail`、`abandon` を `location` に持ち `expected_level`=A1・`actual_level`=B1 の違反が含まれること |
@@ -78,7 +78,7 @@
 | CI-MCH-09 | spaCy POS→pos15種対応表 | 対応表（`docs/cefrj-validation-spec.md` の対応表）の全行 | 各spaCyタグの入力トークンが対応表どおりのWordlist posに写像されること（対応表の全行を網羅） |
 | CI-MCH-10 | 誤答由来の機械照合 | 誤答の `headword`+`pos`+`level` が正規化データと矛盾する語彙4択候補 | verdict `fail`、由来照合違反が含まれること |
 | CI-MCH-11 | 誤答プール規則と緩和記録 | (a)同レベル・同品詞誤答で緩和記録なし (b)品詞緩和済みで緩和事実の記録あり (c)品詞不一致なのに緩和記録なし の3候補 | (a)(b)は当該違反なし、(c)は verdict `fail` |
-| CI-MCH-12 | machine_reportのスキーマ適合 | 任意の候補フィクスチャ1件 | `machine_check.py` のstdout出力が `validate.py` で `machine_report.schema.json` に合格すること |
+| CI-MCH-12 | machine_reportのスキーマ適合 | 任意の候補フィクスチャ1件 | M2では`machine_check.py`のstdout出力がjsonschemaライブラリの直接検証で`machine_report.schema.json`に合格すること。M3完成後は`validate.py --schema machine_report`でも再確認すること |
 | CI-MCH-13 | 2文例文の条件 | (a)先行文脈要求の文タイプ記録付き2文候補 (b)記録なし2文候補 | (a)は当該違反なし、(b)は verdict `fail` |
 | CI-MCH-14 | 整序シャッフルの非同一性 | シャッフル提示順が正解順と同一の `grammar_reorder` 候補 | verdict `fail`、シャッフル同一違反が含まれること |
 | CI-MCH-15 | 出力の決定性 | 任意の候補フィクスチャ1件 | 2回実行の出力がCI-R-02の意味でバイト一致すること |

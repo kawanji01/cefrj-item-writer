@@ -74,7 +74,7 @@
 - **DoD**:
   1. `docs/testing-and-acceptance.md` の CI-MCH-01〜15 の入力条件を満たす手元フィクスチャに対し、各合否条件どおりの出力を返す（pytest化はM8。M2では手動実行で確認し結果を記録する）
   2. CI-LKP-01〜04 の合否条件どおりの出力を返す
-  3. `machine_check.py` の出力が `machine_report.schema.json` に適合する
+  3. `machine_check.py` の出力が `machine_report.schema.json` に適合する（M2ではjsonschemaライブラリの直接呼び出しで確認し、`validate.py` 経由のCI-MCH-12はM3で再確認する）
   4. 同一入力2回で、実行日時フィールド（`docs/testing-and-acceptance.md` CI-R-02）を除きバイト一致する
 - **参照文書**: `docs/cefrj-validation-spec.md`（機械検査仕様・検証マトリクスの正）、`docs/question-generation-spec.md`（候補フィールド）、`docs/interaction-flow.md`（照合フローが要求する `lookup.py` の出力内容）、`schemas/candidate.schema.json`・`schemas/machine_report.schema.json`、`docs/testing-and-acceptance.md` 第2.3〜2.4節。
 
@@ -87,6 +87,7 @@
   1. 9スキーマ全てがdraft 2020-12メタスキーマに適合する（不備を発見した場合はPLN-05の手続きでスキーマ改訂を提案する。無断修正禁止）
   2. CI-SCH-01〜05 の合否条件どおりに動作する（妥当例合格・不当例のコード付き不合格・format判別・ID書式）
   3. CI-CLI-01 の入力不正3種で定義済みコード・日本語対処手順・定義済み終了コードで停止する
+  4. M2で直接検証したCI-MCH-12を`validate.py --schema machine_report`で再確認する
 - **参照文書**: `schemas/`（9本）、`docs/json-output-spec.md`（フィールドの正）、`docs/architecture.md`（CLI契約・エラーコード）、`docs/testing-and-acceptance.md` 第2.5節。
 
 ## 6. M4: 対話＋生成コア
