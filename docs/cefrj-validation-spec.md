@@ -353,7 +353,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 ### 3.1 契約と前提（MC-01〜MC-05）
 
-**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、セットの確定済み期待条件（format・level・依頼問題数）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
+**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、セットの確定済み期待条件（format・level・依頼問題数）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。candidateの`level.scale`と期待レベルのscaleが同じ場合、S4〜S6のレベル依存検査は期待レベルを指定レベルとして実行する。format不一致でscaleも異なる場合は`V-COND-01`を発行した上で、実行可能なレベル依存検査をcandidateのscaleと値で継続する。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
 
 **MC-02（verdict）** `verdict` は `violations` が1件以上あれば `fail`、0件なら `pass` である。他の判定基準を導入してはならない。
 
@@ -361,7 +361,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 **MC-04（全件列挙）** 検査は途中で打ち切らず、実行可能な全検査を実行してから検出可能な全違反を単一レポートに集約しなければならない（レビュアーと再生成に全violationsを渡すため）。
 
-**MC-05（スキーマ不適合入力）** 入力candidateが `candidate.schema.json` に適合しない場合、機械検査は問題の不合格ではなく契約違反（`E-CONTRACT-01`）として停止しなければならない。スキーマ不通過の扱い（世代消費の規則）は `docs/subagent-review-spec.md` の再生成ループ仕様（T2/T3）が正である。
+**MC-05（スキーマ不適合入力）** 入力candidateが `candidate.schema.json` に適合しない場合、機械検査は問題の不合格ではなく契約違反（`E-CONTRACT-01`）として停止しなければならない。ただし、candidate JSONの整数トークンが符号を除く10進4,300桁を超える場合はスキーマ検証前の入力不正`E-INPUT-03`とする（M2D-11）。スキーマ不通過の扱い（世代消費の規則）は `docs/subagent-review-spec.md` の再生成ループ仕様（T2/T3）が正である。
 
 **VAL-CFG-01（運用パラメータ）** 実行時に変更可能な運用パラメータは `data/config/limits.json` の値のみである（キー目録と既定値の正は `config_limits.schema.json`、構造の要点は `docs/json-output-spec.md` NDS-03）。本文書・他文書に現れる数値既定値（語数上限・字数上限・誤答再利用上限・世代上限・問題数上限・レビュータイムアウト）は同ファイルの初期値であり、実装は必ず同ファイルの現在値を読まなければならない。
 
@@ -412,7 +412,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 - **語数上限** = `limits.json` のキー `sentence_word_limits`（cefr帯別マップ。既定 A1:10 / A2:14 / B1:20 / B2:26）。文法問題はLVL-04の帯写像でcefr帯に落として上限を引く。`context_sentence` を含む2文構成の場合は合算ではなく各文に適用し、いずれかの文の超過で `V-LEN-01`。
 - **字数** = 解説文字列（`explanation.text`）をNFC正規化した後の全Unicodeコードポイント数（空白・句読点を含む。前後空白の除去は行わない）。上限は `limits.json` のキー `explanation_char_limits` の `brief`（⑤⑥⑦⑧、既定200）/ `detailed`（⑨、既定400）。形式→brief/detailedの対応は `docs/question-generation-spec.md` GEN-21 が正。超過は `V-EXP-01`。語彙4形式は解説を持たない（拡張は `docs/requirements.md` V2-05）。
 
-**MC-10（limits.jsonの参照キー）** 機械検査が参照する `limits.json` のキーは `sentence_word_limits` / `explanation_char_limits` / `distractor_reuse_max`（MC-27）の3つのみである。`generation_max` / `set_question_max` / `review_timeout_seconds` はオーケストレータ・対話が参照する。キーの完全な目録と既定値は `config_limits.schema.json` が正である。
+**MC-10（limits.jsonの参照キー）** 機械検査が参照する `limits.json` のキーは `sentence_word_limits` / `explanation_char_limits` / `distractor_reuse_max`（MC-27） / `set_question_max` の4つのみである。`machine_check.py` による`set_question_max`の参照はS1の`--requested-count`値域検査に限る。`generation_max` / `review_timeout_seconds` はオーケストレータ・対話が参照する。キーの完全な目録と既定値は `config_limits.schema.json` が正である。
 
 **MC-11（解析器の固定）** 解析はspaCy `en_core_web_sm`（`meta.json` に記録された版と同一のインストール版）で行わなければならない。文分割は `doc.sents`（依存構造パーサに基づく既定の文分割）を使用する。パイプラインのコンポーネント無効化・差し替えをしてはならない。
 

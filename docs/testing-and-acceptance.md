@@ -83,6 +83,8 @@
 | CI-MCH-14 | 整序シャッフルの非同一性 | シャッフル提示順が正解順と同一の `grammar_reorder` 候補 | verdict `fail`、シャッフル同一違反が含まれること |
 | CI-MCH-15 | 出力の決定性 | 任意の候補フィクスチャ1件 | 2回実行の出力がCI-R-02の意味でバイト一致すること |
 | CI-MCH-16 | セット確定条件と候補の一致 | 同一の適合candidateに対し、(a)format・level・question_id番号が期待条件内 (b)format不一致 (c)level不一致 (d)question_id番号がrequested_count超過となるCLI引数 | (a)は`V-COND-01`なし、(b)(c)(d)はverdict `fail`かつ該当フィールドをlocationに持つ`V-COND-01`が含まれること。依頼数に対する欠問の判定はSET-07の責務であり本テストに含めない |
+| CI-MCH-17 | 期待レベル基準の全件列挙 | (a)candidateはB1語彙フラッシュカード・対象`abandon`・11語以上、期待A1 (b)candidateでは適格だが期待文法レベルでは不適格な文法対象 (c)candidateレベルにだけ一致する語彙4択誤答アンカー | scaleが同じ場合は全て期待レベル基準で判定し、(a)は`V-COND-01`と`V-LEN-01`・`V-LEX-02`・`V-TGT-03`、(b)は`V-COND-01`と`V-TGT-01`、(c)は`V-COND-01`と`V-DIS-02`を同一レポートに列挙すること。format不一致でscaleが異なる場合は候補scaleの検査を継続すること |
+| CI-MCH-18 | candidate JSON整数の決定的上限 | トップレベルの余分フィールド値に(a)4,300桁 (b)4,301桁 (c)5,000桁の整数を含むcandidate JSON。(c)は`PYTHONINTMAXSTRDIGITS=4300|0`で同一入力を実行 | (a)は整数桁数を理由とする`E-INPUT-03`にならずスキーマ検証へ進む。(b)(c)は対象・行・列・上限4,300・実測桁数付き`E-INPUT-03`。(c)の2環境はエラーJSONがバイト一致すること |
 
 ### 2.4 テスト対象一覧: lookup（CI-LKP群）
 

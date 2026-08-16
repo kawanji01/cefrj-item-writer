@@ -105,6 +105,36 @@
 - 両CLIの `--help` は日本語で終了コード0。未知・欠落引数は`E-INPUT-01`、limit・generation・ID値域外は`E-INPUT-04`、set_id不正は`E-INPUT-05`、candidate不存在は`E-INPUT-02`、JSON構文不正は位置情報付き`E-INPUT-03`、candidateスキーマ不通過は`E-CONTRACT-01`で終了コード1となった。
 - `.venv/bin/python -m py_compile scripts/lookup.py scripts/machine_check.py`、`.venv/bin/python scripts/doctor.py`（12/12 pass）、`git diff --check` が合格した。
 
+### R4レビュー修正（2026-08-17）
+
+- R4-01: candidateと期待レベルのscaleが同じ場合、S4〜S6のレベル依存検査を期待レベル基準で実行するよう修正した。scaleが異なる場合は`V-COND-01`を維持し、candidateのscaleと値で実行可能な検査を継続する。
+- R4-02: PLN-05で承認されたM2D-10を`DECISIONS.md`へ記録し、`machine_check.py`による`set_question_max`参照をS1の`--requested-count`値域検査だけに限定するようMC-10とCLI-16を同期した。
+- R4-03: PLN-05で承認されたM2D-11を`DECISIONS.md`へ記録し、candidate JSON整数の上限を符号を除く10進4,300桁に固定した。4,301桁以上は対象・行・列・上限・実測桁数付き`E-INPUT-03`とし、`PYTHONINTMAXSTRDIGITS`に依存しない出力へ修正した。
+- CI-MCH-17・18を`docs/testing-and-acceptance.md`とM2 DoDへ追加した。`schemas/`は変更していない。
+
+### R4修正後のM2 DoD再検証（4/4 pass）
+
+1. 機械検査マトリクス
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 実データ・spaCy・実CLIでCI-MCH-01〜18、9形式例、期待レベル全件列挙、整数桁数境界を検証 ... PY`。
+   - 結果: CI-MCH-01〜18は18/18 pass。`docs/question-generation-spec.md`の9形式例はcandidateスキーマに全件適合し、検査で生成した36件のquestion reportは全て`machine_report.schema.json` 1.1.0に適合した。
+2. 照会マトリクス
+   - コマンド: `.venv/bin/python - <<'PY' ... scripts/lookup.pyをsubprocess実行しCI-LKP-01〜04を検証 ... PY`。
+   - 結果: CI-LKP-01〜04は4/4 pass。`abandon`のB1 verbとA1不一致、`Tokyo`の辞書外、`watch`のA1 noun/verb、`gp:13`とレベル継承済み`gp:1-1`の表示名・パターン略記・レベルを確認した。
+3. machine_reportスキーマ適合
+   - コマンド: 上記CI-MCHハーネスから`jsonschema.Draft202012Validator`を直接呼び出し、各出力を`schemas/machine_report.schema.json`へ検証した。
+   - 結果: CI-MCHフィクスチャと9形式例から生成した全36レポートがスキーマ1.1.0に適合した。
+4. 決定性
+   - コマンド: 上記CI-MCHハーネスで同一candidateを2回検査し、CI-R-02の実行日時フィールド`generated_at`を除外して正準UTF-8バイト列を比較した。
+   - 結果: 2回の出力がバイト一致した。5,000桁整数の同一入力も`PYTHONINTMAXSTRDIGITS=4300|0`で、対象・位置・上限4,300・実測5,000桁を持つ`E-INPUT-03`の正準JSONがバイト一致した。
+
+### R4追加回帰確認
+
+- CI-MCH-17: B1 `abandon`候補＋期待A1で、`V-COND-01`・`V-LEN-01`・`V-LEX-02`・`V-TGT-03`を同一レポートへ列挙した。B2.2 `gp:97`候補＋期待A1.1は`V-COND-01`・`V-TGT-01`、A2語彙4択＋期待A1は`V-COND-01`・`V-DIS-02`を併記した。format不一致かつscale相違でもcandidate scaleの検査を完遂した。
+- CI-MCH-18: トップレベルの余分フィールド値が4,300桁なら整数桁数を理由とする`E-INPUT-03`にならず`E-CONTRACT-01`のスキーマ検証へ進み、4,301桁・5,000桁は構造化された桁数情報付き`E-INPUT-03`となった。
+- `scripts/machine_check.py`の`set_question_max`参照が`validate_set_conditions()`内の1箇所だけであることを検査した。
+- `.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、9スキーマのDraft 2020-12自己妥当性は9/9 pass、Python 3.7 grammar指定の`ast.parse`は4スクリプト全件pass、py_compile・`git diff --check`もpassした。
+- M2着手前のM1 DoD 6項目は本ファイル「M2着手前のM1 DoD再検証」に6/6 passとして記録済みであり、M1マイルストーンコミット`18841cc`で確定している。
+
 ## 2026-08-16 — M1 正規化＋doctor
 
 ### 実装

@@ -815,9 +815,9 @@
 
 ---
 
-## 5. M2実装に伴う承認決定（M2D-01〜M2D-09）
+## 5. M2実装に伴う承認決定（M2D-01〜M2D-11）
 
-2026-08-16、PLN-05に基づくM2実装前確認およびM2 R3レビューで発見した次の9件について、作問者が推奨案を承認した。
+2026-08-16〜17、PLN-05に基づくM2実装前確認およびM2 R3/R4レビューで発見した次の11件について、作問者が推奨案を承認した。
 
 ### M2D-01 machine_check識別情報のCLI入力
 - **決定**: `machine_check.py` に必須引数 `--set-id` と `--generation` を追加する。`question_id`はcandidateから取得する。`set_id`書式不正はE-INPUT-05、`generation`が`gen1|gen2|gen3`以外の場合はE-INPUT-04とする。
@@ -863,3 +863,13 @@
 - **決定**: `machine_check.py` に必須引数 `--expected-format`・`--expected-level`・`--requested-count` を追加する。candidateの`format`、`level.scale`/`level.value`と期待値の不一致、および`question_id`の番号が依頼問題数を超える場合は新設の`V-COND-01`とする。依頼問題数分の完全性は1問入力では判定せず、`finalize_set.py` のSET-07で検証する。`machine_report.schema.json` は違反コードenumの後方互換な追加として1.1.0へマイナー版上げする。
 - **理由**: candidate単体の`format`・`level`はセットの確定済み条件の正値にならず、現行契約ではGEN-02の不一致を検出できないため。一方、1問検査に存在しない問題の欠落判定を担わせず、完成条件の既存責務を維持する。
 - **影響先**: `docs/question-generation-spec.md` GEN-02、`docs/architecture.md` CLI-16、`docs/cefrj-validation-spec.md` MC-28・MC-30・MAT-01/MAT-04、`docs/testing-and-acceptance.md` CI-MCH-16、`IMPLEMENTATION_PLAN.md` M2 DoD、`schemas/machine_report.schema.json`、M2機械検査実装、M4・M5呼び出し側。
+
+### M2D-10 machine_checkによるset_question_max参照
+- **決定**: `machine_check.py` はS1の`--requested-count`値域検査に限り、`limits.json.set_question_max`を参照する。MC-10の参照キー目録にこの用途を追加し、CLI-16と同期する。
+- **理由**: M2D-09で必須化した依頼問題数の上限を、運用パラメータの正本である`limits.json`から決定的に検査し、MC-10とCLI-16の矛盾を解消するため。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-10、M2機械検査実装、CI-MCH-16。
+
+### M2D-11 candidate JSON整数の固定桁数上限
+- **決定**: `machine_check.py` がcandidate JSONで受理する整数トークンは、符号を除く10進桁数を4,300桁以下に固定する。4,301桁以上は対象・行・列・上限・実測桁数を持つ`E-INPUT-03`とする。実行環境の`PYTHONINTMAXSTRDIGITS`は使用せず、プロセス内の変換上限も4,300桁に固定する。
+- **理由**: CPythonの既定上限4,300桁とM2の既存回帰条件（5,000桁を入力不正とする）を維持しつつ、環境変数による`E-INPUT-03`/`E-CONTRACT-01`の分岐と出力差を排除するため。
+- **影響先**: `docs/architecture.md` CLI-07・E-INPUT-03、`docs/cefrj-validation-spec.md` MC-05、`docs/testing-and-acceptance.md` CI-MCH-18、M2機械検査実装。

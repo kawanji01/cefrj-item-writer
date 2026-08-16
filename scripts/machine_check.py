@@ -37,6 +37,7 @@ SYMBOL_ONLY_PATTERN = re.compile(r"^[^\w]+$", re.UNICODE)
 JSON_NUMBER_PATTERN = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 NONSTANDARD_JSON_CONSTANTS = ("-Infinity", "Infinity", "NaN")
 GENERATION_VALUES = ("gen1", "gen2", "gen3")
+JSON_INTEGER_MAX_DIGITS = 4300
 FORMAT_VALUES = (
     "vocab_mcq_en2ja",
     "vocab_mcq_ja2en",
@@ -119,6 +120,17 @@ class TextTarget:
     text: str
     sentence_checks: bool
     target_occurrence: bool = False
+
+
+class JsonIntegerTooLong(json.JSONDecodeError):
+    def __init__(self, document: str, position: int, digit_count: int) -> None:
+        super().__init__(
+            f"JSON整数が上限{JSON_INTEGER_MAX_DIGITS}桁を超えています（実測{digit_count}桁）",
+            document,
+            position,
+        )
+        self.digit_count = digit_count
+        self.digit_limit = JSON_INTEGER_MAX_DIGITS
 
 
 class MachineArgumentParser(argparse.ArgumentParser):
@@ -211,7 +223,12 @@ def validate_json_number_tokens(text: str) -> None:
                         if value == float("inf") or value == float("-inf"):
                             raise ValueError("finite float required")
                     else:
+                        digit_count = len(token.lstrip("-"))
+                        if digit_count > JSON_INTEGER_MAX_DIGITS:
+                            raise JsonIntegerTooLong(text, index, digit_count)
                         int(token)
+                except json.JSONDecodeError:
+                    raise
                 except ValueError as exc:
                     raise json.JSONDecodeError(
                         f"有限値として表現できないJSON数値です: {token}", text, index
@@ -222,6 +239,9 @@ def validate_json_number_tokens(text: str) -> None:
 
 
 def strict_candidate_json_loads(text: str) -> Any:
+    set_int_limit = getattr(sys, "set_int_max_str_digits", None)
+    if set_int_limit is not None:
+        set_int_limit(JSON_INTEGER_MAX_DIGITS)
     json.loads(
         text,
         parse_constant=lambda token: token,
@@ -364,6 +384,9 @@ def parse_candidate(path_text: str) -> dict[str, Any]:
             "line": exc.lineno,
             "source": source_name,
         }
+        if isinstance(exc, JsonIntegerTooLong):
+            detail["digit_count"] = exc.digit_count
+            detail["digit_limit"] = exc.digit_limit
         position = f"{exc.lineno}行{exc.colno}列"
         raise CliFailure(
             "E-INPUT-03",
@@ -865,11 +888,11 @@ def check_vocab_target(
     candidate: dict[str, Any],
     lexicon_by_id: dict[str, dict[str, Any]],
     target_occurrences: int,
+    requested_level: str,
     violations: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     target_ref = candidate["target"]["ref"]
     target_entry = lexicon_by_id.get(target_ref)
-    requested_level = candidate["level"]["value"]
     if target_entry is None or target_entry["level"] != requested_level:
         actual = target_entry["level"] if target_entry is not None else None
         violations.append(
@@ -933,11 +956,12 @@ def check_vocab_target(
 def check_grammar_target(
     candidate: dict[str, Any],
     grammar_by_id: dict[str, dict[str, Any]],
+    requested_level: str,
     violations: list[dict[str, Any]],
 ) -> None:
     target_ref = candidate["target"]["ref"]
     entry = grammar_by_id.get(target_ref)
-    requested = candidate["level"]["value"]
+    requested = requested_level
     eligible = False
     if entry is not None and entry["target_eligible"] and entry["level"]["min"] is not None:
         rank = CEFRJ_RANK[requested]
@@ -963,13 +987,13 @@ def check_distractor_anchors(
     candidate: dict[str, Any],
     lexicon_by_id: dict[str, dict[str, Any]],
     target_entry: dict[str, Any] | None,
+    requested_level: str,
     violations: list[dict[str, Any]],
 ) -> None:
     if candidate["format"] not in {"vocab_mcq_en2ja", "vocab_mcq_ja2en"}:
         return
     body = candidate["body"]
     choices = body["choices"]
-    requested_level = candidate["level"]["value"]
     target_ref = candidate["target"]["ref"]
     target_pos = (
         target_entry["pos"] if target_entry is not None else lexical_pos_from_ref(target_ref)
@@ -1170,8 +1194,17 @@ def machine_check(
     grammar_by_id = {entry["id"]: entry for entry in resources["grammar"]["entries"]}
     target_entry = lexicon_by_id.get(candidate["target"]["ref"]) if candidate["format"] in VOCAB_FORMATS else None
     matcher = LexicalMatcher(nlp, resources["lexicon"], resources["proper_nouns"]["words"])
-    requested_level = candidate["level"]["value"]
-    allowed_level = requested_level if candidate["level"]["scale"] == "cefr" else requested_level.split(".", 1)[0]
+    validation_level = (
+        expected_level
+        if candidate["level"]["scale"] == expected_level["scale"]
+        else candidate["level"]
+    )
+    requested_level = validation_level["value"]
+    allowed_level = (
+        requested_level
+        if validation_level["scale"] == "cefr"
+        else requested_level.split(".", 1)[0]
+    )
 
     targets = extract_text_targets(candidate)
     docs = list(nlp.pipe(target.text for target in targets))
@@ -1244,12 +1277,14 @@ def machine_check(
     # S6: 形式固有検査。
     if candidate["format"] in VOCAB_FORMATS:
         target_entry = check_vocab_target(
-            candidate, lexicon_by_id, target_occurrences, violations
+            candidate, lexicon_by_id, target_occurrences, requested_level, violations
         )
     else:
-        check_grammar_target(candidate, grammar_by_id, violations)
+        check_grammar_target(candidate, grammar_by_id, requested_level, violations)
     check_choice_structure(candidate, violations)
-    check_distractor_anchors(candidate, lexicon_by_id, target_entry, violations)
+    check_distractor_anchors(
+        candidate, lexicon_by_id, target_entry, requested_level, violations
+    )
     check_form_specific(candidate, violations, docs_by_field)
 
     report = {
