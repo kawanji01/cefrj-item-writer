@@ -135,6 +135,12 @@
 - `.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、9スキーマのDraft 2020-12自己妥当性は9/9 pass、Python 3.7 grammar指定の`ast.parse`は4スクリプト全件pass、py_compile・`git diff --check`もpassした。
 - M2着手前のM1 DoD 6項目は本ファイル「M2着手前のM1 DoD再検証」に6/6 passとして記録済みであり、M1マイルストーンコミット`18841cc`で確定している。
 
+### レビューサイクル収束（R1〜R5）
+
+- 独立レビューを5ラウンド実施した。R1〜R4で検出したblocker 0件・major 5件・minor 11件は全件解消し、R5は新規指摘なし（blocker 0件・major 0件・minor 0件）で収束した。
+- M2成果物は`machine_check.py`・`lookup.py`、承認済み決定M2D-01〜M2D-11、関連設計文書、R1〜R5のレビュー・解決記録で確定した。`schemas/`は承認範囲外の変更を行っていない。
+- 最終DoDは4/4 pass: CI-MCH-01〜18が18/18、CI-LKP-01〜04が4/4、検査したmachine report 36件がスキーマ1.1.0に適合し、`generated_at`除外後の同一入力2回の正準UTF-8バイト列が一致した。
+
 ## 2026-08-16 — M1 正規化＋doctor
 
 ### 実装
