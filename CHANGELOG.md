@@ -42,6 +42,21 @@
 - R1-06: JSON構文不正、`NaN`、`Infinity`、`1e400`、5,000桁整数をstdin・ファイルの両経路で実CLIへ投入し、全10条件がstdout空・終了コード1・`E-INPUT-03`、対象・2行8列・具体的remedyを返すことを確認した。
 - `.venv/bin/python scripts/doctor.py` は12 pass / 0 fail・stderr空、`.venv/bin/python -m py_compile scripts/lookup.py scripts/machine_check.py`、`git diff --check` はpassした。`docs/`、`schemas/`、`DECISIONS.md`、`IMPLEMENTATION_PLAN.md` にR1修正差分がないことを確認した。
 
+### R2レビュー修正
+
+- candidate JSONを数値変換なしで先に構文解析し、構文全体が成立した場合だけ標準外定数・有限表現不能数・巨大整数を位置付きで検査するよう修正した。これにより先行する構文不正を後方の不正数値より優先して報告する。
+- 語彙ターゲットがlexiconに存在しない場合も、スキーマ適合済み `target.ref` から宣言品詞を復元し、誤答の同品詞・互換品詞群検査と緩和記録検査を継続するよう修正した。
+- MC-21の選択肢比較を、日本語はtrim＋NFC、英語はtrim＋小文字化へ分離した。MC-23-1の英語choice/headword照合は双方の小文字化だけに限定し、NFC/NFDを同一視しないよう修正した。
+
+### R2修正後の再検証（4/4 pass）
+
+- CI-MCH-01〜15を手元候補で再実行し15/15 pass、各machine_reportがスキーマ1.0.0に適合し、`generated_at` 除外後の正準JSONがバイト一致した。
+- CI-LKP-01〜04を実CLIで再実行し4/4 pass。`abandon`、`Tokyo`、`watch`、`gp:13`、`gp:1-1` の件数・属性・継承を再確認した。
+- R2-01: 先行構文不正＋後方 `NaN`、先行構文不正＋後方 `1e400`、単独 `NaN`、単独 `1e400` をstdin・ファイルの実CLIへ投入した。全8条件がstdout空・終了コード1・`E-INPUT-03`となり、最初の構文／数値位置である1行7列を報告した。
+- R2-02: target不存在＋緩和falseのA1 verb誤答3件が宣言nounとの不一致として `V-DIS-02` 3件、target不存在＋宣言nounと一致するA1 noun誤答3件が `V-DIS-02` なしとなることを実CLIで確認した。緩和trueの互換群外も3件全てを列挙した。
+- R2-03: 英語選択肢のNFC/NFDは区別し、前後空白・大小文字だけの差は重複とすること、日本語選択肢のNFC/NFDと前後空白差は重複とすることを確認した。`vocab_mcq_ja2en` のNFD choiceはNFC headwordと不一致の `V-DIS-01`、大小文字差だけは一致、前後空白差は不一致となった。
+- `.venv/bin/python scripts/doctor.py` は12 pass / 0 fail・stderr空、py_compile・`git diff --check` はpassした。CPython 3.10.18で `machine_check.py` が引き続きstdout空・終了コード1・`E-ENV-01`を返した。`docs/`、`schemas/`、`DECISIONS.md`、`IMPLEMENTATION_PLAN.md` にR2修正差分はない。
+
 ### M2 DoD実行記録（4/4 pass）
 
 1. 機械検査マトリクス（CI-MCH-01〜15）

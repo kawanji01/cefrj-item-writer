@@ -145,6 +145,19 @@ def answer_equivalent_key(value: str) -> str:
     return value.strip().lower()
 
 
+def english_choice_key(value: str) -> str:
+    return value.strip().lower()
+
+
+def japanese_choice_key(value: str) -> str:
+    return nfc(value.strip())
+
+
+def lexical_pos_from_ref(target_ref: str) -> str:
+    pos_slug = target_ref.rsplit(":", 1)[1]
+    return "modal auxiliary" if pos_slug == "modal-auxiliary" else pos_slug
+
+
 def validate_json_number_tokens(text: str) -> None:
     """標準外定数とPythonで表現不能なJSON数値を位置付きで拒否する。"""
 
@@ -197,6 +210,12 @@ def validate_json_number_tokens(text: str) -> None:
 
 
 def strict_candidate_json_loads(text: str) -> Any:
+    json.loads(
+        text,
+        parse_constant=lambda token: token,
+        parse_float=lambda token: token,
+        parse_int=lambda token: token,
+    )
     validate_json_number_tokens(text)
     try:
         return strict_json_loads(text)
@@ -749,16 +768,15 @@ def check_choice_structure(candidate: dict[str, Any], violations: list[dict[str,
             )
         )
     fmt = candidate["format"]
-    values = []
-    for choice in choices:
-        text = nfc(choice["text"].strip())
-        values.append(text if fmt == "vocab_mcq_en2ja" else text.lower())
+    comparison_key = japanese_choice_key if fmt == "vocab_mcq_en2ja" else english_choice_key
+    comparison_rule = "trim・NFC" if fmt == "vocab_mcq_en2ja" else "trim・英語小文字化"
+    values = [comparison_key(choice["text"]) for choice in choices]
     if len(set(values)) != len(values):
         violations.append(
             violation(
                 "V-CHO-01",
                 "body.choices[*].text",
-                "trim・NFC・英語小文字化後に重複する選択肢があります。",
+                f"{comparison_rule}後に重複する選択肢があります。",
                 "4つの選択肢表記を互いに異なる文字列へ修正してください。",
             )
         )
@@ -873,16 +891,18 @@ def check_distractor_anchors(
     body = candidate["body"]
     choices = body["choices"]
     requested_level = candidate["level"]["value"]
+    target_ref = candidate["target"]["ref"]
+    target_pos = (
+        target_entry["pos"] if target_entry is not None else lexical_pos_from_ref(target_ref)
+    )
     distractors = [choice for choice in choices if not choice["is_correct"]]
-    same_pos_pool_count: int | None = None
-    if target_entry is not None:
-        same_pos_pool_count = sum(
-            1
-            for entry in lexicon_by_id.values()
-            if entry["id"] != target_entry["id"]
-            and entry["level"] == requested_level
-            and entry["pos"] == target_entry["pos"]
-        )
+    same_pos_pool_count = sum(
+        1
+        for entry in lexicon_by_id.values()
+        if entry["id"] != target_ref
+        and entry["level"] == requested_level
+        and entry["pos"] == target_pos
+    )
     for index, choice in enumerate(choices):
         anchor = choice["anchor"]
         entry = lexicon_by_id.get(anchor["entry_id"])
@@ -894,7 +914,7 @@ def check_distractor_anchors(
         }
         bad_source = entry is None or recorded_values != expected_values
         if candidate["format"] == "vocab_mcq_ja2en" and entry is not None:
-            bad_source = bad_source or lookup_key(choice["text"]) != lookup_key(entry["headword"])
+            bad_source = bad_source or choice["text"].lower() != entry["headword"].lower()
         if bad_source:
             violations.append(
                 violation(
@@ -905,13 +925,10 @@ def check_distractor_anchors(
                 )
             )
         if not choice["is_correct"]:
-            pos_ok = True
-            if target_entry is not None:
-                pos_ok = anchor["pos"] == target_entry["pos"]
-                if body["pos_pool_relaxed"]:
-                    pos_ok = compatible_pos(anchor["pos"], target_entry["pos"])
+            pos_ok = anchor["pos"] == target_pos
+            if body["pos_pool_relaxed"]:
+                pos_ok = compatible_pos(anchor["pos"], target_pos)
             if anchor["level"] != requested_level or not pos_ok:
-                target_pos = target_entry["pos"] if target_entry is not None else "不明"
                 violations.append(
                     violation(
                         "V-DIS-02",
@@ -922,16 +939,14 @@ def check_distractor_anchors(
                         actual_level=anchor["level"],
                     )
                 )
-    if body["pos_pool_relaxed"] and target_entry is not None:
+    if body["pos_pool_relaxed"]:
         cross_pos_used = any(
             (entry := lexicon_by_id.get(choice["anchor"]["entry_id"])) is not None
             and choice["anchor"]["pos"] == entry["pos"]
-            and entry["pos"] != target_entry["pos"]
+            and entry["pos"] != target_pos
             for choice in distractors
         )
-        if same_pos_pool_count is not None and (
-            same_pos_pool_count >= 3 or not cross_pos_used
-        ):
+        if same_pos_pool_count >= 3 or not cross_pos_used:
             violations.append(
                 violation(
                     "V-DIS-02",
@@ -944,7 +959,6 @@ def check_distractor_anchors(
             )
     anchor_ids = [choice["anchor"]["entry_id"] for choice in choices]
     correct_ids = [choice["anchor"]["entry_id"] for choice in choices if choice["is_correct"]]
-    target_ref = candidate["target"]["ref"]
     identity_bad = len(set(anchor_ids)) != len(anchor_ids)
     identity_bad = identity_bad or correct_ids != [target_ref]
     identity_bad = identity_bad or any(
