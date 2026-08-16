@@ -74,6 +74,27 @@
    - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`（実行前後の3ファイルSHA-256もinline Pythonで比較）。
    - 結果: lexicon / grammarのadded / removed / level_changedが全て `count=0, ids=[]`。`written=[]`、実行前後の3ファイルはバイト一致、終了コード0。
 
+### M2着手前のM1 DoD再検証（2026-08-16、6/6 pass）
+
+1. 決定性
+   - コマンド: `.venv/bin/python - <<'PY' ... リポジトリ内の一時出力先2件へbuild_normalized.pyを各1回実行し、3成果物をバイト比較 ... PY`。
+   - 結果: 両実行とも終了コード0・stderr空。2組およびコミット済み3成果物がそれぞれバイト一致した。
+2. スキーマ・meta適合
+   - コマンド: `.venv/bin/python - <<'PY' ... Draft202012Validatorでlexicon/grammarを検証し、validate_meta_documentでmetaを検証 ... PY`。
+   - 結果: 3成果物が適合。`data_version=wl1.6+gp20200220+norm1.0.2`、`pipeline_version=1.0.2`。
+3. 件数不変条件（CI-NRM-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... json/openpyxlで正規化データと原本ALLシートを検証 ... PY`。
+   - 結果: entries=7,988、A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859、`(headword,pos)`ユニーク=7,988、ALL行=7,801、groups=179、教員版ターゲット=256、ITEM LIST=501、全枝番の親存在、未付与親16件ID一致。
+4. レベル継承・範囲分解（CI-NRM-05 / CI-NRM-07）
+   - コマンド: `.venv/bin/python - <<'PY' ... grammar.jsonの継承元・source・min/maxと教員版level_rawを検証 ... PY`。
+   - 結果: `gp:1-1` / `gp:1-2` / `gp:1-3` は `gp:1` を継承し、単一値152件・範囲値104件、単一値の下限=上限を確認した。
+5. doctor完全環境・異常模擬（CI-NRM-06 / CI-CLI-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... tempfileへ必要ファイルを複製し、完全環境・正規化欠落・原本1バイト改変・config欠落でdoctor.pyを実行。原本改変環境ではbuild_normalized.pyも実行 ... PY`。
+   - 結果: 完全環境は12 pass・終了コード0。正規化欠落はD08/D09=`E-DATA-03`、原本改変はdoctor D07およびbuild=`E-DATA-02`、config欠落はD10=`E-DATA-05`で、各終了コード1・定義済みremedyあり・doctorのstderr空。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff` と、続くinline Pythonによる3成果物SHA-256比較。
+   - 結果: lexicon / grammarのadded / removed / level_changedは全て0件、`written=[]`、終了コード0。実行後SHA-256はlexicon=`11ac8d1d...c3c7`、grammar=`6a435941...f62`、meta=`fd8c51b2...0fd4`で開始前と一致した。
+
 ### 追加確認
 
 - R10〜R15の各修正後にM1 DoD 6項目を全て再実行し、独立2ビルドのバイト一致、schema・NRM-29適合、件数不変条件、レベル継承・範囲分解、doctor正常／異常系、差分ゼロが6/6 passすることを確認。
