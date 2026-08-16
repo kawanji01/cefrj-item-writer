@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## 2026-08-17 — M3 スキーマ検証
+
+### 実装
+
+- `scripts/validate.py` を追加し、`set` / `candidate` / `machine_report` / `review_request` / `review_result` / `normalized_lexicon` / `normalized_grammar` / `config_limits` / `config_proper_nouns` の9識別子を統一CLIで検証できるようにした。
+- 妥当時は検証結果JSONと終了コード0、不当時は違反JSONポインタ・日本語理由を持つ検証結果をstdout、`E-CONTRACT-01`をstderrへ出力して終了コード1とした。違反は決定的順序で最大50件を返し、総数をエラーdetailへ記録する。
+- stdin・ファイルをUTF-8バイト列として読み、標準JSON構文、非標準数値定数、有限floatへ変換不能な数値を位置付き`E-INPUT-03`で拒否する。正常・エラーJSONはいずれも正準形UTF-8・LFで出力する。
+- PLN-05で承認されたM3D-01を `DECISIONS.md` へ記録し、通常検証と排他的な `--set-dir` 状態確認モードを追加した。`set.json` がなければ `status=incomplete`、存在すればsetスキーマ検証を伴う `status=complete` を返す契約を関連設計文書へ反映した。
+- `schemas/` 9本は変更していない。
+
+### M3着手前のM1 DoD再検証（2026-08-17、6/6 pass）
+
+1. 決定性
+   - コマンド: `.venv/bin/python - <<'PY' ... リポジトリ内の独立した一時出力先2件へbuild_normalized.pyを各1回実行し、2組とコミット済み3成果物をバイト比較 ... PY`。
+   - 結果: 2回とも終了コード0・stderr空。3ファイルは各組およびコミット済み成果物とバイト一致した。SHA-256はlexicon=`11ac8d1d...c3c7`、grammar=`6a435941...f62`、meta=`fd8c51b2...0fd4`。
+2. スキーマ・meta適合
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... schema_errorsとvalidate_meta_documentで3成果物を検証 ... PY`。
+   - 結果: `lexicon.json`・`grammar.json` は対応スキーマ、`meta.json` はNRM-29に適合した。`data_version=wl1.6+gp20200220+norm1.0.2`、`pipeline_version=1.0.2`。
+3. 件数不変条件（CI-NRM-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... json/openpyxlで正規化データと原本ALLシートを検証 ... PY`。
+   - 結果: entries=7,988、A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859、`(headword,pos)`ユニーク=7,988、ALL行=7,801、groups=179（全member 2件以上）、教員版=256、ITEM LIST=501、全枝番の親が存在し、未付与親16件のID集合が仕様値と一致した。
+4. レベル継承・範囲分解（CI-NRM-05 / CI-NRM-07）
+   - コマンド: `.venv/bin/python - <<'PY' ... grammar.jsonの全継承項目と教員版level_rawを検証 ... PY`。
+   - 結果: 継承項目220件が親の下限・上限を保持し、`gp:1-1` / `gp:1-2` / `gp:1-3` は `gp:1` を継承した。教員版は単一値152件・範囲値104件で、全単一値の下限=上限だった。
+5. doctor完全環境・異常模擬（CI-NRM-06 / CI-CLI-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... 一時コピーで完全環境・正規化欠落・原本1バイト改変・config欠落をdoctor.pyで検査し、原本改変環境ではbuild_normalized.pyも実行 ... PY`。
+   - 結果: 完全環境は12 pass / 0 fail・終了コード0。正規化欠落はD08/D09=`E-DATA-03`、原本改変はdoctor D07およびbuild=`E-DATA-02`、`limits.json`欠落はD10=`E-DATA-05`で各終了コード1・具体的remedyあり・doctorのstderr空だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python - <<'PY' ... scripts/build_normalized.py --diffを実行し、前後の3成果物SHA-256を比較 ... PY`。
+   - 結果: lexicon / grammarのadded / removed / level_changedは全て0件、`written=[]`、終了コード0。実行前後の3ファイルはバイト一致した。
+
+### M3 DoD実行記録（4/4 pass）
+
+1. 9スキーマの自己妥当性（CI-SCH-01）
+   - コマンド: `.venv/bin/python - <<'PY' ... validator_for(schema).check_schema(schema)と$id書式を9ファイルで検証 ... PY`。
+   - 結果: 9/9がJSON Schema draft 2020-12メタスキーマに適合し、`$id`は規定URL＋semver書式だった。machine_reportは1.1.0、他8本は1.0.0。
+2. CI-SCH-01〜05
+   - コマンド: `.venv/bin/python - <<'PY' ... 設計文書内の公式JSON例を一時ファイル化し、scripts/validate.pyをsubprocessで実行 ... PY`。
+   - 結果: 9スキーマの妥当例は9/9合格。各スキーマの必須欠落・型不正・additionalProperties違反は27/27が`E-CONTRACT-01`と違反パスを返した。candidateの9形式は9/9合格し、format/body不整合は不合格。妥当IDに加え、set_id不正・`q21`・`gen4`・不正lex ID・不正gp IDを全て不合格とした。
+3. CI-CLI-01入力不正3種
+   - コマンド: `.venv/bin/python - <<'PY' ... 必須引数欠落・不存在ファイル・不正JSON stdinでvalidate.pyをsubprocess実行 ... PY`。
+   - 結果: 順に`E-INPUT-01` / `E-INPUT-02` / `E-INPUT-03`、stdout空、終了コード1、日本語message・具体的remedyとなった。不正JSONは行・列をdetailへ記録した。
+4. CI-MCH-12再確認
+   - コマンド: `.venv/bin/python - <<'PY' ... 公式candidate例をmachine_check.pyへ投入し、そのstdoutをvalidate.py --schema machine_report --file -へ入力 ... PY`。
+   - 結果: machine_check.pyはスキーマ1.1.0のreportを終了コード0で出力し、validate.pyは`valid=true`・終了コード0・stderr空で受理した。
+
+### 追加確認
+
+- `validate.py --set-dir` は監査のみのディレクトリを `status=incomplete`・終了コード0・stderrなしで識別した。妥当な`set.json`は`status=complete`かつvalid、不当な`set.json`はcomplete状態を保持して`E-CONTRACT-01`、不存在ディレクトリは`E-INPUT-02`、不正set_idは`E-INPUT-05`となった。
+- 60件の違反を持つ入力でstdoutとstderrの違反列挙が先頭50件、`detail.total_errors=60`となり、同一入力2回の出力がバイト一致した。
+- `PYTHONIOENCODING=ascii|cp932|utf-16`の各環境で同じUTF-8 stdinを受理した。不正UTF-8はstdin・ファイルとも対象・行・列付き`E-INPUT-03`、リポジトリルート外からの実行は`E-ENV-04`となった。
+
 ## 2026-08-16 — M2 機械検査
 
 ### 実装

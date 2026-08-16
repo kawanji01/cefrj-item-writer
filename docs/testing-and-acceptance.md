@@ -144,7 +144,7 @@
 | CI-CLI-01 | 入力不正時の停止 | 全8 CLI に対し (a)必須引数欠落 (b)存在しないファイルパス (c)JSONとして不正なstdin（stdinを取るCLIのみ） | 各CLIが `docs/architecture.md` の目録に定義された E-INPUT / E-CONTRACT 系コードと日本語対処手順を出力し、定義済み終了コードで停止すること |
 | CI-CLI-02 | 互換一致（機械検査） | `tests/fixtures/candidates/compat/` の互換用候補フィクスチャ一式 | `machine_check.py` の出力が `tests/golden/machine/` のゴールデンとCI-R-02の意味でバイト一致すること（ホストツール・OSに依存しない） |
 | CI-CLI-03 | doctor診断 | (a)完全な環境 (b)`data/normalized/` 欠落 (c)チェックサム不一致 (d)`data/config/limits.json` 欠落 を模擬した一時環境 | (a)は終了コード0、(b)(c)(d)はそれぞれ目録に定義された E-ENV / E-DATA 系コードで停止すること |
-| CI-CLI-04 | 中断セットの残置状態 | `finalize_set.py` 未実行のセット作業ディレクトリフィクスチャ | `output/<set_id>/` に `set.json` が存在せず監査のみが残ること、および `validate.py` がこの状態を「未完成セット」としてエラーなく識別できること |
+| CI-CLI-04 | 中断セットの残置状態 | `finalize_set.py` 未実行のセット作業ディレクトリフィクスチャ | `output/<set_id>/` に `set.json` が存在せず監査のみが残ること、および `validate.py --set-dir output/<set_id>` が終了コード0・stderrなしで `status=incomplete`、`set_json_path=null`、`validation=null` を返すこと |
 
 ---
 

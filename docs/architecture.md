@@ -124,7 +124,7 @@ cefr_j_agents/
 | `set_check.py` | セット横断の決定的検査 | `--set-dir <path>`（必須。`output/<set_id>`） | 使わない | セット横断machine_report JSON（5.5） | 0=検査完遂 / 1/2 | 【基本】【データ】+ 監査配置（E-CONTRACT-03）+ set_id形式（E-INPUT-05） |
 | `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | セットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-CONTRACT-03/04/05 + E-INPUT-03/05 |
 | `build_html.py` | set.json→単一自己完結HTMLの決定的生成 | `--set <path>`（必須。set.json） / `--out <path>`(既定: 入力と同ディレクトリの `index.html`) | 使わない | 生成サマリーJSON（5.7） | 0/1/2 | 【基本】+ 入力スキーマ（E-CONTRACT-01）+ メジャー一致（E-CONTRACT-02） |
-| `validate.py` | 9スキーマに対する文書検証 | `--schema <名>`（必須。5.8の9識別子） / `--file <path\|- >`（必須） | `-` 指定時に検証対象JSON | 検証結果JSON（5.8） | 0=妥当 / 1=不当（E-CONTRACT-01）または他エラー / 2 | 【基本】+ スキーマファイル存在（E-ENV-04） |
+| `validate.py` | 9スキーマに対する文書検証・セット状態識別 | 通常モード: `--schema <名>` / `--file <path\|- >`（ともに必須）。状態確認モード: `--set-dir <path>`（通常モードと排他） | `--file -` 指定時に検証対象JSON | 検証結果JSONまたはセット状態JSON（5.8） | 0=妥当または未完成状態識別 / 1=不当（E-CONTRACT-01）または他エラー / 2 | 【基本】+ スキーマファイル存在（E-ENV-04） |
 | `lookup.py` | 正規化データ照会 | サブコマンド `lex` / `gp`（5.9） | 使わない | 照会結果JSON（5.9） | 0=完遂（0件でも0） / 1/2 | 【基本】【データ】 |
 
 以下、各CLIの詳細契約。
@@ -186,8 +186,9 @@ cefr_j_agents/
 
 ### 5.8 validate.py
 
-- **CLI-26** `--schema` の識別子は次の9個とする(MUST): `set` / `candidate` / `machine_report` / `review_request` / `review_result` / `normalized_lexicon` / `normalized_grammar` / `config_limits` / `config_proper_nouns`。それぞれ `schemas/<識別子>.schema.json` に対応する。他の値は E-INPUT-04 で停止する(MUST)。
-- **CLI-27** stdout: `{"valid": true|false, "schema": "<識別子>", "schema_version": "<スキーマのsemver>", "errors": [{"json_pointer": "<RFC6901>", "message": "<日本語>"}]}`。妥当なら終了コード0・`errors` は空配列。不当なら stdout に上記を出力した上で、stderr に E-CONTRACT-01 のエラーJSONを出力し終了コード1とする(MUST)。`errors` は全件出力する。ただし50件を超える場合は先頭50件と総数（`detail.total_errors`）を出力する(MUST)。
+- **CLI-26** 通常モードでは `--schema` と `--file` をともに必須とする。`--schema` の識別子は次の9個とする(MUST): `set` / `candidate` / `machine_report` / `review_request` / `review_result` / `normalized_lexicon` / `normalized_grammar` / `config_limits` / `config_proper_nouns`。それぞれ `schemas/<識別子>.schema.json` に対応する。他の値は E-INPUT-04 で停止する(MUST)。状態確認モードでは `--set-dir <path>` だけを指定し、`--schema` / `--file` と併用してはならない(MUST NOT)。モードの必須引数欠落・併用はE-INPUT-01で停止する。
+- **CLI-27** 通常モードのstdout: `{"valid": true|false, "schema": "<識別子>", "schema_version": "<スキーマのsemver>", "errors": [{"json_pointer": "<RFC6901>", "message": "<日本語>"}]}`。妥当なら終了コード0・`errors` は空配列。不当なら stdout に上記を出力した上で、stderr に E-CONTRACT-01 のエラーJSONを出力し終了コード1とする(MUST)。`errors` は全件出力する。ただし50件を超える場合は先頭50件と総数（`detail.total_errors`）を出力する(MUST)。
+- **CLI-27A** 状態確認モードは `--set-dir` のディレクトリ名をset_idとしてID-01に照合し、不一致はE-INPUT-05、ディレクトリの不存在・読取り不能はE-INPUT-02で停止する(MUST)。`<set-dir>/set.json` が存在しない場合のstdoutは `{"set_dir": "<入力パス>", "set_json_path": null, "status": "incomplete", "validation": null}` とし、終了コード0・stderrなしで返す(MUST)。`set.json` が存在する場合はsetスキーマで通常モードと同じ検証を行い、stdoutを `{"set_dir": "<入力パス>", "set_json_path": "<入力パス>/set.json", "status": "complete", "validation": <CLI-27の検証結果>}` とする。妥当なら終了コード0、不当ならこのstdoutに加えてE-CONTRACT-01をstderrへ出力し終了コード1とする(MUST)。通常ファイルでない`set.json`または読取り不能な`set.json`はE-INPUT-02とする。
 
 ### 5.9 lookup.py
 

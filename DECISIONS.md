@@ -873,3 +873,14 @@
 - **決定**: `machine_check.py` がcandidate JSONで受理する整数トークンは、符号を除く10進桁数を4,300桁以下に固定する。4,301桁以上は対象・行・列・上限・実測桁数を持つ`E-INPUT-03`とする。実行環境の`PYTHONINTMAXSTRDIGITS`は使用せず、プロセス内の変換上限も4,300桁に固定する。
 - **理由**: CPythonの既定上限4,300桁とM2の既存回帰条件（5,000桁を入力不正とする）を維持しつつ、環境変数による`E-INPUT-03`/`E-CONTRACT-01`の分岐と出力差を排除するため。
 - **影響先**: `docs/architecture.md` CLI-07・E-INPUT-03、`docs/cefrj-validation-spec.md` MC-05、`docs/testing-and-acceptance.md` CI-MCH-18、M2機械検査実装。
+
+---
+
+## 6. M3実装に伴う承認決定（M3D-01）
+
+2026-08-17、PLN-05に基づくM3実装前確認で発見した次の未定義事項について、作問者が推奨案を承認した。
+
+### M3D-01 validate.pyの未完成セット識別モード
+- **決定**: `validate.py` に、通常の `--schema` / `--file` と排他的な `--set-dir <path>` モードを追加する。指定ディレクトリに `set.json` がなければ `status=incomplete`・終了コード0・stderrなしで返す。`set.json` があればsetスキーマで検証し、`status=complete`と検証結果を返す。ディレクトリの不存在・読取り不能はE-INPUT-02、ディレクトリ名のset_id書式不正はE-INPUT-05とする。
+- **理由**: 通常の入力ファイル不存在を未完成セットと誤認せず、既存のスキーマ検証契約と、ARC-07・CI-CLI-04が要求するセット状態確認を明確に分離するため。
+- **影響先**: `docs/architecture.md` CLI-26〜27、`docs/testing-and-acceptance.md` CI-CLI-04、M3スキーマ検証実装。
