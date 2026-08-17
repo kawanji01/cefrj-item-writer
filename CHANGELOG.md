@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-08-17 — M4 対話＋生成コア
+
+### 実装
+
+- `agent/author-core.md` を追加し、S00〜S99の状態遷移、1ターン1質問、入力検証と固定再質問、停止・戻る・修正フローを定義した。
+- `lookup.py` を唯一の照合経路とし、語彙・文法の明示指定、レベル不一致、辞書外、多品詞、形式不適合、提案モードを対話フローへ配線した。
+- 承認済みM4D-01に基づき、文法名の部分一致が複数件の場合は全適格候補をlookup返却順で提示し、教師の番号選択を待つ仕様を `DECISIONS.md` と `docs/interaction-flow.md` に反映した。
+- 9形式のcandidate JSON骨格と、PRM-01〜PRM-14の必須制約を生成プロンプト構築仕様へ反映した。
+- M4の暫定配線として、candidateを `validate.py`、`machine_check.py`、machine reportスキーマの順に検証し、正規パスへ保存する手順を定義した。正式な対話ランタイムアダプタは計画どおりM7の範囲とした。
+- `schemas/` は変更していない。
+
+### M4 DoD検証（2026-08-17、5/5 pass）
+
+- コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... author-core・interaction-flowの静的契約、lookup.py、validate.py、machine_check.py、各JSON Schemaを実データで一括検証 ... PY`。
+- DoD 1: 全状態と遷移順、1ターン1質問、入力検証、固定再質問、およびM4D-01の複数一致選択を確認した。`be` / A1.2 の複数一致ではlookup返却順を保持した。
+- DoD 2: `abandon` / A1 は実データの `verb/B1` と不一致のため拒否し、`Tokyo` はWordlist一致0件のため辞書外として拒否した。
+- DoD 3: 公式例を基にした9形式すべてでcandidateスキーマ、`validate.py`、`machine_check.py`、machine reportスキーマに適合し、機械判定は9/9 passだった。
+- DoD 4: PRM-01〜PRM-14、現行 `limits.json`、実行時に全件展開する50語の機能語allowlistを確認した。
+- DoD 5: 9レベルすべてで教師版の直接割当だけが提案対象となった。適格件数はA1.1=28、A1.2=50、A1.3=61、A2.1=65、A2.2=63、B1.1=76、B1.2=67、B2.1=53、B2.2=34。未割当16 IDと `gp:47` は拒否した。
+
+### M4着手前のM1 DoD再検証（2026-08-17、6/6 pass）
+
+1. 決定性
+   - コマンド: `.venv/bin/python - <<'PY' ... リポジトリ内の独立した一時出力先2件へbuild_normalized.pyを各1回実行し、2組とコミット済み3成果物をバイト比較 ... PY`。
+   - 結果: 2回とも終了コード0・stderr空。3ファイルは各組およびコミット済み成果物とバイト一致した。SHA-256はlexicon=`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、grammar=`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、meta=`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`。
+2. スキーマ・meta適合
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... jsonschema.validator_forとvalidate_meta_documentで3成果物を検証 ... PY`。
+   - 結果: `lexicon.json`・`grammar.json` は対応するDraft 2020-12スキーマ、`meta.json` はNRM-29に適合した。`data_version=wl1.6+gp20200220+norm1.0.2`、`pipeline_version=1.0.2`。
+3. 件数不変条件（CI-NRM-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... json/openpyxlで正規化データと原本ALLシートを検証 ... PY`。
+   - 結果: entries=7,988、A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859、`(headword,pos)`ユニーク=7,988、ALL行=7,801、groups=179（全member 2件以上）、grammar=501（親263・枝番238）、target_eligible=256、全枝番の親が存在し、未付与親16件のID集合が仕様値と一致した。
+4. レベル継承・範囲分解（CI-NRM-05 / CI-NRM-07）
+   - コマンド: `.venv/bin/python - <<'PY' ... grammar.jsonの全継承項目と教員版level_rawを検証 ... PY`。
+   - 結果: 継承項目220件が親の下限・上限を保持し、`gp:1-1` / `gp:1-2` / `gp:1-3` は `gp:1` のレベルを継承した。教員版は単一値152件・範囲値104件で、全単一値の下限=上限、全範囲値が`min-max`へ分解されていた。
+5. doctor完全環境・異常模擬（CI-NRM-06 / CI-CLI-03）
+   - コマンド: `.venv/bin/python - <<'PY' ... 一時コピーで完全環境・正規化欠落・原本1バイト改変・config欠落をdoctor.pyで検査し、原本改変環境ではbuild_normalized.pyも実行 ... PY`。
+   - 結果: 完全環境は12 pass / 0 fail・終了コード0。正規化欠落はD08/D09=`E-DATA-03`、原本改変はdoctor D07およびbuild=`E-DATA-02`、`limits.json`欠落はD10=`E-DATA-05`で各終了コード1となり、doctorのstderrは空だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python - <<'PY' ... scripts/build_normalized.py --diffを実行し、前後の3成果物SHA-256を比較 ... PY`。
+   - 結果: lexicon / grammarのadded / removed / level_changedは全て`count=0, ids=[]`、`written=[]`、終了コード0・stderr空。実行前後の3ファイルSHA-256は一致した。
+
 ## 2026-08-17 — M3 スキーマ検証
 
 ### 実装
