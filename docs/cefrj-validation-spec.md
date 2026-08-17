@@ -327,7 +327,7 @@ SHA-256は原本xlsxファイル全体に対して計算した小文字16進64�
 
 ### 2.5 起動時整合検証（NRM-30）
 
-**NRM-30** 正規化データを読み込む全CLI（`machine_check.py` / `set_check.py` / `lookup.py` / `build_html.py` / `finalize_set.py`）は、処理前に次を検証し、不一致なら `E-DATA-*` で停止しなければならない（コード値は `docs/architecture.md`）。
+**NRM-30** 正規化データを読み込む全CLI（`machine_check.py` / `set_check.py` / `lookup.py` / `finalize_set.py`）は、処理前に次を検証し、不一致なら `E-DATA-*` で停止しなければならない（コード値は `docs/architecture.md`）。`build_html.py` は正規化データを読み込まず、入力を `set.json` のみに限定する（`docs/html-output-spec.md` CON-01、`docs/architecture.md` CLI-23）。
 
 1. `lexicon.json` / `grammar.json` / `meta.json` が存在し読み取り可能である。
 2. 3ファイルの `data_version` が一致する。

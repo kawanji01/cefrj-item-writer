@@ -157,7 +157,7 @@ def check_model() -> dict[str, Any]:
 def check_repository(repo_root: Path) -> dict[str, Any]:
     name = "リポジトリ構成"
     problems: list[str] = []
-    for relative in ("schemas", "data/config", "agent", "scripts"):
+    for relative in ("schemas", "data/config", "agent", "scripts", "templates"):
         if not (repo_root / relative).is_dir():
             problems.append(relative)
     for schema_name in SCHEMA_FILES:
@@ -169,6 +169,16 @@ def check_repository(repo_root: Path) -> dict[str, Any]:
             strict_json_loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
             problems.append(f"schemas/{schema_name}（破損）")
+    template_path = repo_root / "templates/index.html.j2"
+    if not template_path.is_file():
+        problems.append("templates/index.html.j2")
+    else:
+        try:
+            jinja2 = importlib.import_module("jinja2")
+            template_text = template_path.read_text(encoding="utf-8")
+            jinja2.Environment().parse(template_text)
+        except Exception as exc:
+            problems.append(f"templates/index.html.j2（読取不能またはJinja2構文不正: {exc}）")
     if problems:
         return failed(
             "D04",
@@ -176,7 +186,11 @@ def check_repository(repo_root: Path) -> dict[str, Any]:
             "E-ENV-04",
             f"E-ENV-04 リポジトリ構成が不完全です: {', '.join(problems)}",
         )
-    return passed("D04", name, "必須ディレクトリとスキーマ9ファイルを確認しました")
+    return passed(
+        "D04",
+        name,
+        "必須ディレクトリ・スキーマ9ファイル・templates/index.html.j2を確認しました",
+    )
 
 
 def check_output(repo_root: Path) -> dict[str, Any]:

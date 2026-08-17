@@ -1022,3 +1022,34 @@
 - **決定**: FIN-01/SET-01の`created_at`で許容する数値UTCオフセットは、分が00〜59、絶対値が14:00以下、時が14なら分が00のものに限定する。末尾`Z`は従来どおり許容する。`+09:99`や`+14:01`のような値は、標準ライブラリが正規化して日時へ変換できても`E-CONTRACT-01`で拒否する。
 - **理由**: 字句パターンだけでは非正規のオフセットを通し、標準ライブラリの正規化によりset_idとのローカル年月日時照合まで通過し得た。プロジェクトが受理するISO 8601部分集合を数値境界まで固定し、環境依存の寛容な解析へ契約判断を委ねないため。
 - **影響先**: `docs/json-output-spec.md` SET-01/FIN-01、`docs/testing-and-acceptance.md` finalizeメタデータ回帰、`scripts/finalize_set.py`、M5 R7回帰確認。
+
+---
+
+## 9. M6実装に伴う承認決定（M6D-01〜M6D-05）
+
+2026-08-18、PLN-05に基づくM6実装前確認で発見した次の5件について、作問者が推奨案を承認した。
+
+### M6D-01 build_htmlの入力境界
+- **決定**: `build_html.py`を`docs/cefrj-validation-spec.md` NRM-30の正規化データ読取りCLI列挙から除外し、入力を`set.json`だけに限定する。前提検査は`docs/architecture.md`の【基本】、setスキーマ検証、schema_versionメジャー一致とし、正規化データ・設定・監査・ネットワークを参照しない。
+- **理由**: NRM-30の列挙が、入力を`set.json`だけに限定するHTML CON-01・CLI-23と矛盾していた。JSON正本だけから決定的に再生成できる境界を維持するため。
+- **影響先**: `docs/cefrj-validation-spec.md` NRM-30、`scripts/build_html.py`、M6検証。
+
+### M6D-02 先行文脈のHTML表示
+- **決定**: `grammar_mcq`・`grammar_cloze`・`grammar_example_selfcheck`で`body.context_sentence`が非nullの場合、画面UIと印刷ワークシートの双方で主文の直前に`<p class="context-sentence" lang="en">`として表示する。nullの場合は同要素を出力しない。解答部は既存仕様を維持する。
+- **理由**: 3形式の正本は先行文脈を保持できる一方、HTML上の表示位置が未定義であり、非表示では先行文脈要求項目の問題が成立しないため。新しいデータ項目や表示ラベルを追加しない最小の表示規則とした。
+- **影響先**: `docs/html-output-spec.md` UI-05/UI-13/UI-23・PRN-09/11/14、`templates/index.html.j2`、M6検証。
+
+### M6D-03 例文問題の印刷時ハイライト
+- **決定**: `grammar_example_selfcheck`は画面・印刷とも対象構造をハイライトしない。PRN-14をUI-24と統一し、位置情報のない対象構造を推測で強調しない。
+- **理由**: `set.json`には対象構造のスパン情報がなく、CON-01の入力境界内では印刷時だけ正しい範囲を決定できないため。
+- **影響先**: `docs/html-output-spec.md` PRN-14、`templates/index.html.j2`、M6印刷確認。
+
+### M6D-04 Jinja2テンプレートの配置と診断
+- **決定**: 単一のJinja2テンプレートを`templates/index.html.j2`へ配置し、`templates/`を正式なリポジトリ構成へ追加する。テンプレートの欠落・読取り不能・Jinja2構文不正は`E-ENV-04`とし、`build_html.py`の事前検査とdoctor D04で検出する。
+- **理由**: M6成果物としてテンプレートが必須である一方、配置先と欠落時の停止契約が未定義だった。単一ファイルにすると追加構成を最小にしながら、実装物を独立して検査できるため。
+- **影響先**: `docs/architecture.md` リポジトリ構成・CLI-10・E-ENV-04、`scripts/doctor.py`、`scripts/build_html.py`、`templates/index.html.j2`、M1 DoD再検証。
+
+### M6D-05 build_htmlの入出力同一パス拒否
+- **決定**: `build_html.py`は書込み前に`--set`と`--out`のパス・既存ファイル実体の同一性を検査し、同一なら`E-INPUT-01`で拒否する。入力`set.json`と既存出力は変更しない。通常の既存`index.html`は決定性確認と再生成のため上書きを許可する。
+- **理由**: `--out`へ入力正本自身を指定した場合の扱いが未定義であり、そのまま受理すると確定済み`set.json`をHTMLで破壊できるため。既存の引数不正コードでfail-closedにし、通常の再生成だけを維持する。
+- **影響先**: `docs/architecture.md` CLI-23a、`docs/html-output-spec.md` CON-02a、`scripts/build_html.py`、M6 CLI回帰確認。

@@ -86,6 +86,7 @@ cefr_j_agents/
 │   └── config/               # limits.json / proper_nouns.json
 ├── agent/                    # author-core.md / reviewer-core.md（共通コア指示書）
 ├── scripts/                  # 本書第5節のCLI 8本
+├── templates/                # index.html.j2（自己完結HTML用Jinja2テンプレート）
 ├── tests/                    # pytest + フィクスチャ（docs/testing-and-acceptance.md）
 ├── output/<set_id>/          # set.json / index.html / review/（実行時生成。コミットしない）
 ├── .claude/                  # Claude Codeアダプタ（docs/cross-agent-compatibility.md）
@@ -135,7 +136,7 @@ cefr_j_agents/
   1. Pythonバージョン ≥ 3.11（E-ENV-01）
   2. 依存パッケージのインポート可否（E-ENV-02）
   3. spaCy en_core_web_sm のロード可否（E-ENV-03）
-  4. リポジトリ構成（`schemas/`・`data/config/`・`agent/`・`scripts/` の存在）（E-ENV-04）
+  4. リポジトリ構成（`schemas/`・`data/config/`・`agent/`・`scripts/` の存在、`templates/index.html.j2` の存在・読取り・Jinja2構文妥当性）（E-ENV-04）
   5. `output/` の作成・書き込み可否（E-ENV-05）
   6. 原本xlsx 2ファイルおよび `data/source/sources.json` の存在と構造（`url`・`download_date` の記載）（E-DATA-01。警告扱いにせず fail とする。原本同梱が前提のため）
   7. 原本チェックサムと `data/normalized/meta.json` 記録値の一致（E-DATA-02）
@@ -184,6 +185,7 @@ cefr_j_agents/
 ### 5.7 build_html.py
 
 - **CLI-23** 入力は `set.json` のみとし(MUST)、正規化データ・設定ファイル・ネットワークを参照してはならない(MUST NOT)。同一の `set.json` から生成したHTMLはバイト一致しなければならない(MUST)（要件の正は `docs/html-output-spec.md`）。
+- **CLI-23a** `--out` が `--set` と同じパス、または同じファイル実体を指す場合は E-INPUT-01 で書込み前に拒否し、入力 `set.json` と既存出力を変更してはならない(MUST NOT)。既存の通常のHTML出力は決定的再生成のため上書きしてよい(MAY)。
 - **CLI-24** 入力の `schema_version` のメジャーが生成器の対応メジャーと異なる場合は E-CONTRACT-02 で停止する(MUST)。マイナー・パッチ差は受理する(MUST)。
 - **CLI-25** stdout: `{"set_id": "<set_id>", "html_path": "<出力パス>", "bytes": <int>, "schema_version": "<入力のsemver>"}`。
 
@@ -226,7 +228,7 @@ cefr_j_agents/
 | E-ENV-01 | 実行中のPythonが3.11未満 | 検出したバージョンと要求バージョン(3.11以上)を明記 | Python 3.11以上をインストールし、`python scripts/setup.py` でvenvを再作成する |
 | E-ENV-02 | `requirements.txt` に固定した依存パッケージのインポート失敗、または要求バージョン不一致 | 欠落・不一致のパッケージ名・要求版・検出版を全件列挙 | リポジトリルートで `python scripts/setup.py` を再実行する |
 | E-ENV-03 | spaCyモデル en_core_web_sm のロード失敗、または要求版3.8.0との不一致 | モデル名 en_core_web_sm・要求版・検出版を明記 | リポジトリルートで `python scripts/setup.py` のモデル取得手順（唯一のネットワーク許可点）を再実行する |
-| E-ENV-04 | リポジトリ構成の欠落・不正: カレントディレクトリがリポジトリルートでない、`schemas/`・`data/config/`・`agent/`・`scripts/` のいずれかが欠落、スキーマファイル自体が欠落・破損、または正規化3ファイル全欠落時にGitを起動できない・リポジトリを判定できない・`HEAD`が欠落または破損して履歴を安全に照会できない | 欠落したパス、または失敗したGit照会とOSエラー・終了コードを明記 | リポジトリルートに移動して再実行する。ファイル欠落の場合は `git status` で確認し `git checkout` で復元する。Git照会失敗の場合は`git --version`と`git rev-parse --verify HEAD`を確認し、Gitまたはリポジトリを復旧してから再実行する |
+| E-ENV-04 | リポジトリ構成の欠落・不正: カレントディレクトリがリポジトリルートでない、`schemas/`・`data/config/`・`agent/`・`scripts/`・`templates/index.html.j2` のいずれかが欠落または読取り不能、Jinja2テンプレートが構文不正、スキーマファイル自体が欠落・破損、または正規化3ファイル全欠落時にGitを起動できない・リポジトリを判定できない・`HEAD`が欠落または破損して履歴を安全に照会できない | 欠落・不正なパス、または失敗したGit照会とOSエラー・終了コードを明記 | リポジトリルートに移動して再実行する。ファイル欠落・破損の場合は `git status` で確認し `git checkout` で復元する。Git照会失敗の場合は`git --version`と`git rev-parse --verify HEAD`を確認し、Gitまたはリポジトリを復旧してから再実行する |
 | E-ENV-05 | CLIの出力先（`output/`、セットディレクトリ、`build_normalized.py --out-dir`）の作成・書き込み失敗 | 対象パスとOSエラー内容を明記 | ディレクトリの権限と空き容量を確認する |
 | E-ENV-06 | レビュアー配線が未検出: `.claude/agents/` のレビュアー定義が存在せず、かつ `codex` コマンドもPATH上に無い | 探索した2つの配線（ファイルパスとコマンド名）を明記 | `docs/cross-agent-compatibility.md` に従い、使用するツール側のアダプタ配線を整備する |
 

@@ -20,6 +20,7 @@
 
 - **CON-01** HTML生成器は `build_html.py`（CLI契約の正は `docs/architecture.md`）であり、入力は正本 `output/<set_id>/set.json` **のみ**でなければならない(MUST)。`review/` 配下の監査ファイル、正規化データ、設定ファイル、ネットワーク、環境変数のいずれも出力内容の入力にしてはならない(MUST NOT)。
 - **CON-02** 出力は `output/<set_id>/index.html` の1ファイルでなければならない(MUST)。1セット=1HTML。他のファイル（CSS・JS・画像・フォント）を出力してはならない(MUST NOT)。
+- **CON-02a** 出力パスが入力 `set.json` と同じパスまたは同じファイル実体を指す場合、生成器は E-INPUT-01 で書込み前に拒否し、正本を変更してはならない(MUST NOT)。既存の通常のHTML出力は決定的再生成のため上書きしてよい(MAY)。
 - **CON-03** 生成器は実行前に `set.json` を `schemas/set.schema.json` で検証し、`schema_version` のメジャーが生成器の対応メジャーと一致しない場合は定義済みエラー（`E-CONTRACT-xx` 系。目録は `docs/architecture.md`）で停止しなければならない(MUST)。部分的なHTMLを書き出してはならない(MUST NOT)。
 - **CON-04** 生成器はPython 3.11+ ＋ Jinja2 で実装しなければならない(MUST)。テンプレートファイル自体は実装物であり、その挙動仕様は本文書が固定する。
 - **CON-05** 生成器は完全オフラインで動作しなければならない(MUST)。ネットワークアクセスを行ってはならない(MUST NOT)。
@@ -282,6 +283,8 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
   <details class="explanation"><summary>解説</summary><p>{解説（簡潔・200字上限）}</p></details>
 ```
 
+`body.context_sentence` が非 `null` の場合のみ、`.stem` の直前に `<p class="context-sentence" lang="en">{先行文脈}</p>` を出力しなければならない(MUST)。`null` の場合は `.context-sentence` 要素を出力してはならない(MUST NOT)。
+
 - **UI-06** 状態遷移は UI-02 と同一。判定表示（UI-03。⑤の `.translation-line` には判定確定時に `body.example_ja` を S-19 ラベルで表示する）に加え、判定確定時に `.explanation` の `open` 属性を付与して自動展開する(MUST)。展開後も `<details>` の開閉操作は可能のままにする。判定確定まで `.explanation` は `hidden` 属性で非表示とする(MUST)（先に解説が読める状態にしない）。
 
 ### 6.3 例文フラッシュカード ③`vocab_flashcard_en2ja` ④`vocab_flashcard_ja2en`
@@ -350,6 +353,8 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 ```
 
 `data-accepted` は正答＋同値表記リストの全要素の配列（CON-10、DET-06）。`.cue` は `body.cue`（内容語の原形ヒント。生成規則の正は `docs/question-generation-spec.md` GEN-30a）が非 `null` の場合のみ、空欄直後に全角括弧で囲んで出力する(MUST)。`cue` が `null` の場合は `.cue` 要素自体を出力してはならない(MUST NOT)。
+
+`body.context_sentence` が非 `null` の場合のみ、`.stem` の直前に `<p class="context-sentence" lang="en">{先行文脈}</p>` を出力しなければならない(MUST)。`null` の場合は `.context-sentence` 要素を出力してはならない(MUST NOT)。
 
 - **UI-14** 状態遷移:
 
@@ -443,6 +448,8 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 </section>
 ```
 
+`body.context_sentence` が非 `null` の場合のみ、`.sentence` の直前に `<p class="context-sentence" lang="en">{先行文脈}</p>` を出力しなければならない(MUST)。`null` の場合は `.context-sentence` 要素を出力してはならない(MUST NOT)。
+
 - **UI-24** 本形式は**英文を提示し、学習者が日本語訳を想起してから開示・自己採点する**方向で固定する(MUST)。対象構造のハイライトは行わない(MUST NOT)（⑨のペイロードには対象構造のスパン情報が存在せず、`set.json` のみから決定的に導出できないため。CON-01/DET-02-5）。
 - **UI-25** 状態遷移:
 
@@ -469,12 +476,12 @@ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 ### 7.2 形式別ワークシート
 
 - **PRN-08** ①②（語彙4択）: 問題ごとに「問n」＋stem（①=例文。対象語は太字下線＋品詞ラベル。②=語義＋空欄マーカー入り英例文）＋選択肢4行（`A` 〜 `D` ラベル＋テキスト、行頭に手書きチェック用の `（　）` を置かない。選択記入は問題番号右の解答欄 `答え（　　）` に書く）。解答部: `問n　{正解ラベル}　{正解テキスト}` に続けて、①は `stem_ja`、②は `sentence_complete` と `sentence_ja` を併記して列挙。
-- **PRN-09** ⑤（文法選択）: PRN-08 と同一レイアウト。解答部は正解ラベル＋正解語句＋解説全文（簡潔）。
+- **PRN-09** ⑤（文法選択）: PRN-08 と同一レイアウト。`context_sentence` が非nullの場合は主文の直前に先行文脈を表示する。解答部は正解ラベル＋正解語句＋解説全文（簡潔）。
 - **PRN-10** ③④（フラッシュカード）: 印刷では**リスト形式に退化**する(MUST)。ワークシート=「問n」＋表面テキストのみの番号付きリスト（③は英例文＋対象語太字下線、④は日本語訳）。解答部=番号＋表面＋裏面（対訳・語義）を1問1ブロックで列挙。カード状のレイアウト・切り取り線を実装してはならない(MUST NOT)（v1では退化リストのみ）。
-- **PRN-11** ⑥（穴埋め）: ワークシート=空欄マーカー（LAY-07）入り英文＋記入用下線（空欄マーカーがそのまま記入欄を兼ねる。追加の記入枠は置かない）。解答部=正答（正書法）＋同値表記リストがあれば `（別解: {同値表記を「, 」区切り}）` ＋解説。
+- **PRN-11** ⑥（穴埋め）: ワークシート=`context_sentence` が非nullの場合は先行文脈を主文の直前に表示し、続けて空欄マーカー（LAY-07）入り英文＋記入用下線（空欄マーカーがそのまま記入欄を兼ねる。追加の記入枠は置かない）。解答部=正答（正書法）＋同値表記リストがあれば `（別解: {同値表記を「, 」区切り}）` ＋解説。
 - **PRN-12** ⑦（整序）: ワークシート=「問n」＋日本語訳＋トークン列を保存順のまま `[ token / token / … ]` 形式（半角スラッシュ区切り、全体を角括弧）で提示＋記入用下線1行。解答部=正解文（正書法）＋解説。
 - **PRN-13** ⑧（書き換え）: ワークシート=S-21/S-22/S-23 と同じラベルで元文・指示・空欄入り目標文を提示（空欄は LAY-07 マーカー）。解答部=目標文の完成形＋解説。
-- **PRN-14** ⑨（例文問題）: ワークシート=「問n」＋英文（対象構造太字下線）＋訳記入用の下線2行。解答部=日本語訳＋詳細解説全文。
+- **PRN-14** ⑨（例文問題）: ワークシート=「問n」＋`context_sentence` が非nullの場合は先行文脈＋英文＋訳記入用の下線2行。対象構造の位置情報が存在しないため、画面と同じく対象構造のハイライトを行ってはならない(MUST NOT)（UI-24）。解答部=日本語訳＋詳細解説全文。
 
 ## 8. スマホ対応基準（MOB）
 

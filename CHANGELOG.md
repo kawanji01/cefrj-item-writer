@@ -1,5 +1,58 @@
 # CHANGELOG
 
+## 2026-08-18 — M6 HTML生成
+
+### 実装
+
+- `scripts/build_html.py` と単一テンプレート `templates/index.html.j2` を追加し、合格済み `set.json` だけから9形式の対話UI・印刷ワークシート・解答解説・出典を持つ自己完結HTMLを決定的に生成するようにした。CSS/JavaScriptは全てインラインで、外部リソース、ネットワーク、正規化データ、設定、監査ファイルを参照しない。
+- 4択の即時採点、保存順の選択肢、フラッシュカード反転・自己評価・保存順リセット、穴埋め/書き換えのNFC等価判定、整序のタップ選択・取り消し・保存済み正解列判定、例文問題の開示・自己採点を実装した。全操作要素をネイティブのbutton/input/detailsで構成し、固定文言・`role="status"`・英語`lang`・44px操作領域・375px単一カラム・focus-visibleを反映した。
+- A4・15mm余白、問題内改ページ回避、解答部の強制改ページ、9形式別ワークシート、フラッシュカードの印刷用リスト退化、常時表示の出典フッターを実装した。
+- `build_html.py` は【基本】事前検査、setスキーマ、対応メジャー、UTF-8/LF/BOMなし/末尾改行1個、入出力同一実体拒否、排他的な一時ファイルからの原子的置換、日本語CLIエラーとCLI-25 stdoutを実装した。
+- `scripts/doctor.py` D04へ `templates/index.html.j2` の存在・読取り・Jinja2構文検査を追加した。
+- PLN-05で承認されたM6D-01〜05（set-only入力境界、3形式の先行文脈表示、例文問題で推測ハイライトをしない、テンプレート配置/診断、入出力同一実体拒否）を `DECISIONS.md` と関連設計文書へ反映した。`schemas/`は変更していない。
+
+### M6着手時のM1 DoD再検証（2026-08-18、6/6 pass）
+
+1. 決定性
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... リポジトリ内の隔離一時出力先2件へbuild_normalized.pyを各1回実行し、2組とコミット済み3成果物をバイト比較 ... PY`。
+   - 結果: 2回とも終了コード0・stderr空。3成果物は相互および正本とバイト一致した。SHA-256はlexicon=`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、grammar=`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、meta=`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`。
+2. スキーマ・meta適合
+   - コマンド: 同上のinline Pythonで `jsonschema.validator_for` と `validate_meta_document` を実行。
+   - 結果: lexicon/grammarは対応するDraft 2020-12スキーマ、metaはNRM-29へ適合した。`data_version=wl1.6+gp20200220+norm1.0.2`、`pipeline_version=1.0.2`。
+3. 件数不変条件（CI-NRM-03）
+   - コマンド: 同上のinline PythonでJSONと原本xlsxのALL・教員版・ITEM LISTを `openpyxl` で実照合。
+   - 結果: 語彙7,988件（A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859）、`(headword,pos)`一意7,988件、ALL 7,801行、併記179群、文法501件（親263・枝番238）、教員版/target eligible 256件、全枝番の親存在、未付与親16件のID一致を確認した。
+4. レベル継承・範囲分解（CI-NRM-05 / CI-NRM-07）
+   - コマンド: 同上のinline Pythonでgrammar全501件の親子関係・`level_raw`・min/max/source/inherited_fromを検証。
+   - 結果: 継承220件が親の下限/上限を保持し、`gp:1-1` / `gp:1-2` / `gp:1-3`も`gp:1`を継承した。教員版の単一値152件・範囲値104件は全件正しく分解されていた。
+5. doctor完全環境・異常模擬（CI-NRM-06 / CI-CLI-03）
+   - コマンド: 同上のinline Pythonで完全環境と隔離コピーのnormalized欠落・原本1バイト改変・config欠落・M6テンプレート欠落を `doctor.py` へ投入し、原本改変環境では `build_normalized.py` も実行。
+   - 結果: 完全環境は12 pass / 0 fail。normalized欠落はD08=`E-DATA-03`、原本改変はdoctor D07とbuildの双方が`E-DATA-02`、config欠落はD10=`E-DATA-05`、テンプレート欠落はD04=`E-ENV-04`となり、全て終了コード1・doctor stderr空だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`相当をsubprocess実行し、前後の3成果物SHA-256も比較。
+   - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全て`count=0, ids=[]`、`written=[]`、終了コード0・stderr空で、3成果物のハッシュは実行前後一致した。
+
+### M6 DoD検証（2026-08-18、3/3 pass）
+
+- DoD 1（CI-HTM-01〜06）
+  - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 正本文書の公式candidate 9形式をsetスキーマ形へ確定し、各形式をbuild_html.pyで2回生成してバイト・DOM・data属性・外部参照・固定順を検証し、Node --checkも実行 ... PY`。
+  - 結果: 9/9形式で2回生成がバイト一致し、UTF-8/BOMなし/LF/末尾改行1個、LAY-01骨格、外部リソース/URL属性/fetch/XHR/localStorage 0件、出典全文、4択の保存順、整序の保存済み正解列、3形式の先行文脈表示を確認した。9形式の生成サイズは19,676〜20,944 bytes、inline JavaScriptは構文合格だった。
+  - 結果: `grammar_cloze`の`data-accepted`は`["I am","I'm"]`、書き換えも正答＋同値表記を無加工で保持した。schema major 2は`E-CONTRACT-02`で既存出力を保持し、入力正本との同一パス・ハードリンク・シンボリックリンクは3/3 `E-INPUT-01`で正本を保持した。
+- DoD 2（実M5完成セットでA-12〜A-14）
+  - コマンド: 公式`grammar_cloze`を `machine_check.py → review監査 → 増分set_check.py → 最終set_check.py → finalize_set.py → validate.py → build_html.py` の実フローで一時確定し、同一HTMLを2回再生成した。続いて127.0.0.1だけの一時HTTPサーバーとアプリ内ブラウザで375×812px表示を操作確認した。
+  - 結果: machine/増分set_check/最終set_check/setスキーマは全pass。HTMLは19,676 bytes、SHA-256=`7dda89a158c3d4b25c5f328d568536dddf1ce4f8667c8818808de17109692906`で3生成が一致した。外部resource entry 0件、横はみ出し0px、console warning/error 0件、同値解`I'm`の操作、Wordlist/Grammar Profileの出典全文を確認した。
+  - コマンド: A-13用に公式`grammar_mcq`と`vocab_flashcard_en2ja`も同じM5実フローで別々の完成セットへ確定し、127.0.0.1でChromeへ開いて両方の実印刷プレビューを表示した。
+  - 結果: 両セットのmachine/増分・最終set_check/setスキーマは全pass。両プレビューとも2ページで、1ページ目に問題ワークシート、2ページ目に改ページされた解答・解説と出典が表示された。フラッシュカードは画面のカードUIではなく、表面英文を番号付きで示すリストへ退化していた。
+- DoD 3（9形式のUI・状態遷移・DOM）
+  - コマンド: 9形式を一時HTTP配信し、アプリ内ブラウザで各画面をDOM snapshot・実クリック/入力・consoleログ・375pxスクリーンショットにより確認。
+  - 結果: 4択の正誤ラベル/訳/自動解説、フラッシュカード2問の反転・覚えた/まだ・サマリー・保存順リセット、穴埋めの前後空白/大文字/同値形`I'm`のEnter正解、書き換えの完成目標文、整序のタップ・取り消し・誤答/正答・ドラッグなし、例文問題の開示・できた/できなかった集計が仕様どおりだった。9形式の全画面で横はみ出し0、外部resource 0、console warning/error 0だった。
+
+### CLI・回帰確認
+
+- `build_html.py`の日本語help、必須引数欠落・未知引数・stdin拒否=`E-INPUT-01`、不存在=`E-INPUT-02`、不正UTF-8/JSON=`E-INPUT-03`、setスキーマ不通過=`E-CONTRACT-01`、major不一致=`E-CONTRACT-02`、出力不能=`E-ENV-05`、テンプレート欠落/構文不正=`E-ENV-04`を実CLIで確認した。対応major内の`1.99.99`は受理し、不正入力時は既存HTMLを保持した。
+- 実セットと9形式フィクスチャのいずれも試験用一時ファイル以外を入力にせず、生成内容に実行時刻・乱数・環境値を混入させなかった。M6の設計反映以外の文書と全スキーマを変更していない。
+- `.venv/bin/python -m py_compile scripts/*.py`、`.venv/bin/python scripts/doctor.py`、`git diff --check`を実行し、全Python構文検査、doctor 12 pass / 0 fail、差分検査がpassした。試験用のM5完成セットと一時HTTPサーバーを削除し、`output/`配下に試験成果物を残していない。
+
 ## 2026-08-17 — M5 レビューループ
 
 ### 実装
