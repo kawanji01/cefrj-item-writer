@@ -122,7 +122,7 @@ cefr_j_agents/
 | `build_normalized.py` | 原本xlsx→正規化JSONの決定的ビルド | `--source-dir`(既定 `data/source`) / `--out-dir`(既定 `data/normalized`) / `--diff` / `--dry-run` / `--accept-source-change` | 使わない | ビルドサマリーJSON（5.3） | 0/1/2 | 【基本】+ E-DATA-01・E-DATA-02・E-DATA-06 + spaCy（E-ENV-03）+ 通常ビルド時の出力先書込み（E-ENV-05） |
 | `machine_check.py` | 候補1問の決定的機械検査 | `--candidate <path\|- >` / `--set-id <set_id>` / `--generation <gen1\|gen2\|gen3>` / `--expected-format <9形式>` / `--expected-level <対応レベル>` / `--requested-count <1..上限>`（全て必須） | `-` 指定時に candidate JSON | machine_report JSON | 0=検査完遂（verdictは内容） / 1/2 | 【基本】【データ】+ spaCy（E-ENV-03）+ 入力スキーマ（E-CONTRACT-01） |
 | `set_check.py` | セット横断の決定的検査 | `--set-dir <path>`（必須。`output/<set_id>`） | 使わない | セット横断machine_report JSON（5.5） | 0=検査完遂 / 1/2 | 【基本】【データ】+ 監査配置（E-CONTRACT-03）+ set_id形式（E-INPUT-05） |
-| `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | セットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-CONTRACT-03/04/05 + E-INPUT-03/05 |
+| `finalize_set.py` | 完成条件検査と set.json の原子的書き込み | `--set-dir <path>`（必須） | 開始時 `config_snapshot` を含むセットメタデータJSON（必須。様式の正は `docs/json-output-spec.md`） | 確定サマリーJSON（5.6） | 0/1/2 | 【基本】【データ】+ E-DATA-08 + E-CONTRACT-03/04/05 + E-INPUT-03/05 |
 | `build_html.py` | set.json→単一自己完結HTMLの決定的生成 | `--set <path>`（必須。set.json） / `--out <path>`(既定: 入力と同ディレクトリの `index.html`) | 使わない | 生成サマリーJSON（5.7） | 0/1/2 | 【基本】+ 入力スキーマ（E-CONTRACT-01）+ メジャー一致（E-CONTRACT-02） |
 | `validate.py` | 9スキーマに対する文書検証・セット状態識別 | 通常モード: `--schema <名>` / `--file <path\|- >`（ともに必須）。状態確認モード: `--set-dir <path>`（通常モードと排他） | `--file -` 指定時に検証対象JSON | 検証結果JSONまたはセット状態JSON（5.8） | 0=妥当または未完成状態識別 / 1=不当（E-CONTRACT-01）または他エラー / 2 | 【基本】+ スキーマファイル存在（E-ENV-04） |
 | `lookup.py` | 正規化データ照会 | サブコマンド `lex` / `gp`（5.9） | 使わない | 照会結果JSON（5.9） | 0=完遂（0件でも0） / 1/2 | 【基本】【データ】 |
@@ -162,7 +162,7 @@ cefr_j_agents/
 ### 5.5 set_check.py
 
 - **CLI-19** 入力は `--set-dir` のディレクトリ名から得た `set_id`（書式不一致は E-INPUT-05）と、その `review/` 配下の監査ファイルとする(MUST)。実行モードは次の2つとする(MUST)。
-  1. **増分モード** `set_check.py --set-dir <path> --target <question_id>`: 問題確定のたびに実行する（`docs/subagent-review-spec.md` T10/T11）。検査対象 = 確定済み問題（review_result が `pass` かつ対応する `review/set_check.<qid>.<gen>.json` の verdict が `pass` である最大世代を持つ問題）＋ `--target` で指定した問題の最新レビュー合格世代の候補。確定済み問題が0件の場合は正常であり（最初の問題 q01 の増分検査では `--target` の候補単独を検査し、セット横断の比較対象なし=pass となる）、E-CONTRACT-03 としてはならない(MUST NOT)。`--target` の問題にレビュー合格世代が存在しない場合、または監査ファイルの命名・対応関係が `docs/subagent-review-spec.md` の配置仕様に反する場合は E-CONTRACT-03 で停止する(MUST)。出力の `target_question_id` に指定値を記録する。
+  1. **増分モード** `set_check.py --set-dir <path> --target <question_id>`: 問題確定のたびに実行する（`docs/subagent-review-spec.md` T10/T11）。検査対象 = 確定済み問題（machine_report と review_result がともに `pass` かつ対応する `review/set_check.<qid>.<gen>.json` の verdict が `pass` である最大世代を持つ問題）＋ `--target` で指定した問題の最新のmachine/review両方合格世代の候補。確定済み問題が0件の場合は正常であり（最初の問題 q01 の増分検査では `--target` の候補単独を検査し、セット横断の比較対象なし=pass となる）、E-CONTRACT-03 としてはならない(MUST NOT)。`--target` の問題にmachine/review両方の合格世代が存在しない場合、または監査ファイルの命名・対応関係が `docs/subagent-review-spec.md` の配置仕様に反する場合は E-CONTRACT-03 で停止する(MUST)。出力の `target_question_id` に指定値を記録する。
   2. **全体最終モード** `set_check.py --set-dir <path>`（`--target` 省略）: セット確定処理時の最終検査。CLI-19-1 の意味で確定済みの全問題の候補を収集して検査する。このモードに限り、合格世代が1問も無い場合は E-CONTRACT-03 で停止する(MUST)。出力の `target_question_id` は `null` とする。
 - **CLI-20** 検査項目（対象重複・例文使い回し・誤答の過度な再利用）の判定規則の正は `docs/cefrj-validation-spec.md` MC-27 である。stdout は `machine_report.schema.json`（`scope = "set"`）準拠とし、`target_question_id` / `checked_question_ids` で検査範囲を判別可能にしなければならない(MUST)（フィールド定義は `docs/json-output-spec.md` AUD-05 と `schemas/machine_report.schema.json` に従う）。
 
@@ -170,12 +170,13 @@ cefr_j_agents/
 
 - **CLI-21** 実行手順は次の順としなければならない(MUST)。
   1. stdinのセットメタデータJSONを読み、様式検査（パース不能=E-INPUT-03、内容不正=E-CONTRACT-01。様式の正は `docs/json-output-spec.md`）。
-  2. `output/<set_id>/set.json` が既に存在すれば E-CONTRACT-05 で停止（上書き禁止）。
-  3. stdinメタデータの `final_question_ids`（`docs/json-output-spec.md` FIN-01）に列挙された各問題について、監査ファイルから合格世代（review_result が `pass` かつ対応する増分 set_check レポートが `pass` の最大世代）を収集（命名・対応関係の不整合は E-CONTRACT-03）。
-  4. 合格問題数が1以上 `requested_count` 以下であり、`final_question_ids` の集合と監査上の合格世代を持つ問題の集合が一致することを検査（不一致・0件は E-CONTRACT-04。減数（`docs/interaction-flow.md` DLG-81/DLG-82・`docs/subagent-review-spec.md` S6）により `requested_count` 未満で確定することは正常である）。
-  5. セット横断検査を set_check.py の全体最終モード（CLI-19-2）と同一の実装（共有関数）で内部再実行（不合格は E-CONTRACT-04）。
-  6. `set.json` を組み立て、`set.schema.json` で検証（不通過は E-CONTRACT-01。これは内部バグを意味する）。
-  7. 同一ディレクトリ内の一時ファイル `set.json.tmp` に書き込み、`os.replace` で `set.json` へ原子的に改名する(MUST)。
+  2. stdinメタデータの `config_snapshot` と現在の検証済み `data/config/limits.json`・`proper_nouns.json` をJSON値として完全一致比較し、不一致なら E-DATA-08 で停止する。
+  3. `output/<set_id>/set.json` が既に存在すれば E-CONTRACT-05 で停止（上書き禁止）。
+  4. stdinメタデータの `final_question_ids`（`docs/json-output-spec.md` FIN-01）に列挙された各問題について、監査ファイルから合格世代（machine_report と review_result がともに `pass` かつ対応する増分 set_check レポートが `pass` の最大世代）を収集（命名・対応関係の不整合は E-CONTRACT-03）。
+  5. 合格問題数が1以上 `requested_count` 以下であり、`final_question_ids` の集合と監査上の合格世代を持つ問題の集合が一致することを検査（不一致・0件は E-CONTRACT-04。減数（`docs/interaction-flow.md` DLG-81/DLG-82・`docs/subagent-review-spec.md` S6）により `requested_count` 未満で確定することは正常である）。
+  6. セット横断検査を set_check.py の全体最終モード（CLI-19-2）と同一の実装（共有関数）で内部再実行し、`config_snapshot.limits.distractor_reuse_max` を適用する（不合格は E-CONTRACT-04）。
+  7. `set.json` を組み立て、`set.schema.json` で検証（不通過は E-CONTRACT-01。これは内部バグを意味する）。
+  8. 同一ディレクトリ内の一時ファイル `set.json.tmp` に書き込み、`os.replace` で `set.json` へ原子的に改名する(MUST)。
 - **CLI-22** stdout: `{"set_id": "<set_id>", "set_json_path": "output/<set_id>/set.json", "question_count": <int>, "data_version": "<書式は第7節>", "schema_version": "<set.schema.jsonのsemver>"}`。
 
 ### 5.7 build_html.py
@@ -235,8 +236,10 @@ cefr_j_agents/
 | E-DATA-02 | 原本チェックサム不一致: `data/source/` の実ファイルのSHA-256が `data/normalized/meta.json` の記録値と一致しない、または`--accept-source-change`時にチェックサムが変わった原本の`version_label`が既存metaから更新されていない | ファイル名・期待値・実測値を明記し、版未更新時は旧版・新版も明記 | 原本を意図的に更新した場合は第8節 OPS-01（原本更新手順）を実施し、対応する`version_label`も更新する。意図しない場合は正しい原本を配置し直す |
 | E-DATA-03 | 正規化データの欠落: `data/normalized/lexicon.json`・`grammar.json`・`meta.json` のいずれかが存在しない | 欠落ファイルを全件列挙 | `git checkout` で復元するか、原本がある場合は `python scripts/build_normalized.py` を実行する |
 | E-DATA-04 | 正規化データの不整合または陳腐化: normalized JSONがスキーマ不通過、`meta.json` の `data_version`・チェックサムと lexicon.json / grammar.json の記録値が相互に矛盾、metaの原本版・パイプライン版・3ファイルの`data_version`が現在の`sources.json.version_label` 2値と実行中の正規化パイプライン版から導出した期待値に一致しない、または不適合な既存metaから原本変更防止用の安全根拠を取得できない | 不整合の内容（スキーマ違反箇所または矛盾・陳腐化したフィールド）を明記し、陳腐化の場合はフィールドごとの期待値・実測値を列挙 | `python scripts/build_normalized.py` で再ビルドする。同じE-DATA-04で停止する場合は `git checkout -- data/normalized/meta.json` でコミット済みmetaを復元してから再ビルドする。再発する場合は正規化パイプラインの不具合として報告する |
-| E-DATA-05 | 設定ファイル不正: `data/config/limits.json`・`proper_nouns.json` のいずれかが欠落またはスキーマ不通過 | 対象ファイルと違反箇所（JSONポインタ）を明記 | `git checkout` で復元するか、`python scripts/validate.py --schema config_limits --file data/config/limits.json`（proper_nounsも同様）で違反箇所を確認し修正する |
+| E-DATA-05 | 設定ファイル不正: `data/config/limits.json`・`proper_nouns.json` のいずれかが欠落・スキーマ不通過、または現行スキーマが表現できない `generation_max > 3` | 対象ファイルと違反箇所（JSONポインタ）を明記。世代上限超過時は受取値と許容範囲1〜3を明記 | `git checkout` で復元するか、`python scripts/validate.py --schema config_limits --file data/config/limits.json`（proper_nounsも同様）で違反箇所を確認し修正する。`generation_max`は1〜3へ戻し、4世代以上への拡張は関連スキーマと監査命名の改訂を先行させる |
 | E-DATA-06 | 原本構造・内容不一致: build_normalized.py が期待するシート名・列名・行位置を原本xlsxに見いだせない、必須セル値が値域外、ID結合・親子・併記variant対応が解決不能、またはNRM-31の件数不変条件を満たさない | 見つからなかったシート名・列名・行位置、値域外セル、解決不能ID、または不一致の件数を全件列挙 | 原本の版が設計前提（Wordlist Ver1.6 / Grammar Profile full 20200220）と一致するか確認する。新版へ移行する場合は OPS-01 に従い正規化仕様の改訂を先行させる |
+| E-DATA-07 | 監査ファイル上書き衝突: オーケストレータが書き込もうとした `output/<set_id>/review/` の同名監査ファイルが既に存在する | 衝突した既存監査ファイルの相対パスを明記 | 既存監査ファイルを変更・削除せず保持し、新しい `set_id` でセットを最初から作成する |
+| E-DATA-08 | セッション設定スナップショット不一致: doctor成功直後に固定した `limits.json`・`proper_nouns.json` のJSON値と、S80開始時・各処理前・finalize時の現在値が一致しない | 不一致ファイルと、スナップショット値・現在値の差分を明記 | 進行中セットの監査を保持したまま中止し、設定変更後に `python scripts/doctor.py` を実行して新しい `set_id` で最初から作成する |
 
 ### 6.3 E-CONTRACT（スキーマ・契約違反）
 

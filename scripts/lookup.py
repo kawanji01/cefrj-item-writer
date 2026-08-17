@@ -57,14 +57,17 @@ REMEDIES = {
         "python scripts/build_normalized.py --accept-source-changeを実行してください。"
     ),
     "E-DATA-05": (
-        "git checkoutで設定を復元し、M3以降はpython scripts/validate.pyで"
+        "git checkoutで設定を復元し、python scripts/validate.pyで"
         "config_limitsまたはconfig_proper_nounsを検証してください。"
+        "generation_maxは1〜3にしてください。"
     ),
     "E-INPUT-01": "python scripts/lookup.py --help の日本語ヘルプを参照して引数を修正してください。",
     "E-INPUT-04": (
         "docs/architecture.md CLI-29〜CLI-30とschemas/の列挙定義に従って値を修正してください。"
     ),
 }
+
+MAX_SCHEMA_GENERATION = 3
 
 
 class LookupArgumentParser(argparse.ArgumentParser):
@@ -181,6 +184,19 @@ def load_validated_resources(repo_root: Path) -> dict[str, Any]:
         )
 
     limits = validate_config(repo_root, "limits.json", "config_limits.schema.json")
+    if limits["generation_max"] > MAX_SCHEMA_GENERATION:
+        raise CliFailure(
+            "E-DATA-05",
+            "E-DATA-05 data/config/limits.jsonの/generation_maxが現行スキーマの"
+            f"許容範囲1..{MAX_SCHEMA_GENERATION}を超えています: {limits['generation_max']}",
+            detail={
+                "allowed": f"1..{MAX_SCHEMA_GENERATION}",
+                "json_pointer": "/generation_max",
+                "path": str(repo_root / "data/config/limits.json"),
+                "received": limits["generation_max"],
+            },
+            remedy=REMEDIES["E-DATA-05"],
+        )
     proper_nouns = validate_config(
         repo_root, "proper_nouns.json", "config_proper_nouns.schema.json"
     )

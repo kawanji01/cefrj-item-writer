@@ -48,8 +48,10 @@ REMEDIES = {
     "E-DATA-02": "意図的な原本更新はsources.jsonの対応するversion_labelも更新し、python scripts/build_normalized.py --diff で確認後、python scripts/build_normalized.py --accept-source-change を実行してください。意図しない場合は正しい原本を配置し直してください。",
     "E-DATA-03": "git checkoutで復元するか、python scripts/build_normalized.py を実行してください。",
     "E-DATA-04": "python scripts/build_normalized.py で再ビルドしてください。同じE-DATA-04で停止する場合は git checkout -- data/normalized/meta.json でコミット済みmetaを復元してから再ビルドしてください。再発時は正規化パイプラインの不具合として報告してください。",
-    "E-DATA-05": "git checkoutで設定を復元し、M3以降は python scripts/validate.py --schema config_limits --file data/config/limits.json で違反箇所を確認してください。",
+    "E-DATA-05": "git checkoutで設定を復元し、python scripts/validate.py --schema config_limits --file data/config/limits.json で違反箇所を確認してください。generation_maxは1〜3にしてください。",
 }
+
+MAX_SCHEMA_GENERATION = 3
 
 
 class DoctorArgumentParser(argparse.ArgumentParser):
@@ -310,14 +312,23 @@ def check_configs(repo_root: Path) -> dict[str, Any]:
                 f"{error['json_pointer'] or '/'} {error['message']}" for error in errors[:50]
             )
             problems.append(f"{file_name}: {rendered}")
+        elif file_name == "limits.json" and value["generation_max"] > MAX_SCHEMA_GENERATION:
+            problems.append(
+                "limits.json: /generation_max "
+                f"受取{value['generation_max']}、現行スキーマの運用許容範囲1..{MAX_SCHEMA_GENERATION}"
+            )
     if problems:
         return failed(
             "D10",
             name,
             "E-DATA-05",
-            f"E-DATA-05 設定ファイルが欠落またはスキーマ不通過です: {'; '.join(problems)}",
+            f"E-DATA-05 設定ファイルが欠落・スキーマ不通過・運用上限不適合です: {'; '.join(problems)}",
         )
-    return passed("D10", name, "limits.jsonとproper_nouns.jsonが各スキーマに適合しました")
+    return passed(
+        "D10",
+        name,
+        "limits.jsonとproper_nouns.jsonが各スキーマおよび世代上限1..3に適合しました",
+    )
 
 
 def check_schemas(repo_root: Path) -> dict[str, Any]:

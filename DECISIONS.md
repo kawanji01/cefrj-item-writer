@@ -930,3 +930,24 @@
 - **決定**: `vocab_mcq_ja2en`の`body.choices[*].text`に限り、`choice.anchor.entry_id`がlexiconに存在し、anchorへ記録された`headword` / `pos` / `level`が実値と一致し、かつ選択肢表記が実在headwordとMC-23の小文字化比較で一致する場合、そのheadwordを固定spaCyモデルでトークン列化した宣言アンカー候補を用いる。候補が選択肢フィールド全体と一致すれば、固定トークナイザが複数トークンへ分割するheadwordも区間全体を同じanchor ID・level・`decision=wordlist_match`で消費する。anchor不存在、記録不一致、表記不一致の場合はこの候補を作らず、従来の一般照合とMC-23違反を適用する。他形式・他フィールドの照合は変更しない。
 - **理由**: `wed`や`'m`のようにWordlist上は単一語だが固定spaCyモデルが複数トークンへ分割する見出し語を、`vocab_mcq_ja2en`の正解肢・誤答肢として実在アンカーどおり検査可能にしつつ、不正なanchorで辞書外語違反を迂回できないようにするため。
 - **影響先**: `docs/cefrj-validation-spec.md` MC-13・MC-23、`docs/question-generation-spec.md` GEN-29、`agent/author-core.md` PRM-07、`scripts/machine_check.py`、M4 R6回帰確認。
+
+---
+
+## 8. M5実装に伴う承認決定（M5D-01〜M5D-03）
+
+2026-08-17、PLN-05に基づくM5実装前確認で発見した次の3件について、作問者が推奨案を承認した。
+
+### M5D-01 監査ファイル上書き衝突の具体的エラーコード
+- **決定**: `output/<set_id>/review/` の同名監査ファイルが既に存在する場合のエラーとして `E-DATA-07` を新設する。既存監査は変更・削除せず、衝突パスを報告して新しい`set_id`での最初からの実行を案内する。
+- **理由**: AU-05がE-DATA系での停止を要求する一方、既存E-DATA-01〜06に監査上書き衝突へ適用できるコードがなく、即席のコード選択なしにPLN-08を満たせなかったため。
+- **影響先**: `docs/architecture.md` E-DATA目録、`docs/subagent-review-spec.md` AU-05、`agent/author-core.md`、M5監査配線。
+
+### M5D-02 セッション設定スナップショットの固定とfinalizeへの受け渡し
+- **決定**: S00のdoctor成功直後に`limits.json`全体と`proper_nouns.json.words`全体をセッション設定スナップショットとして固定する。S80開始時と各決定的CLI・レビュー実行前に現在値とのJSON値完全一致を検査し、変更時は新設`E-DATA-08`でセットを中止する。FIN-01のstdinメタデータへ`config_snapshot`を追加し、`finalize_set.py`は現在値との一致を検証後、受け取った開始時値をset.jsonへ保持する。
+- **理由**: SET-02は実行中の設定変更を正本へ反映することを禁止する一方、従来のFIN-01は開始時値を渡せず、FIN-02は確定時の現在値から再構築していたため。全CLIへの新引数追加を避け、設定混在をfail-closedで防ぐ最小変更とした。
+- **影響先**: `docs/interaction-flow.md` IF-04a、`docs/json-output-spec.md` SET-02・FIN-01/02、`docs/architecture.md` CLI-21・E-DATA目録、`agent/author-core.md`、`scripts/finalize_set.py`、M5レビュー配線。
+
+### M5D-03 現行generation列挙とgeneration_maxの整合
+- **決定**: 現行のcandidate・machine_report・review_request・review_result各スキーマと監査ファイル命名が表現できる世代は`gen1`〜`gen3`であるため、`limits.json.generation_max`の運用上の許容範囲を1〜3とする。スキーマ上は1以上の整数という既存定義を維持し、3を超える値はdoctorのD10と正規化データを読むCLIの共通事前検査で`E-DATA-05`として拒否する。将来4世代以上へ拡張する場合は、先に関連スキーマ・監査命名・遷移仕様を一括改訂する。
+- **理由**: RG-01が設定値の読取りを要求する一方、現行スキーマのgeneration列挙は3値固定であり、4以上を受理すると監査出力を正規の契約で表現できないため。即席の`gen4`等を生成せず、現行契約内でfail-closedにする。
+- **影響先**: `docs/subagent-review-spec.md` RG-01、`docs/architecture.md` E-DATA-05、`agent/author-core.md`、`scripts/doctor.py`、正規化データ利用CLIの共通事前検査。

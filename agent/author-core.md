@@ -15,7 +15,7 @@
 
 作問開始時に上記のうち当該処理に関係する正本文書を読み、値は必ず現在の `data/normalized/` と `data/config/` から取得する。設計にない挙動を補ってはならない。
 
-M4時点の暫定配線は、対話、`lookup.py` による照合、candidate生成、candidateスキーマ検証、`machine_check.py`、candidate/machine監査保存までである。独立レビュー、再生成ループ、セット横断検査、確定、HTML生成はそれぞれM5・M6の成果物を使う。未実装の工程をLLM判断で代替したり、セット完成を報告したりしてはならない。
+M5時点の配線は、対話、`lookup.py` による照合、candidate生成と受理検証、`machine_check.py`、独立レビュー、再生成、`set_check.py`、`finalize_set.py`、全監査保存までである。HTML生成はM6の成果物を使う。M5単独でHTMLを捏造したり、S90のセット完成を報告したりしてはならない。
 
 ## 1. 絶対規則
 
@@ -95,7 +95,7 @@ M4時点の暫定配線は、対話、`lookup.py` による照合、candidate生
 python scripts/doctor.py
 ```
 
-仮想環境をactivateしていない場合は `python` を `.venv/bin/python`（Windowsは `.venv\Scripts\python.exe`）へ読み替えてよい。終了コード0かつ12項目passの場合だけ、検証済み `data/config/limits.json` の `set_question_max` をセッション値として1回読み取り、S10へ進む。以後は質問、再質問、入力検証、追加可能数、S80のCLI引数に同じセッション値を使い、設定ファイルを再読込みして上限を変えない。doctor失敗時は出力されたエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
+仮想環境をactivateしていない場合は `python` を `.venv/bin/python`（Windowsは `.venv\Scripts\python.exe`）へ読み替えてよい。終了コード0かつ12項目passの場合だけ、検証済み `data/config/limits.json` の全オブジェクトと `data/config/proper_nouns.json` の `words` 全配列を `{"limits": <全オブジェクト>, "proper_nouns": <words全配列>}` のセッション設定スナップショットとして1回だけ読み取り、S10へ進む。以後の問題数上限、世代上限、レビュータイムアウト、各制約値はこのスナップショットから取り、設定ファイルの再読込みで適用値を変えない。`generation_max` はdoctorで検証済みの1〜3であり、即席の `gen4` 以降を生成しない。S80開始時と各決定的CLI・レビュー実行前に現在の2設定ファイルを検証し、スナップショットとJSON値として完全一致することを確認する。不一致なら `E-DATA-08` でS99へ遷移する。doctor失敗時は出力されたエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
 
 ### 2.4 S10 形式選択
 
@@ -544,7 +544,7 @@ candidateは次の共通骨格を持つ。
 
 ### PRM-12 再生成時だけの指示
 
-gen2/gen3では、前世代 `review_result.violations[]` の各 `code`、`location`、`evidence`、`expected_level`、`actual_level`、`suggestion` を生成入力へ全て含める。全指摘を解消した新candidateを作り、指摘のない箇所を不必要に変えない。M4暫定配線ではこのループを独自実装せず、M5の `docs/subagent-review-spec.md` 準拠配線に委ねる。
+gen2/gen3では、直前世代のcandidate、machine_reportの全違反、`review_result.violations[]` 全件、`machine_check_disputes[]` 全件を生成入力へ含める。T11経由では直前のset_check違反も含める。誤検出疑いがあっても機械違反は回避対象であることを明記し、全指摘を解消した新candidateを作り、指摘のない箇所を不必要に変えない。それより前の世代の候補・指摘を累積して渡してはならない。
 
 ### PRM-13 自己検査
 
@@ -592,11 +592,13 @@ bodyは `source_sentence`、`instruction`、`target_sentence_with_blank`、`answ
 
 bodyは `example.en`、`example.ja`、`context_sentence`、`context_required_by` を持つ。解説はdetailedで3部構成にする。適用規則はGEN-05〜GEN-11、GEN-19、GEN-21〜GEN-23、GEN-25。
 
-## 6. M4暫定CLI配線と監査保存
+## 6. candidate・機械検査の配線と監査保存
 
 各問題をq番号順に1問ずつ処理する。並行生成しない。
 
-1. lookup結果、現在のlimits、allowlist全件、確定条件から第4節の生成入力を展開し、第5節の該当形式でcandidate JSONを生成する。
+全監査ファイルは `output/<set_id>/review/` 直下へ遷移直後に保存する。保存前に同名パスの不存在を確認し、排他的作成を使う。同名ファイルが既に存在する場合は既存内容を変更・削除せず、`E-DATA-07` と衝突相対パスを提示してS99へ遷移する。
+
+1. lookup結果、セッション設定スナップショット、allowlist全件、確定条件から第4節の生成入力を展開し、第5節の該当形式でcandidate JSONを生成する。各世代の開始前にFMT-80b事象1を表示する。
 2. `output/<set_id>/review/` を作成し、生成生出力をホスト側でJSONパース・再直列化する前に取得する。ホストがbytesを返す場合はそのバイト列を非改変で使い、文字列を返す場合はstrict UTF-8で1回だけエンコードする。孤立サロゲート等でUTF-8化できなければ、下記のcandidate受理検証不通過へ進める。置換文字・`backslashreplace`・`ensure_ascii=True`で受理可能な別内容へ変換してはならない。
 3. UTF-8化できた生成生出力を非改変の一時ファイルへ置き、ホスト側でパースする前に次を実行する。
 
@@ -613,7 +615,7 @@ python scripts/validate.py --schema candidate --file <生成生出力一時フ�
 
    1回目はAUD-09の形式で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。
 
-   2回目は同じ内容形式で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。UTF-8で保持できる生出力は全文をinvalidファイルへ入れる。生出力自体をUTF-8化できない場合は改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。M4ではその先の世代遷移を独自判断しない。
+   2回目は同じ内容形式で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。UTF-8で保持できる生出力は全文をinvalidファイルへ入れる。生出力自体をUTF-8化できない場合は改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。現在世代がスナップショットの `generation_max` 未満なら次世代へ進み、最終世代なら不成立として第9節へ進む。
 5. `validate.py`がvalidを返した場合だけ、その同じ生出力を厳格にJSONオブジェクトへパースする。candidateスキーマには数値フィールドがないため、検証前の通常floatパースで`1e400`等を無限大へ丸める必要はない。パースしたcandidateを、UTF-8（BOMなし）・非ASCII文字をエスケープしない・キー辞書順・インデント2・改行LF・末尾改行1つのJS-01正準形へ直列化する。Pythonでは `json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"` をstrict UTF-8でエンコードしたバイト列とする。この段階の例外を未処理で停止せず、第4項のT2/T3へ送る。受理検証を全て通過した同じ正準バイト列だけを `output/<set_id>/review/<question_id>.<gen>.candidate.json` に保存し、次項の入力にも使う。
 6. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数を毎回渡す。依頼問題数はS00で固定した `set_question_max` 以下であることをS40/S70で確認済みの値とする。
 
@@ -629,7 +631,64 @@ python scripts/machine_check.py \
 
 7. stdoutのmachine_reportをそのまま正準JSONとして `output/<set_id>/review/<question_id>.<gen>.machine.json` に保存する。`machine_report` の内容をLLMで書き換えない。
 8. `verdict` に応じてFMT-80bの「機械検査 合格」または「機械検査 不合格（コード列挙）」だけを表示する。
-9. 以降はM5の独立レビュー・再生成ループへ渡す。M4単独ではreviewファイル、set.json、index.htmlを捏造せず、S90へ遷移しない。
+9. 機械検査の合否にかかわらず、第7節の独立レビューを実行する。機械検査failをレビュー結果で覆さない。
+
+## 7. 独立レビューの配線
+
+### 7.1 review_requestの構築
+
+各世代についてcandidateとmachine_reportをそれぞれのスキーマで再検証し、次の `review_request` を構築する。
+
+- 識別値、対象参照、candidate全体、machine_report全体は当該監査ファイルと完全一致させる。
+- `level_limits.vocabulary_level_max` は語彙形式では指定CEFR、文法形式では指定CEFR-J値の帯（A1/A2/B1/B2）とする。`grammar_intro_level_max` は語彙形式では指定帯のceiling（A1→A1.3、A2→A2.2、B1→B1.2、B2→B2.2）、文法形式では指定CEFR-J値そのものとする。
+- `constraints_snapshot.limits.sentence_word_limit` は指定帯の値、`explanation_char_limit` は語彙形式でnull、文法形式でbrief/detailedに対応する値とする。`proper_nouns` はセッション設定スナップショットの全配列、`topic` は教師指定値またはnullとする。
+- `readable_resources` は `data/normalized/lexicon.json`、`data/normalized/grammar.json`、`data/normalized/meta.json`、`data/config/limits.json`、`data/config/proper_nouns.json`、`docs/cefrj-validation-spec.md`、`docs/subagent-review-spec.md`、`agent/reviewer-core.md` の8件だけをこの順で列挙する。
+
+`python scripts/validate.py --schema review_request --file <一時ファイル>` を通過させ、正準化した同じ封筒をレビュアー起動直前に `<question_id>.<gen>.request.json` として排他的に保存する。不通過は `E-CONTRACT-01` としてセットを中止し、LLM判断で修復しない。
+
+### 7.2 起動と出力受理
+
+生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行のタイムアウトにする。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
+
+最終メッセージはCOR-08の順序で取り込む。テキスト全体のJSONパースを先に試し、失敗時だけ最初のJSONコードフェンス内を試し、`python scripts/validate.py --schema review_result --file -` で検証する。スキーマでは表現できないRR-01〜RR-05違反も受理しない。受理したJSONは正準化して `<question_id>.<gen>.review.json` に排他的に保存する。
+
+プロセス異常、タイムアウト、空出力、パース不能、review_result不通過は問題品質の不合格にも世代消費にも数えない。同一のrequestを変更せず最大2回再実行し、各失敗を `review.invalid1.txt`、`review.invalid2.txt`、`review.invalid3.txt` にAUD-09形式で直ちに排他的保存する。1・2回目はFMT-80b事象11、初回を含む3実行全てが失敗したらT7のインフラ障害としてS99へ遷移し、`set.json`を書かない。
+
+## 8. 世代判定とセット横断検査
+
+1. machine_reportがfail、またはreview_resultがfailなら世代failである。レビューは機械failをpassへ変更できない。レビューfail時はFMT-80b事象7を表示する。現在世代が `generation_max` 未満ならPRM-12の直前世代入力だけで次世代へ進みFMT-80b事象8を表示し、最終世代なら不成立として第9節へ進む。
+2. machine_reportとreview_resultがともにpassのときだけ、次を実行する。
+
+```text
+python scripts/set_check.py --set-dir output/<set_id> --target <question_id>
+```
+
+3. stdoutを `review/set_check.<question_id>.<gen>.json` に排他的保存する。failでもCLI終了コード0であり、判定を覆さない。failならFMT-80b事象14を表示し、現在世代が上限未満ならそのset_check違反もPRM-12へ含めて次世代へ進み、最終世代なら不成立とする。
+4. set_checkもpassのときだけT10のACCEPTEDとし、FMT-80b事象6を表示して確定済み数を増やし、次のquestion_idへ進む。
+
+## 9. 不成立、補充、教師照会
+
+試行対象総数は初期対象、補充、代替を合わせて要求数Nの2倍以下とする。提案モードではS35のlookup返却順の未採用候補を補充プールとして保持し、不成立時に先頭から決定的に補充する。補充・代替には割当済みIDを再利用せず、`q01`〜`q20` の未使用最小IDを割り当てる。
+
+提案モードで試行対象総数<2N、補充プール残あり、未使用IDありなら自動補充してFMT-80b事象9を表示する。それ以外の提案モードはDLG-82、明示モードはDLG-81を文言どおり提示する。全世代のmachine違反とreview違反を世代別に要約し、確定数/要求数、試行数/2Nを含める。代替指定は上限未満かつ未使用IDありの場合だけ提示し、S32と同じ原本照合後にgen1から実行する。減数で確定問題が0件になる選択は提示せず、0件なら中止だけとする。S99では監査を残し、`set.json`を書かない。
+
+## 10. 最終セット検査と確定
+
+1問以上が確定し全スロットの処理が終わったらFMT-80b事象12を表示し、次を実行する。
+
+```text
+python scripts/set_check.py --set-dir output/<set_id>
+```
+
+stdoutを `review/set_check.final.json` に排他的保存する。failならFMT-80b事象14を表示し、増分検査との内部不整合 `E-CONTRACT-04` としてS99へ進む。passならFMT-80b事象13を表示する。
+
+FIN-01のフィールドだけを持つメタデータJSONを構築する。`config_snapshot` はS00で固定した値、`final_question_ids` はACCEPTED問題だけを昇順で列挙し、減数・不成立IDを含めない。これを標準入力のJSON文書1個として次へ渡す。
+
+```text
+python scripts/finalize_set.py --set-dir output/<set_id>
+```
+
+finalizeの内部set_check再実行、集合一致、setスキーマ検証、原子的書き込みの結果を上書きしない。M5の成功成果物は `set.json` と監査一式までであり、`index.html` は作らずS90へ遷移しない。M6の `build_html.py` が実装されるまで、セット完成や配布可能を報告してはならない。
 
 終了コード1では、まず第4項の生成生出力に対する `validate.py --schema candidate` の `E-CONTRACT-01` / `E-INPUT-03` かを判定し、該当時は必ずT2/T3を優先する。それ以外のdoctor以外のCLI停止では、stderr全体をUTF-8のJSON文書1個として解析し、CLI-05の `error_code`、`message`、`remedy`、`detail` を取得する。物理的な最終行だけを読んではならない。lookupの定義済み停止、生成出力以外に起因するcandidate検証CLI停止、他スキーマの検証不通過、およびmachine_report内部生成結果の `E-CONTRACT-01` はT2/T3へ送らない。S80では取得した値をFMT-80bの事象16 `エラーにより中止します: {error_code} {remedy}` に非改変で入れ、IF-04/IF-42と `docs/architecture.md` の停止規則に従う。S80以外でも少なくとも `error_code` と日本語 `remedy` を教師へ提示する。doctorの診断failはS00の規則どおりstdoutの全12項目レポートを使う。
 

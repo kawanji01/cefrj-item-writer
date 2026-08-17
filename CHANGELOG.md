@@ -1,5 +1,53 @@
 # CHANGELOG
 
+## 2026-08-17 — M5 レビューループ
+
+### 実装
+
+- `agent/reviewer-core.md` を追加し、1問1独立レビュー、候補・機械レポート・検証仕様・正規化データだけを読む境界、CHK-01〜19、`level_source`、機械検査誤検出疑いの構造化報告、review_result自己検証を定義した。
+- `agent/author-core.md` をM5へ拡張し、review_request組み立て、毎世代の独立レビュー、直前世代の構造化指摘だけを渡す再生成、提案モード補充、明示モード教師照会、レビュー系インフラ障害、増分・最終set_check、finalizeまでを配線した。M6未実装のHTML生成とS90完了報告は行わない境界を維持した。
+- `scripts/set_support.py` と `scripts/set_check.py` を追加し、監査命名・対応関係、machine/review両方の合格世代、対象重複 `V-SET-01`、例文使い回し `V-SET-02`、誤答再利用 `V-SET-03` を決定的に検査するようにした。
+- `scripts/finalize_set.py` を追加し、FIN-01入力、合格集合、保存済み最終レポートと内部再検査、出典、原本チェックサム、設定スナップショット、provenance、整序問題の`answer_tokens`を検証し、`set.json.tmp`から`os.replace`で正本を原子的に確定するようにした。
+- 承認済みM5D-01〜03に基づき、監査上書き衝突を`E-DATA-07`、セッション設定ドリフトを`E-DATA-08`とし、`generation_max`は現行世代列挙で表現できる1〜3だけを運用上許可した。3超はdoctor D10と正規化データ利用CLIの共通事前検査で`E-DATA-05`となる。
+- 設計文書と`DECISIONS.md`は承認内容だけを反映し、`schemas/`は変更していない。
+
+### M5着手前のM1 DoD再検証（2026-08-17、6/6 pass）
+
+1. 決定性
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 独立一時出力先2件へbuild_normalized.pyを実行し、2組とコミット済み3成果物をバイト比較 ... PY`。
+   - 結果: 2回とも終了コード0で、`lexicon.json`・`grammar.json`・`meta.json`は相互およびコミット済み成果物とバイト一致した。SHA-256は順に`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`。
+2. スキーマ・meta適合
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... lexicon/grammarスキーマとNRM-29 metaを検証 ... PY`。
+   - 結果: 3成果物が適合し、`data_version=wl1.6+gp20200220+norm1.0.2`、正規化パイプライン版`1.0.2`だった。
+3. 件数不変条件
+   - コマンド: `.venv/bin/python - <<'PY' ... json/openpyxlで正規化データと原本ALL・教員版・ITEM LISTを照合 ... PY`。
+   - 結果: 語彙7,988件（A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859）、`(headword,pos)`一意7,988件、ALL 7,801行、併記179群（全群2件以上）、文法501件（親263・枝番238）、教員版・target eligible 256件、未付与親16件が仕様値と一致した。
+4. レベル継承・範囲分解
+   - コマンド: `.venv/bin/python - <<'PY' ... grammar.jsonの継承、単一値、範囲値を全件検証 ... PY`。
+   - 結果: `gp:1-1` / `gp:1-2` / `gp:1-3`を含む継承項目が親値を保持し、教員版の単一値152件・範囲値104件が全て正しく分解されていた。
+5. doctor完全環境・異常模擬
+   - コマンド: `.venv/bin/python - <<'PY' ... 一時コピーで完全環境、normalized欠落、原本1バイト改変、config欠落をdoctor.pyで検査し、原本改変環境でbuild_normalized.pyも実行 ... PY`。
+   - 結果: 完全環境は12 pass / 0 fail。normalized欠落はD08/D09=`E-DATA-03`、原本改変はD07とbuild=`E-DATA-02`、config欠落はD10=`E-DATA-05`となり、全停止に具体的remedyがあった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff` と実行前後の3成果物SHA-256比較。
+   - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全区分`count=0, ids=[]`、`written=[]`、終了コード0で、3成果物は実行前後バイト一致した。
+
+### M5 DoD検証（2026-08-17、5/5 pass）
+
+- コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 一時setディレクトリへRPL-01〜10とCI-SET-01〜06の監査フィクスチャを投入し、set_check.py・finalize_set.py・validate.pyをsubprocess実行 ... PY`。
+- DoD 1: RPL-01〜10は10/10 pass。3問gen1完走、gen1 review fail→gen2合格と直前指摘6フィールド移送、提案補充2N上限、明示3世代後の教師照会、review invalid初回＋再実行2回で中止、candidate invalid同一世代2回後の世代消費、machine fail非上書き、例文使い回し後の確定拒否、監査参照と正本自立性、最悪コスト`2n×3`を確認した。
+- DoD 2: review_requestがcandidate全体・machine_report全体・実効制約・RC-10の8リソースだけを含み、`reviewer-core.md`が生成側会話、他問、過去世代、許可外ファイル、書き込み、ネットワークを禁止することを確認した。Codexアダプタの許可された作業ファイルも監査正本と混同せず受理した。
+- DoD 3: machine fail＋review passのgen1は合格世代に選ばれず、gen2のmachine/review/set_check全passだけが採用された。
+- DoD 4: CI-SET-01〜06は6/6 pass。3違反を個別検出し、合格3問は原子的確定、不合格残存は`E-CONTRACT-04`かつ`set.json`なし、監査命名・相対参照・正本全必須ブロックも合格した。
+- DoD 5: review_result不正は問題不合格にも世代消費にも数えず、同一封筒で最大2回再実行し、初回を含む3失敗を`review.invalid1`〜`3`へ保存後にセット中止、`set.json`なしとなった。
+
+### 追加回帰確認
+
+- `docs/question-generation-spec.md`の公式candidate 9形式を個別の監査セットへ投入し、全形式で増分set_check、最終set_check、finalize、setスキーマ検証が9/9 passした。`grammar_reorder`の`answer_tokens`はcandidate非改変のまま確定時だけ導出された。
+- `generation_max=4`の隔離コピーではdoctor D10と`lookup.py`共通事前検査がともに`E-DATA-05`となり、`/generation_max`、受取値、許容1〜3を報告した。
+- `set_check.py` / `finalize_set.py`の日本語help、必須引数欠落`E-INPUT-01`、不正set_id `E-INPUT-05`、finalizeの不正stdin優先`E-INPUT-03`を確認した。
+- `.venv/bin/python -m py_compile scripts/doctor.py scripts/lookup.py scripts/set_support.py scripts/set_check.py scripts/finalize_set.py`、`git diff --check`、`doctor.py` 12 pass / 0 failを確認した。
+
 ## 2026-08-17 — M4 対話＋生成コア
 
 ### 実装

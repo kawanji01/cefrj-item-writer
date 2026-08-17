@@ -96,7 +96,7 @@
 | `attribution` | object | CEFR-J出典ブロック（第4.3節） | 同上 |
 | `questions` | array | 合格問題の配列（1〜20件）。`question_id` 昇順 | 同上 |
 
-- **SET-02（config_snapshot）**: `config_snapshot` は `{"limits": <limits.jsonの全内容>, "proper_nouns": <proper_nouns.jsonのwords配列>}` としなければならない(MUST)。`limits` は `data/config/limits.json` のトップレベルオブジェクトをそのまま複製し、`proper_nouns` は `data/config/proper_nouns.json` の `words` 配列をそのまま複製する。セット実行開始時（`set_id` 採番時）に読み取った値を固定し、実行中の設定ファイル変更を反映してはならない(MUST NOT)。
+- **SET-02（config_snapshot）**: `config_snapshot` は `{"limits": <limits.jsonの全内容>, "proper_nouns": <proper_nouns.jsonのwords配列>}` としなければならない(MUST)。`limits` は `data/config/limits.json` のトップレベルオブジェクトをそのまま複製し、`proper_nouns` は `data/config/proper_nouns.json` の `words` 配列をそのまま複製する。S00のdoctor成功直後に読み取ったセッション設定スナップショットを、セット実行開始時（`set_id` 採番時）に現在値との完全一致を確認したうえで固定する。実行中の設定ファイル変更を反映してはならず(MUST NOT)、不一致は `E-DATA-08` でセット中止とする。
 - **SET-03（questions の順序と欠番）**: `questions[]` は `question_id` の昇順に整列しなければならない(MUST)。減数が発生した場合は欠番を許す（ID-02）。要素数は `requested_count` 以下でなければならない(MUST)。
 - **SET-04（正本の自立性）**: `set.json` は監査ファイル（`review/` 配下）が欠けても単体で解釈・HTML生成可能でなければならない(MUST)。`provenance` の参照は相対パスの記録のみであり、`build_html.py` は参照先を読み取ってはならない(MUST NOT)（`docs/html-output-spec.md` CON-01）。
 
@@ -146,13 +146,14 @@
 | `created_at` | string | セット作成日時（SET-01 の書式）。 |
 | `tool` | string | `claude_code` / `codex`。 |
 | `model` | string | モデル名。 |
+| `config_snapshot` | object | SET-02で固定した開始時設定。`{"limits": <limits.json全内容>, "proper_nouns": <proper_nouns.jsonのwords配列>}`。 |
 | `final_question_ids` | array of string | 確定してセットに収録する `question_id` の列挙（昇順・一意）。減数・不成立で除外したスロットを含めない。1件以上 `requested_count` 件以下でなければならない(MUST)。 |
 
 - **FIN-02（組み立て手順）**: `finalize_set.py` は `set.json` を次の手順で組み立てなければならない(MUST)（前提検査・原子的書き込みの正は `docs/architecture.md` CLI-21）。
   1. stdinメタデータ（FIN-01）のうち `final_question_ids` を除く全フィールドをトップレベルへ転記する（`final_question_ids` は手順4の収集対象の決定と検査にのみ使い、`set.json` には含めない。SET-01 のフィールド目録が正）。
   2. `data/normalized/meta.json` から `data_version`・`source_checksums`（`sources[]` の `file` のファイル名部分をキー、`sha256` を値とする）・出典情報（ATT-01〜ATT-02）を構築する。
-  3. `data/config/` から `config_snapshot` を構築する（SET-02）。
-  4. `final_question_ids`（FIN-01）に列挙された各問題について、合格世代（review_result が `pass` かつ対応する `review/set_check.<question_id>.<gen>.json` の verdict が `pass` である最大世代）の `review/<question_id>.<gen>.candidate.json` を読み、問題オブジェクトへ複製し、`provenance` を付加する（SET-06）。`final_question_ids` 外のスロットの監査ファイルは収集対象にしてはならない(MUST NOT)。宣言された集合と監査上の合格世代集合が一致しない場合は E-CONTRACT-04 で停止する（`docs/architecture.md` CLI-21 手順4）。
+  3. stdinの `config_snapshot` が現在の検証済み `data/config/` 2ファイルから構築した値とJSON値として完全一致することを検査し、不一致は E-DATA-08 で停止する。一致したstdin値をset.jsonへ保持し、現在値から再構築して置き換えてはならない。
+  4. `final_question_ids`（FIN-01）に列挙された各問題について、合格世代（machine_report と review_result がともに `pass` かつ対応する `review/set_check.<question_id>.<gen>.json` の verdict が `pass` である最大世代）の `review/<question_id>.<gen>.candidate.json` を読み、問題オブジェクトへ複製し、`provenance` を付加する（SET-06）。`final_question_ids` 外のスロットの監査ファイルは収集対象にしてはならない(MUST NOT)。宣言された集合と監査上の合格世代集合が一致しない場合は E-CONTRACT-04 で停止する（`docs/architecture.md` CLI-21 手順5）。
   5. `format` が `grammar_reorder` の場合、各問題の `body` に `answer_tokens` を導出して付加する（FIN-04〜FIN-05）。
   6. `schema_version` に set スキーマ現行版を記入し、SET-07 の一致検証と `set.schema.json` 検証を実施して原子的に書き込む。
 - **FIN-03（candidate の不改変）**: 手順4の複製で candidate の内容を書き換えてはならない(MUST NOT)。許される追加は `provenance`（全形式）と `answer_tokens`（grammar_reorder のみ）の2つに限る(MUST)。
