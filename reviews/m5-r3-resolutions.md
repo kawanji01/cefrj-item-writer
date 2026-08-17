@@ -1,0 +1,7 @@
+- R3-01: format/levelと設定から封筒のレベル上限・実効limits・allowlistを再導出して監査正本と照合し、finalize時に全topicをFIN-01へ照合した (scripts/set_support.py, scripts/set_check.py, scripts/finalize_set.py)
+- R3-02: 終端監査の一意な試行question_id数を2×requested_count以下に制限し、超過をE-CONTRACT-04で拒否した (scripts/set_support.py)
+- R3-03: 承認済みM5D-06を記録し、解説へ必須の教員版項目名をkyoinban.name_jaに統一した (DECISIONS.md, docs/question-generation-spec.md, docs/subagent-review-spec.md, agent/author-core.md, agent/reviewer-core.md)
+- R3-04: CHK-04へ全語連鎖・複数語見出し・未収録表現の推定とgrammar_rewrite両文の検査を追加した (agent/reviewer-core.md)
+- R3-05: CHK-16へ目標文の空欄が対象文法操作の核心部分を覆う検査を追加した (agent/reviewer-core.md)
+- R3-06: 承認済みM5D-07を記録し、進捗・不成立照会・世代行・監査範囲をgeneration_maxでパラメータ化した (DECISIONS.md, docs/interaction-flow.md, agent/author-core.md)
+- R3-07: 承認済みM5D-08を記録し、保存済みreview_resultのdispute件数を一度だけ累積して完了・中止時に0件でも表示する契約を追加した (DECISIONS.md, docs/subagent-review-spec.md, docs/interaction-flow.md, agent/author-core.md)

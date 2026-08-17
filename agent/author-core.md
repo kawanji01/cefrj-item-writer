@@ -401,13 +401,13 @@ S70では次の順序と文面で全条件を提示する。
 
 ## 3. S80開始と識別子
 
-S70承認後、S80開始時にset_idを1回だけ採番する。書式はローカル日時14桁と4文字の小文字英数字乱数による `YYYYMMDD-HHMMSS-xxxx` とし、既存 `output/<set_id>/` と衝突したら末尾4文字を再生成する。S70承認時の対象数が1〜S00で固定した `set_question_max` 件であることを再検証し、対象順に `q01`〜`q20` のうち必要なN個を `q01`から連番で割り当てる。`q20` を超えるIDを生成しない。
+S70承認後、S80開始時にタイムゾーン付きローカル日時を1回だけ秒精度で取得し、同じ年月日時からset_id先頭14桁とFIN-01の`created_at`を同時に作る。set_idは末尾へ4文字の小文字英数字乱数を加えた `YYYYMMDD-HHMMSS-xxxx`、`created_at`は`YYYY-MM-DDThh:mm:ss±hh:mm`（UTCなら`Z`も可）とし、両値をFIN-01まで不変保持する。既存 `output/<set_id>/` と衝突したら日時は変更せず末尾4文字だけを再生成する。`machine_check_dispute_count`を0で初期化する。S70承認時の対象数が1〜S00で固定した `set_question_max` 件であることを再検証し、対象順に `q01`〜`q20` のうち必要なN個を `q01`から連番で割り当てる。`q20` を超えるIDを生成しない。
 
 次を提示する。
 
 ```text
 セット {set_id} の生成を開始します（全 {N} 問、形式 {format}、レベル {L}）。
-1問ごとに 生成 → 機械検査 → 独立レビュー を行い、不合格の場合は最大3世代まで再生成します。
+1問ごとに 生成 → 機械検査 → 独立レビュー を行い、不合格の場合は最大{generation_max}世代まで再生成します。
 ```
 
 問題・世代の進捗は次の1行形式だけを使う。
@@ -544,7 +544,12 @@ candidateは次の共通骨格を持つ。
 
 ### PRM-12 再生成時だけの指示
 
-gen2/gen3では、直前世代のcandidate、machine_reportの全違反、`review_result.violations[]` 全件、`machine_check_disputes[]` 全件を生成入力へ含める。T11経由では直前のset_check違反も含める。誤検出疑いがあっても機械違反は回避対象であることを明記し、全指摘を解消した新candidateを作り、指摘のない箇所を不必要に変えない。それより前の世代の候補・指摘を累積して渡してはならない。
+gen2/gen3では直前世代の終端経路に応じて入力を分ける。
+
+- T3経由では、通常の対象・セッション固定条件に加え、`candidate.invalid2.txt`に記録した2回目のcandidate受理検証診断だけを生成入力へ含める。invalid内の生成生出力、1回目の診断、T3では存在しないcandidate・machine・request・review監査を含めない。
+- T8/T11経由では、直前世代のcandidate、machine_reportの全違反、`review_result.violations[]`全件、`machine_check_disputes[]`全件を含める。T11経由では直前のset_check違反も含める。誤検出疑いがあっても機械違反は回避対象であることを明記し、全指摘を解消した新candidateを作り、指摘のない箇所を不必要に変えない。
+
+どの経路でも、それより前の世代の診断・候補・指摘を累積して渡してはならない。
 
 ### PRM-13 自己検査
 
@@ -613,11 +618,11 @@ python scripts/validate.py --schema candidate --file <生成生出力一時フ�
    - 生成生出力の非UTF-8・非標準JSON・構文不正により、`validate.py`が終了コード1・`E-INPUT-03`を返す。
    - `validate.py`がcandidateをvalidとした後の厳格パース、または次項のJS-01正準化に失敗する。
 
-   1回目はAUD-09の形式で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。
+   1回目はAUD-09の正準JSON封筒で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。生出力バイト列を1バイト以上取得できた場合は`kind: "validation_failure"`とし、全文を標準Base64の`raw_output_base64`へバイト完全保存し、非空診断を`diagnostic`へ入れる。ホスト文字列をstrict UTF-8化できなければ`kind: "utf8_encode_failure"`の`reason`/`position`、生出力が得られなければ`kind: "process_failure"`の`exit_code`/`stderr_base64`を使う。全形に`audit_format: "aud09-v2"`を入れ、固定キーだけをJS-01正準形で保存する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。
 
-   2回目は同じ内容形式で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。UTF-8で保持できる生出力は全文をinvalidファイルへ入れる。生出力自体をUTF-8化できない場合は改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。現在世代がスナップショットの `generation_max` 未満なら次世代へ進み、最終世代なら不成立として第9節へ進む。
+   2回目も同じAUD-09正準JSON封筒で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。T3後に次世代へ渡すのは2回目封筒の`diagnostic`、`reason`/`position`、または`exit_code`と復号stderrから構成した診断だけとし、`raw_output_base64`を復号した生出力は渡さない。現在世代がスナップショットの `generation_max` 未満なら、PRM-12のT3入力だけで次世代へ進み、最終世代なら不成立として第9節へ進む。
 5. `validate.py`がvalidを返した場合だけ、その同じ生出力を厳格にJSONオブジェクトへパースする。candidateスキーマには数値フィールドがないため、検証前の通常floatパースで`1e400`等を無限大へ丸める必要はない。パースしたcandidateを、UTF-8（BOMなし）・非ASCII文字をエスケープしない・キー辞書順・インデント2・改行LF・末尾改行1つのJS-01正準形へ直列化する。Pythonでは `json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"` をstrict UTF-8でエンコードしたバイト列とする。この段階の例外を未処理で停止せず、第4項のT2/T3へ送る。受理検証を全て通過した同じ正準バイト列だけを `output/<set_id>/review/<question_id>.<gen>.candidate.json` に保存し、次項の入力にも使う。
-6. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数を毎回渡す。依頼問題数はS00で固定した `set_question_max` 以下であることをS40/S70で確認済みの値とする。
+6. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数Nを毎回渡す。依頼問題数はS00で固定した `set_question_max` 以下であることをS40/S70で確認済みの値とする。`machine_check.py`はこのNから試行ID上限`min(2N, 20)`を導出するため、補充・代替の`q{N+1}`以降でもN自体を変更せず同じ値を渡す。
 
 ```text
 python scripts/machine_check.py \
@@ -650,9 +655,9 @@ python scripts/machine_check.py \
 
 生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行のタイムアウトにする。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
 
-最終メッセージはCOR-08の順序で取り込む。テキスト全体のJSONパースを先に試し、失敗時だけ最初のJSONコードフェンス内を試し、`python scripts/validate.py --schema review_result --file -` で検証する。スキーマでは表現できないRR-01〜RR-05違反も受理しない。受理したJSONは正準化して `<question_id>.<gen>.review.json` に排他的に保存する。
+最終メッセージはCOR-08の順序で取り込む。ホストがbytesを返す場合はその生バイト列、文字列を返す場合はstrict UTF-8で1回だけエンコードした生バイト列を、JSONパース・再直列化より先に取得する。テキスト全体のJSONパースを先に試し、失敗時だけ最初のJSONコードフェンス内を試し、`python scripts/validate.py --schema review_result --file -` でスキーマと全string値・object keyのstrict UTF-8表現可能性を検証する。スキーマでは表現できないRR-01〜RR-05違反も受理しない。通過後も同じJSONをJS-01正準形へstrict UTF-8で直列化し、その同じ正準バイト列だけを `<question_id>.<gen>.review.json` に排他的に保存する。保存成功時だけ、その `machine_check_disputes[]` の要素数を `machine_check_dispute_count` へ1回加算する。invalid出力や同じ監査ファイルの再読込みでは加算せず、異なる問題・世代の各要素は独立して数える。
 
-プロセス異常、タイムアウト、空出力、パース不能、review_result不通過は問題品質の不合格にも世代消費にも数えない。同一のrequestを変更せず最大2回再実行し、各失敗を `review.invalid1.txt`、`review.invalid2.txt`、`review.invalid3.txt` にAUD-09形式で直ちに排他的保存する。1・2回目はFMT-80b事象11、初回を含む3実行全てが失敗したらT7のインフラ障害としてS99へ遷移し、`set.json`を書かない。
+プロセス異常、タイムアウト、空出力、パース不能、review_resultのスキーマ・RR記入規則不通過、全string値・object keyのstrict UTF-8符号化不能、またはJS-01正準化失敗は問題品質の不合格にも世代消費にも数えない。同一のrequestを変更せず最大2回再実行し、各失敗を `review.invalid1.txt`、`review.invalid2.txt`、`review.invalid3.txt` にAUD-09の正準JSON封筒で直ちに排他的保存する。非空の生出力バイト列があれば`validation_failure`として全文を`raw_output_base64`へバイト完全保存し、失敗段階・例外型・理由・位置を`diagnostic`へ入れる。ホスト文字列しか得られずstrict UTF-8化不能なら`utf8_encode_failure`、プロセス異常・タイムアウト・空出力なら`process_failure`を使う。1・2回目はFMT-80b事象11、初回を含む3実行全てが失敗したらT7のインフラ障害としてS99へ遷移し、`set.json`を書かない。
 
 ## 8. 世代判定とセット横断検査
 
@@ -664,17 +669,19 @@ python scripts/set_check.py --set-dir output/<set_id> --target <question_id>
 ```
 
 3. stdoutを `review/set_check.<question_id>.<gen>.json` に排他的保存する。failでもCLI終了コード0であり、判定を覆さない。failならFMT-80b事象14を表示し、現在世代が上限未満ならそのset_check違反もPRM-12へ含めて次世代へ進み、最終世代なら不成立とする。
-4. set_checkもpassのときだけT10のACCEPTEDとし、FMT-80b事象6を表示して確定済み数を増やし、次のquestion_idへ進む。
+4. set_checkもpassのときだけT10のACCEPTEDとする。当該論理スロットについて、初期IDを`slot_question_id`、このスロットへ割り当てた全IDを割当順で`attempted_question_ids`、現在IDを`accepted_question_id`とし、AUD-11の6フィールドだけを持つ`review/slot.<slot_question_id>.outcome.json`を正準JSONで直ちに排他的保存する。`status`は`accepted`、`teacher_decision`はnullとする。保存後にFMT-80b事象6を表示して確定済み数を増やし、次のquestion_idへ進む。
 
 ## 9. 不成立、補充、教師照会
 
 試行対象総数は初期対象、補充、代替を合わせて要求数Nの2倍以下とする。提案モードではS35のlookup返却順の未採用候補を補充プールとして保持し、不成立時に先頭から決定的に補充する。補充・代替には割当済みIDを再利用せず、`q01`〜`q20` の未使用最小IDを割り当てる。
 
-提案モードで試行対象総数<2N、補充プール残あり、未使用IDありなら自動補充してFMT-80b事象9を表示する。それ以外の提案モードはDLG-82、明示モードはDLG-81を文言どおり提示する。全世代のmachine違反とreview違反を世代別に要約し、確定数/要求数、試行数/2Nを含める。代替指定は上限未満かつ未使用IDありの場合だけ提示し、S32と同じ原本照合後にgen1から実行する。減数で確定問題が0件になる選択は提示せず、0件なら中止だけとする。S99では監査を残し、`set.json`を書かない。
+提案モードで試行対象総数<2N、補充プール残あり、未使用IDありなら自動補充してFMT-80b事象9を表示する。それ以外の提案モードはDLG-82、明示モードはDLG-81を文言どおり提示する。事象9/10と両照会文の世代数・最終世代・監査範囲にはS00で固定した`generation_max`を展開し、不合格要点は実行済みのgen1〜gen{generation_max}だけを対象別・世代別に列挙する。未実行世代を表示しない。各世代は実際の終端経路を表示し、T3なら2回目のcandidate受理診断と`candidate.invalid1/2.txt`、T8ならmachine/review違反と正規4監査、T11ならそれらと増分set_checkを要約・案内する。T3に存在しない正規監査または`review_result.violations[]`を案内しない。確定数/要求数、試行数/2Nも含める。
+
+代替指定は上限未満かつ未使用IDありの場合だけ提示し、S32と同じ原本照合後にgen1から実行する。教師が減数を選択した場合は、当該論理スロットの初期ID、割り当てた全IDを使ってAUD-11の`review/slot.<slot_question_id>.outcome.json`を正準JSONで直ちに排他的保存する。`status`は`reduced`、`accepted_question_id`はnull、`teacher_decision`は`reduce`とする。提案モードで未処理の初期論理スロットが残る場合、DLG-82の続行は現在のスロットだけをこの方法で減数にし、残りの初期対象を元の順序で補充なしに処理する。この場合は確定済み0件でも続行を提示し、未着手スロットを一括で減数にしない。未処理初期スロットがない場合だけ、確定済み1件以上なら減数後に最終確定を提示し、確定済み0件なら中止だけとする。S99では監査を残し、`set.json`を書かない。S80開始後にS99へ遷移した場合は、IF-52の監査保存文の直後に`機械検査誤検出疑い {machine_check_dispute_count}件（詳細は監査ファイル参照）`を0件でも表示する。S80開始前の中止では表示しない。
 
 ## 10. 最終セット検査と確定
 
-1問以上が確定し全スロットの処理が終わったらFMT-80b事象12を表示し、次を実行する。
+1問以上が確定し全スロットの処理が終わり、初期ID`q01`〜`qNN`に対応するN件のスロット終端監査を保存済みであることを確認したらFMT-80b事象12を表示し、次を実行する。
 
 ```text
 python scripts/set_check.py --set-dir output/<set_id>
@@ -688,7 +695,9 @@ FIN-01のフィールドだけを持つメタデータJSONを構築する。`con
 python scripts/finalize_set.py --set-dir output/<set_id>
 ```
 
-finalizeの内部set_check再実行、集合一致、setスキーマ検証、原子的書き込みの結果を上書きしない。M5の成功成果物は `set.json` と監査一式までであり、`index.html` は作らずS90へ遷移しない。M6の `build_html.py` が実装されるまで、セット完成や配布可能を報告してはならない。
+finalizeの内部set_check再実行、集合一致、setスキーマ検証、原子的書き込みの結果を上書きしない。M5の成功成果物は `set.json` と監査一式までであり、`index.html` は作らずS90へ遷移しない。M6の `build_html.py` が実装されるまで、セット完成や配布可能を報告してはならない。M6実装後にS90へ進む場合は、FMT-90の「■ 監査ファイル」直下に`機械検査誤検出疑い {machine_check_dispute_count}件（詳細は監査ファイル参照）`を0件でも表示する。
+
+finalizeが終了コード0・CLI-22成功JSONとともにstderrへ`warning_code: "W-CLEANUP-01"`の正準JSONを返した場合、`set.json`は完成済みとして成功処理を維持し、S99へ遷移しない。`docs/interaction-flow.md` IF-51aの固定文言で`detail.temp_path`と`remedy`を提示し、set.jsonを変更しないこと、表示された一時リンクだけを削除すること、finalizeを再実行しないことを伝える。
 
 終了コード1では、まず第4項の生成生出力に対する `validate.py --schema candidate` の `E-CONTRACT-01` / `E-INPUT-03` かを判定し、該当時は必ずT2/T3を優先する。それ以外のdoctor以外のCLI停止では、stderr全体をUTF-8のJSON文書1個として解析し、CLI-05の `error_code`、`message`、`remedy`、`detail` を取得する。物理的な最終行だけを読んではならない。lookupの定義済み停止、生成出力以外に起因するcandidate検証CLI停止、他スキーマの検証不通過、およびmachine_report内部生成結果の `E-CONTRACT-01` はT2/T3へ送らない。S80では取得した値をFMT-80bの事象16 `エラーにより中止します: {error_code} {remedy}` に非改変で入れ、IF-04/IF-42と `docs/architecture.md` の停止規則に従う。S80以外でも少なくとも `error_code` と日本語 `remedy` を教師へ提示する。doctorの診断failはS00の規則どおりstdoutの全12項目レポートを使う。
 

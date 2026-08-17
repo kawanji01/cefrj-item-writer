@@ -26,7 +26,7 @@
   3. オブジェクトのキーは辞書順ソート（`sort_keys=True`）。
   4. インデントは半角スペース2個。
   5. 改行は LF。ファイル末尾に改行1個。
-- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。candidateはホスト側のパース・再直列化より先に生成生出力をUTF-8バイト列として`validate.py`へ渡し、標準JSON・candidateスキーマの検証後に厳格パースして本節の正準形へ再直列化しなければならない(MUST)。これらの受理検証を通過したLLM出力を監査ファイルとして保存する際、オーケストレータは正準形に再直列化して保存しなければならない(MUST)（監査ファイルのバイト再現性のため）。受理失敗時のT2/T3分類は`docs/subagent-review-spec.md`、invalid監査の形式はAUD-09が正である。
+- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。candidateはホスト側のパース・再直列化より先に生成生出力をUTF-8バイト列として`validate.py`へ渡し、標準JSON・candidateスキーマの検証後に厳格パースして本節の正準形へ再直列化しなければならない(MUST)。review_resultもスキーマ検証後に全string値・object keyのstrict UTF-8表現可能性を確認し、JS-01正準形へstrict UTF-8で直列化しなければならない(MUST)。これらの受理検証を通過した同じ正準バイト列だけを監査ファイルとして保存する。candidate側の失敗はT2/T3、review_result側のパース・スキーマ・strict UTF-8・JS-01正準化失敗はINF-01のレビュー系インフラ障害とし、invalid監査の形式はAUD-09が正である。
 - **JS-03（実行毎に変わるフィールド）**: 決定的CLIが書き出すJSONのうち、実行毎に値が変わるフィールドは machine_report（scope=question / scope=set とも）の `generated_at` のみとしなければならない(MUST)。`generated_at`はUTC・秒精度・末尾`Z`のISO 8601文字列とする。テストのバイト比較（`docs/testing-and-acceptance.md`）は本フィールドのみを比較から除外する。これ以外のフィールドに実行時刻・乱数・環境依存値を書き込んではならない(MUST NOT)（`set_id` と `created_at` は入力として与えられる値であり、この禁止の対象外である）。
 - **JS-04（数値の表現）**: 整数はJSONの整数リテラル、実数は入力（原本xlsx）の値をPython `json` モジュールの既定の表現で保持する。丸め・指数表記への変換を行ってはならない(MUST NOT)。
 
@@ -40,7 +40,7 @@
 - **ID-04（語彙エントリID）**: 書式は `lex:<headword>:<pos'>`。`<headword>` は正規化済み見出し語の原文（大文字小文字・ピリオド・ハイフン・アポストロフィ・内部空白を保持）、`<pos'>` は Wordlist pos 15種の空白を `-` に置換した値（例 `lex:watch:verb`、`lex:a.m.:adverb`、`lex:may:modal-auxiliary`、`lex:CD player:noun`）。headword に `:` を含むIDを生成してはならない(MUST NOT)（生成時の検査は `docs/cefrj-validation-spec.md` NRM-09）。
 - **ID-05（文法項目ID）**: 書式は `gp:<ID>`（`<ID>` は ITEM LIST のID列原文。例 `gp:13`、枝番 `gp:1-1`）。正規表現 `^gp:[0-9]+(-[0-9]+)?$`。
 - **ID-06（併記グループID）**: 書式は `grp:<先頭variant>:<pos'>`（導出規則の正は `docs/cefrj-validation-spec.md` NRM-10）。
-- **ID-07（監査ファイル名）**: 正規監査ファイルは `review/<question_id>.<gen>.request.json`（レビュアー入力封筒。AUD-08） / `review/<question_id>.<gen>.candidate.json` / `review/<question_id>.<gen>.machine.json` / `review/<question_id>.<gen>.review.json`、補助監査ファイルは `review/<question_id>.<gen>.candidate.invalid<k>.txt`（k=1,2）・`review/<question_id>.<gen>.review.invalid<k>.txt`（k=1,2,3）・`review/set_check.<question_id>.<gen>.json`・`review/set_check.final.json` とする。配置・書き込みタイミングの正は `docs/subagent-review-spec.md` 第8節（AU-01〜AU-07）。
+- **ID-07（監査ファイル名）**: 正規監査ファイルは `review/<question_id>.<gen>.request.json`（レビュアー入力封筒。AUD-08） / `review/<question_id>.<gen>.candidate.json` / `review/<question_id>.<gen>.machine.json` / `review/<question_id>.<gen>.review.json`、補助監査ファイルは `review/<question_id>.<gen>.candidate.invalid<k>.txt`（k=1,2）・`review/<question_id>.<gen>.review.invalid<k>.txt`（k=1,2,3）・`review/set_check.<question_id>.<gen>.json`・`review/set_check.final.json`・`review/slot.<slot_question_id>.outcome.json` とする。配置・書き込みタイミングの正は `docs/subagent-review-spec.md` 第8節（AU-01〜AU-07）。
 - **ID-08（スキーマ$id）**: 各スキーマの `$id` は `https://cefr-j-agents.local/schemas/<name>/<semver>` とする（`docs/architecture.md` VER-01）。`<semver>` はそのスキーマの現行版と一致しなければならない(MUST)。このURLは識別子であり、ネットワーク解決してはならない(MUST NOT)。
 
 ## 3. スキーマ体系と schema_version 運用
@@ -87,7 +87,7 @@
 | `requested_count` | integer | 教師の要求問題数（1〜`limits.json` の `set_question_max`） | `10` |
 | `topic` | string \| null | 教師指定トピック。未指定は `null`。HTMLは非null時のみ表示（`docs/html-output-spec.md` LAY-14） | `"学校生活"` |
 | `preferred_proper_nouns` | array of string | 教師が優先使用を指定した固有名詞（allowlist収録済み語のみ。`docs/interaction-flow.md` IF-16）。指定なしは空配列 | `["Ken"]` |
-| `created_at` | string | セット作成日時。ISO 8601・秒精度・タイムゾーン付き（`YYYY-MM-DDThh:mm:ss±hh:mm` または末尾 `Z`）。`set_id` 採番と同時に取得した値 | `"2026-08-16T14:25:30+09:00"` |
+| `created_at` | string | セット作成日時。ISO 8601部分集合・秒精度・タイムゾーン付き（`YYYY-MM-DDThh:mm:ss±hh:mm` または末尾 `Z`）。数値オフセットは分00〜59・絶対値14:00以下・時14なら分00だけを許容する。`set_id` 採番と同時に取得した値 | `"2026-08-16T14:25:30+09:00"` |
 | `tool` | string | 実行ホストツール。`claude_code` / `codex` の2値 | `"claude_code"` |
 | `model` | string | 使用LLMモデル名（ホストツールが報告する文字列をそのまま記録） | `"claude-fable-5"` |
 | `data_version` | string | データ版文字列（書式の正は `docs/architecture.md` VER-04）。`meta.json` から転記 | `"wl1.6+gp20200220+norm1.0.0"` |
@@ -143,7 +143,7 @@
 | `requested_count` | integer | 要求問題数。 |
 | `topic` | string \| null | トピック。 |
 | `preferred_proper_nouns` | array of string | 優先使用固有名詞。指定なしは空配列。 |
-| `created_at` | string | セット作成日時（SET-01 の書式）。 |
+| `created_at` | string | セット作成日時（SET-01 のISO 8601部分集合。`+09:99`、`+14:01`等は不許可）。 |
 | `tool` | string | `claude_code` / `codex`。 |
 | `model` | string | モデル名。 |
 | `config_snapshot` | object | SET-02で固定した開始時設定。`{"limits": <limits.json全内容>, "proper_nouns": <proper_nouns.jsonのwords配列>}`。 |
@@ -153,7 +153,7 @@
   1. stdinメタデータ（FIN-01）のうち `final_question_ids` を除く全フィールドをトップレベルへ転記する（`final_question_ids` は手順4の収集対象の決定と検査にのみ使い、`set.json` には含めない。SET-01 のフィールド目録が正）。
   2. `data/normalized/meta.json` から `data_version`・`source_checksums`（`sources[]` の `file` のファイル名部分をキー、`sha256` を値とする）・出典情報（ATT-01〜ATT-02）を構築する。
   3. stdinの `config_snapshot` が現在の検証済み `data/config/` 2ファイルから構築した値とJSON値として完全一致することを検査し、不一致は E-DATA-08 で停止する。一致したstdin値をset.jsonへ保持し、現在値から再構築して置き換えてはならない。
-  4. `final_question_ids`（FIN-01）に列挙された各問題について、合格世代（machine_report と review_result がともに `pass` かつ対応する `review/set_check.<question_id>.<gen>.json` の verdict が `pass` である最大世代）の `review/<question_id>.<gen>.candidate.json` を読み、問題オブジェクトへ複製し、`provenance` を付加する（SET-06）。`final_question_ids` 外のスロットの監査ファイルは収集対象にしてはならない(MUST NOT)。宣言された集合と監査上の合格世代集合が一致しない場合は E-CONTRACT-04 で停止する（`docs/architecture.md` CLI-21 手順5）。
+  4. `final_question_ids`（FIN-01）に列挙された各問題について、合格世代（machine_report と review_result がともに `pass` かつ対応する `review/set_check.<question_id>.<gen>.json` の verdict が `pass` である最大世代）の `review/<question_id>.<gen>.candidate.json` を読み、問題オブジェクトへ複製し、`provenance` を付加する（SET-06）。`final_question_ids` 外の問題監査は問題オブジェクトの収集対象にしてはならない(MUST NOT)。あわせてAUD-11のスロット終端監査を全件検証し、要求Nスロットがすべて採用または教師承認済み減数で終端したこと、全試行IDがちょうど1スロットに属すること、各世代が連続し不採用試行が`config_snapshot.limits.generation_max`まで正当に消費されたこと、採用ID集合が`final_question_ids`および監査上の合格世代集合と一致することを確認する。監査の配置・命名・内容形式・対応関係の不整合はE-CONTRACT-03、終端条件または確定集合の不成立はE-CONTRACT-04で停止する（`docs/architecture.md` CLI-21 手順5）。
   5. `format` が `grammar_reorder` の場合、各問題の `body` に `answer_tokens` を導出して付加する（FIN-04〜FIN-05）。
   6. `schema_version` に set スキーマ現行版を記入し、SET-07 の一致検証と `set.schema.json` 検証を実施して原子的に書き込む。
 - **FIN-03（candidate の不改変）**: 手順4の複製で candidate の内容を書き換えてはならない(MUST NOT)。許される追加は `provenance`（全形式）と `answer_tokens`（grammar_reorder のみ）の2つに限る(MUST)。
@@ -489,8 +489,25 @@
 | `constraints_snapshot` | object | `{"limits": {"sentence_word_limit": int, "explanation_char_limit": int\|null}, "proper_nouns": [...], "topic": string\|null}` |
 | `readable_resources` | array of string | 読み取り許可パス一覧（許可範囲の正は RC-10） |
 
-- **AUD-09（invalid テキストファイル）**: `*.invalid<k>.txt` は、UTF-8で保持できる生成生出力テキスト全文と、その後に区切り行 `---- validation error ----` を挟んで受理検証診断を連結したUTF-8テキストとしなければならない(MUST)。診断は、`validate.py`がstdoutを返した場合はそのJSON全文、stdoutがない場合はstderrのCLI-05 JSON全文、厳格パース・JS-01正準化で失敗した場合は失敗段階・例外型・理由・取得可能な位置を含むUTF-8テキストとする。ホストが受け取った生成テキスト自体を孤立サロゲート等によりUTF-8化できない場合は、置換文字やエスケープで生出力を改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。プロセス失敗で出力が得られない場合は、エラー情報（終了コード・stderr）のみを記録する。
+- **AUD-09（invalid監査の正準JSON封筒）**: `*.invalid<k>.txt`は拡張子にかかわらず、JS-01正準形のUTF-8 JSON文書1個でなければならない(MUST)。トップレベルはobject、`audit_format`は`"aud09-v2"`固定、`kind`は次の3値とし、kindごとの固定キー以外を含めてはならない(MUST NOT)。監査読込みは全invalidファイルのstrict UTF-8、標準JSON、JS-01バイト一致、固定キー・型・内容を検証し、不適合をファイル名付き`E-CONTRACT-03`として拒否して世代消費またはインフラ再実行の証拠に数えてはならない(MUST NOT)。旧予約行形式は受理しない。
+  1. **`validation_failure`**: キーは`audit_format` / `kind` / `raw_output_base64` / `diagnostic`だけとする。`raw_output_base64`はホストが取得した生成生出力またはレビュー生出力のバイト列全文をRFC 4648標準Base64（標準alphabet・必要な`=`paddingあり）で記録し、復号結果は1バイト以上でなければならない。読込み側は復号後の再符号化一致を検証する。`diagnostic`は空白以外を1文字以上含むUTF-8文字列とし、`validate.py`のstdout、stdoutがない場合のstderr、または厳格パース・strict UTF-8・JS-01正準化失敗の段階・例外型・理由・位置を記録する。生出力に予約文字列・任意改行・非UTF-8バイトが含まれてもBase64化以外の欠落・改変をしてはならない(MUST NOT)。
+  2. **`utf8_encode_failure`**: ホストが受け取った文字列を孤立サロゲート等によりUTF-8バイト列へ変換できない場合だけ使用する。キーは`audit_format` / `kind` / `reason` / `position`だけとし、`reason`と`position`は空白以外を1文字以上含む文字列とする。生成文字列を置換・エスケープして`raw_output_base64`へ保存してはならない(MUST NOT)。
+  3. **`process_failure`**: 生成生出力が得られないプロセス異常・タイムアウト・空出力で使用する。キーは`audit_format` / `kind` / `exit_code` / `stderr_base64`だけとする。`exit_code`はbooleanでないintegerまたは取得不能を表すnull、`stderr_base64`は取得したstderrバイト列全文のRFC 4648標準Base64とし、stderrが空の場合は空文字列を記録する。
+
+  T3後に次世代へ渡す2回目の診断は、`validation_failure.diagnostic`、`utf8_encode_failure`の`reason`と`position`、または`process_failure`の`exit_code`と復号したstderrから構成する。いずれの場合も`raw_output_base64`を復号した生成生出力を次世代へ渡してはならない(MUST NOT)。
 - **AUD-10（不変性）**: 監査ファイルは書き込み後に変更・削除してはならない(MUST NOT)（`docs/subagent-review-spec.md` AU-05）。
+- **AUD-11（スロット終端監査: `slot.<slot_question_id>.outcome.json`）**: 9スキーマの対象外とし、決定的CLIが次の手動契約を検証する。トップレベルは次の6フィールドだけを持たなければならない(MUST)。`slot_question_id`はファイル名と一致し、要求数Nに対する初期ID `q01`〜`qNN` のいずれかでなければならない。`attempted_question_ids`は当該論理スロットに割り当てたIDを割当順（RG-19により数値昇順）で1件以上、一意に列挙し、先頭は`slot_question_id`とする。異なる終端監査間で同じ試行IDを共有してはならない(MUST NOT)。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `set_id` | string | ID-01。ディレクトリの`set_id`と一致する。 |
+| `slot_question_id` | string | 論理スロットの初期`question_id`。ファイル名と一致する。 |
+| `status` | string | `accepted` / `reduced`。 |
+| `attempted_question_ids` | array of string | 当該スロットで試行した全ID。先頭はスロットID、末尾は最終試行ID。 |
+| `accepted_question_id` | string \| null | `accepted`では`attempted_question_ids`末尾のID、`reduced`では`null`。 |
+| `teacher_decision` | string \| null | `reduced`では`reduce`、`accepted`では`null`。 |
+
+  `accepted`では最終試行IDのいずれかの世代がT10で終端し、それより前の世代と試行IDはRG-04に従って消費済みでなければならない。`reduced`では全試行IDが`generation_max`まで消費済みでなければならない。T3は当該世代の`candidate.invalid1/2`、T8は完全なcandidate/machine/request/review監査とmachineまたはreviewの`fail`、T11はmachine/reviewがともに`pass`でset_checkが`fail`であることをもって消費済みとする。世代番号は`gen1`から欠番なく連続しなければならず、T10後の追加世代、未完了世代、T6/T7だけによる消費を認めない。
 
 ### 6.1 実例
 

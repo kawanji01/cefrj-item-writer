@@ -7,8 +7,10 @@ import argparse
 import json
 import os
 import re
+import secrets
 import sys
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,12 +33,16 @@ from set_support import (
     question_number,
     report_without_generated_at,
     schema_version,
+    set_id_from_set_dir,
+    validate_request_topics,
+    validate_terminal_outcomes,
     validate_set_dir,
 )
 
 
 CREATED_AT_PATTERN = re.compile(
-    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$"
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?P<offset>Z|(?P<offset_sign>[+-])(?P<offset_hour>[0-9]{2}):(?P<offset_minute>[0-9]{2}))$"
 )
 METADATA_KEYS = {
     "config_snapshot",
@@ -158,6 +164,40 @@ def read_stdin_metadata() -> Any:
         ) from exc
 
 
+def strict_utf8_problems(value: Any, path: str = "$") -> list[str]:
+    """JSON互換値に含まれる全string/keyのstrict UTF-8不適合を列挙する。"""
+
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            return [f"{path} がstrict UTF-8へ符号化できません（文字位置{exc.start}）"]
+        return []
+    if isinstance(value, list):
+        problems: list[str] = []
+        for index, item in enumerate(value):
+            problems.extend(strict_utf8_problems(item, f"{path}[{index}]"))
+        return problems
+    if isinstance(value, dict):
+        problems = []
+        keys = sorted(value, key=lambda item: json.dumps(item, ensure_ascii=True))
+        for index, key in enumerate(keys):
+            if isinstance(key, str):
+                try:
+                    key.encode("utf-8")
+                except UnicodeEncodeError as exc:
+                    problems.append(
+                        f"{path} のobjectキー{index + 1}がstrict UTF-8へ符号化できません"
+                        f"（文字位置{exc.start}）"
+                    )
+                key_path = f"{path}[{json.dumps(key, ensure_ascii=True)}]"
+            else:
+                key_path = f"{path}[object-key-{index + 1}]"
+            problems.extend(strict_utf8_problems(value[key], key_path))
+        return problems
+    return []
+
+
 def validate_metadata(
     metadata: Any,
     set_id: str,
@@ -166,6 +206,9 @@ def validate_metadata(
     problems: list[str] = []
     if not isinstance(metadata, dict):
         raise contract_failure("E-CONTRACT-01", ["FIN-01メタデータのトップレベルがobjectではありません"])
+    utf8_problems = strict_utf8_problems(metadata)
+    if utf8_problems:
+        raise contract_failure("E-CONTRACT-01", utf8_problems)
     missing = METADATA_KEYS - set(metadata)
     extra = set(metadata) - METADATA_KEYS
     if missing:
@@ -175,23 +218,44 @@ def validate_metadata(
     if missing:
         raise contract_failure("E-CONTRACT-01", problems)
 
-    if metadata["set_id"] != set_id:
+    metadata_set_id = metadata["set_id"]
+    if not isinstance(metadata_set_id, str):
+        problems.append("set_idがstringではありません")
+    elif metadata_set_id != set_id:
         problems.append(f"set_idが--set-dirと不一致です: 宣言{metadata['set_id']!r} 実体{set_id!r}")
     format_value = metadata["format"]
-    if format_value not in FORMAT_VALUES:
+    format_valid = isinstance(format_value, str) and format_value in FORMAT_VALUES
+    if not isinstance(format_value, str):
+        problems.append("formatがstringではありません")
+    elif not format_valid:
         problems.append(f"formatが9形式ではありません: {format_value!r}")
     level = metadata["level"]
     if not isinstance(level, dict) or set(level) != {"scale", "value"}:
         problems.append("levelはscale/valueだけを持つobjectではありません")
-    elif format_value in VOCAB_FORMATS and not (
-        level["scale"] == "cefr" and level["value"] in CEFR_VALUES
-    ):
-        problems.append("語彙形式のlevelがcefr A1〜B2ではありません")
-    elif format_value in GRAMMAR_FORMATS and not (
-        level["scale"] == "cefrj" and level["value"] in CEFRJ_VALUES
-    ):
-        problems.append("文法形式のlevelがcefrj 9段階ではありません")
-    if metadata["mode"] not in {"explicit", "proposal"}:
+    else:
+        level_scale = level["scale"]
+        level_value = level["value"]
+        if not isinstance(level_scale, str):
+            problems.append("level.scaleがstringではありません")
+        if not isinstance(level_value, str):
+            problems.append("level.valueがstringではありません")
+        if (
+            format_valid
+            and isinstance(level_scale, str)
+            and isinstance(level_value, str)
+        ):
+            if format_value in VOCAB_FORMATS and not (
+                level_scale == "cefr" and level_value in CEFR_VALUES
+            ):
+                problems.append("語彙形式のlevelがcefr A1〜B2ではありません")
+            elif format_value in GRAMMAR_FORMATS and not (
+                level_scale == "cefrj" and level_value in CEFRJ_VALUES
+            ):
+                problems.append("文法形式のlevelがcefrj 9段階ではありません")
+    mode = metadata["mode"]
+    if not isinstance(mode, str):
+        problems.append("modeがstringではありません")
+    elif mode not in {"explicit", "proposal"}:
         problems.append("modeがexplicit/proposalではありません")
     requested = metadata["requested_count"]
     if isinstance(requested, bool) or not isinstance(requested, int):
@@ -200,9 +264,42 @@ def validate_metadata(
         not isinstance(metadata["topic"], str) or not metadata["topic"]
     ):
         problems.append("topicが非空文字列またはnullではありません")
-    if not isinstance(metadata["created_at"], str) or CREATED_AT_PATTERN.fullmatch(metadata["created_at"]) is None:
+    created_at = metadata["created_at"]
+    created_at_match = (
+        CREATED_AT_PATTERN.fullmatch(created_at) if isinstance(created_at, str) else None
+    )
+    if created_at_match is None:
         problems.append("created_atが秒精度・タイムゾーン付きISO 8601ではありません")
-    if metadata["tool"] not in {"claude_code", "codex"}:
+    else:
+        offset_is_valid = True
+        if created_at_match.group("offset") != "Z":
+            offset_hour = int(created_at_match.group("offset_hour"))
+            offset_minute = int(created_at_match.group("offset_minute"))
+            offset_is_valid = (
+                offset_minute <= 59
+                and offset_hour <= 14
+                and (offset_hour < 14 or offset_minute == 0)
+            )
+            if not offset_is_valid:
+                problems.append(
+                    "created_atのUTCオフセットが許容範囲ではありません: "
+                    "分は00〜59、絶対値は14:00以下、14時は00分だけ許可します"
+                )
+        if offset_is_valid:
+            try:
+                created_datetime = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            except ValueError:
+                problems.append("created_atが実在する日時・UTCオフセットではありません")
+            else:
+                if created_datetime.strftime("%Y%m%d-%H%M%S") != set_id[:15]:
+                    problems.append(
+                        "created_atのローカル日時がset_idの日時部分と一致しません: "
+                        f"created_at={created_at!r} set_id={set_id!r}"
+                    )
+    tool = metadata["tool"]
+    if not isinstance(tool, str):
+        problems.append("toolがstringではありません")
+    elif tool not in {"claude_code", "codex"}:
         problems.append("toolがclaude_code/codexではありません")
     if not isinstance(metadata["model"], str) or not metadata["model"]:
         problems.append("modelが非空文字列ではありません")
@@ -248,7 +345,7 @@ def validate_metadata(
         problems.append("final_question_idsにq01〜q20以外が含まれます")
     elif len(set(final_ids)) != len(final_ids) or final_ids != sorted(final_ids, key=question_number):
         problems.append("final_question_idsが昇順・一意ではありません")
-    elif isinstance(requested, int) and len(final_ids) > requested:
+    elif isinstance(requested, int) and not isinstance(requested, bool) and len(final_ids) > requested:
         problems.append("final_question_ids件数がrequested_countを超えています")
 
     if problems:
@@ -281,18 +378,84 @@ def ensure_snapshot_current(metadata: dict[str, Any], resources: dict[str, Any])
     )
 
 
+def set_path_exists(path: Path) -> bool:
+    return os.path.lexists(path)
+
+
+def create_exclusive_temp(set_dir: Path) -> tuple[Path, int]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    for _attempt in range(100):
+        path = set_dir / f".set.json.tmp.{os.getpid()}.{secrets.token_hex(16)}"
+        try:
+            return path, os.open(path, flags, 0o600)
+        except FileExistsError:
+            continue
+        except OSError as exc:
+            raise CliFailure(
+                "E-ENV-05",
+                f"E-ENV-05 set.json一時ファイルを排他的に作成できません: {path} ({exc})",
+                detail={"error": str(exc), "path": str(path)},
+                remedy=REMEDIES["E-ENV-05"],
+            ) from exc
+    raise CliFailure(
+        "E-ENV-05",
+        f"E-ENV-05 set.json一時ファイル名を確保できません: {set_dir}",
+        detail={"attempts": 100, "path": str(set_dir)},
+        remedy=REMEDIES["E-ENV-05"],
+    )
+
+
+def remove_temp(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise CliFailure(
+            "E-ENV-05",
+            f"E-ENV-05 set.json一時ファイルを削除できません: {path} ({exc})",
+            detail={"error": str(exc), "path": str(path)},
+            remedy=REMEDIES["E-ENV-05"],
+        ) from exc
+
+
+def cleanup_published_temp(repo_root: Path, path: Path) -> dict[str, Any] | None:
+    """公開成功後の一時リンクを削除し、失敗時は非致命警告を返す。"""
+
+    try:
+        path.unlink()
+        return None
+    except FileNotFoundError:
+        return None
+    except OSError:
+        lexical_path = path if path.is_absolute() else repo_root / path
+        temp_path = lexical_path.relative_to(repo_root).as_posix()
+        return {
+            "detail": {"temp_path": temp_path},
+            "message": "set.jsonは完成しましたが一時リンクを削除できませんでした",
+            "remedy": (
+                "set.jsonを変更せず、権限を確認して表示された一時リンクだけを削除してください。"
+                "finalize_set.pyは再実行しないでください。"
+            ),
+            "warning_code": "W-CLEANUP-01",
+        }
+
+
 def finalize(argv: list[str] | None = None) -> dict[str, Any]:
     args = make_parser().parse_args(argv)
     repo_root = Path.cwd()
     raw_metadata = read_stdin_metadata()
     set_dir = Path(args.set_dir)
-    set_id = validate_set_dir(set_dir)
+    set_id = set_id_from_set_dir(set_dir)
     metadata = validate_metadata(raw_metadata, set_id, repo_root)
     resources = load_validated_resources(repo_root)
     ensure_snapshot_current(metadata, resources)
+    validate_set_dir(repo_root, set_dir)
 
     set_path = set_dir / "set.json"
-    if set_path.exists():
+    if set_path_exists(set_path):
         raise CliFailure(
             "E-CONTRACT-05",
             f"E-CONTRACT-05 確定済みset.jsonを上書きできません: {set_path}",
@@ -300,9 +463,24 @@ def finalize(argv: list[str] | None = None) -> dict[str, Any]:
             remedy=REMEDIES["E-CONTRACT-05"],
         )
 
-    state = load_audit_state(repo_root, set_dir, resources["meta"]["data_version"])
+    generation_max = metadata["config_snapshot"]["limits"]["generation_max"]
+    state = load_audit_state(
+        repo_root,
+        set_dir,
+        resources["meta"]["data_version"],
+        generation_max,
+        metadata["config_snapshot"]["limits"],
+        metadata["config_snapshot"]["proper_nouns"],
+    )
+    validate_request_topics(state, metadata["topic"])
     accepted = accepted_attempts(state)
     declared_ids = metadata["final_question_ids"]
+    validate_terminal_outcomes(
+        state,
+        metadata["requested_count"],
+        declared_ids,
+        generation_max,
+    )
     accepted_ids = sorted(accepted, key=question_number)
     if accepted_ids != declared_ids or not 1 <= len(accepted_ids) <= metadata["requested_count"]:
         raise contract_failure(
@@ -386,36 +564,58 @@ def finalize(argv: list[str] | None = None) -> dict[str, Any]:
     if any(question["format"] != metadata["format"] or question["level"] != metadata["level"] for question in questions):
         raise contract_failure("E-CONTRACT-01", ["setのformat/levelとquestionが一致しません"])
 
-    tmp_path = set_dir / "set.json.tmp"
     try:
-        with tmp_path.open("wb") as stream:
-            stream.write(canonical_bytes(set_document))
+        set_payload = canonical_bytes(set_document)
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise contract_failure(
+            "E-CONTRACT-01",
+            [
+                "set.jsonをstrict UTF-8のJS-01正準バイト列へ直列化できません"
+                f"（{type(exc).__name__}）"
+            ],
+            {"error_type": type(exc).__name__},
+        ) from exc
+
+    tmp_path: Path | None = None
+    try:
+        tmp_path, descriptor = create_exclusive_temp(set_dir)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(set_payload)
             stream.flush()
             os.fsync(stream.fileno())
-        if set_path.exists():
+        try:
+            os.link(tmp_path, set_path, follow_symlinks=False)
+        except FileExistsError as exc:
             raise CliFailure(
                 "E-CONTRACT-05",
-                f"E-CONTRACT-05 確定直前にset.jsonが存在しました: {set_path}",
+                f"E-CONTRACT-05 set.jsonを上書きせず確定を拒否しました: {set_path}",
                 detail={"path": str(set_path)},
                 remedy=REMEDIES["E-CONTRACT-05"],
-            )
-        os.replace(tmp_path, set_path)
+            ) from exc
     except CliFailure:
+        if tmp_path is not None:
+            remove_temp(tmp_path)
         raise
     except OSError as exc:
+        if tmp_path is not None:
+            remove_temp(tmp_path)
         raise CliFailure(
             "E-ENV-05",
             f"E-ENV-05 set.jsonを原子的に書き込めません: {set_path} ({exc})",
             detail={"error": str(exc), "path": str(set_path)},
             remedy=REMEDIES["E-ENV-05"],
         ) from exc
+    if tmp_path is not None:
+        warning = cleanup_published_temp(repo_root, tmp_path)
+        if warning is not None:
+            emit_json(warning, sys.stderr)
 
     return {
         "data_version": meta["data_version"],
         "question_count": len(questions),
         "schema_version": set_document["schema_version"],
         "set_id": set_id,
-        "set_json_path": set_path.as_posix(),
+        "set_json_path": f"output/{set_id}/set.json",
     }
 
 

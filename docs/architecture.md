@@ -111,7 +111,7 @@ cefr_j_agents/
 - **CLI-04** CLIが書き出すJSON（stdout・ファイルとも）は正準形とする(MUST): UTF-8・`ensure_ascii=False`・キーを辞書順ソート・インデント2・改行LF・末尾に改行1個。この規則はHTML決定性・正規化ゴールデン・互換テスト（`docs/cross-agent-compatibility.md` CAT-01、`docs/testing-and-acceptance.md`）のバイト一致の前提である。
 - **CLI-05** エラーJSONの形は `{"error_code": "<コード>", "message": "<日本語1行要約>", "remedy": "<日本語対処手順>", "detail": <任意のJSON値またはnull>}` としなければならない(MUST)。message・remedy の内容要件は第6節の各コード定義に従う。
 - **CLI-06** 全CLIは `--help`（日本語ヘルプ）を実装しなければならない(MUST)。未知の引数・必須引数欠落は E-INPUT-01 で停止する(MUST)。
-- **CLI-07** 入力ファイル引数が `-` の場合はstdinのバイト列を読み、実行環境の標準入力エンコーディングに依存せずUTF-8として復号する(MUST)。stdinまたはファイルのJSONがUTF-8でない、またはパース不能な場合は E-INPUT-03 で停止する(MUST)。`machine_check.py` のcandidate JSONに含まれる整数トークンは符号を除く10進4,300桁以下とし、超過はパース不能の E-INPUT-03 とする(MUST)。
+- **CLI-07** 入力ファイル引数が `-` の場合はstdinのバイト列を読み、実行環境の標準入力エンコーディングに依存せずUTF-8として復号する(MUST)。stdinまたはファイルのJSONがUTF-8でない、パース不能、またはパース後のstring値・object keyのいずれかがstrict UTF-8へ符号化不能な場合は E-INPUT-03 で停止する(MUST)。`machine_check.py` のcandidate JSONに含まれる整数トークンは符号を除く10進4,300桁以下とし、超過はパース不能の E-INPUT-03 とする(MUST)。
 - **CLI-08** 各CLIは処理開始前に、当該CLIの前提条件（下表「前提検査」）を検査しなければならない(MUST)。前提検査の共通セット【基本】= Python版（E-ENV-01）・依存パッケージ（E-ENV-02）・カレントディレクトリ（E-ENV-04）。正規化データを読むCLIはさらに【データ】= 原本xlsx存在（E-DATA-01）・原本チェックサム照合（E-DATA-02）・正規化データ存在（E-DATA-03）・スキーマ通過と内部整合（E-DATA-04）・設定ファイル（E-DATA-05）を検査する。原本欠落・チェックサム不一致・正規化データ不整合のいずれかがあれば処理を拒否しなければならない(MUST)。
 
 ### 5.1 契約一覧（8本）
@@ -155,7 +155,7 @@ cefr_j_agents/
 
 ### 5.4 machine_check.py
 
-- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分と、必須引数`--set-id <set_id>`・`--generation <gen1|gen2|gen3>`・`--expected-format <9形式のいずれか>`・`--expected-level <該当形式のcefr|cefrj値>`・`--requested-count <1..limits.jsonのset_question_max>`とする(MUST)。`set_id`書式不正はE-INPUT-05、その他の引数値域外はE-INPUT-04で停止する。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。machine_reportの`question_id`・`format`・`level`はcandidateから、`set_id`・`generation`は引数から転記する。オーケストレータはセット開始時に確定した形式・レベル・問題数を期待値引数へ毎回渡さなければならない(MUST)。
+- **CLI-16** 入力は `candidate.schema.json` 準拠のJSON 1問分と、必須引数`--set-id <set_id>`・`--generation <gen1|gen2|gen3>`・`--expected-format <9形式のいずれか>`・`--expected-level <該当形式のcefr|cefrj値>`・`--requested-count <1..limits.jsonのset_question_max>`とする(MUST)。`set_id`書式不正はE-INPUT-05、その他の引数値域外はE-INPUT-04で停止する。スキーマ不通過は E-CONTRACT-01 で停止する(MUST)（この停止を受けた生成側の再指示規則は `docs/subagent-review-spec.md`）。machine_reportの`question_id`・`format`・`level`はcandidateから、`set_id`・`generation`は引数から転記する。オーケストレータはセット開始時に確定した形式・レベル・問題数Nを期待値引数へ毎回渡さなければならない(MUST)。機械検査はNから試行ID上限`min(2N, 20)`を導出し、それを超える`question_id`を`V-COND-01`とする。補充・代替のための新しいCLI引数を追加してはならない(MUST NOT)。
 - **CLI-17** stdout は `machine_report.schema.json` 準拠のJSONとする(MUST)。検査段・違反判定・免除規則・レポート内容の正は `docs/cefrj-validation-spec.md` の機械検査仕様である。verdict が `fail` でも終了コードは 0 とする(MUST)（CLI-02）。
 - **CLI-18** 本CLIは監査ファイルを書き込んではならない(MUST NOT)。監査保存（`review/<question_id>.<gen>.machine.json`）は呼び出し側（オーケストレータ）の責務とする（配置の正は `docs/subagent-review-spec.md`）。
 
@@ -171,13 +171,15 @@ cefr_j_agents/
 - **CLI-21** 実行手順は次の順としなければならない(MUST)。
   1. stdinのセットメタデータJSONを読み、様式検査（パース不能=E-INPUT-03、内容不正=E-CONTRACT-01。様式の正は `docs/json-output-spec.md`）。
   2. stdinメタデータの `config_snapshot` と現在の検証済み `data/config/limits.json`・`proper_nouns.json` をJSON値として完全一致比較し、不一致なら E-DATA-08 で停止する。
-  3. `output/<set_id>/set.json` が既に存在すれば E-CONTRACT-05 で停止（上書き禁止）。
+  3. `output/<set_id>/set.json` のディレクトリエントリ（通常ファイル・ディレクトリ・シンボリックリンク）が既に存在すれば E-CONTRACT-05 で停止（上書き禁止）。
   4. stdinメタデータの `final_question_ids`（`docs/json-output-spec.md` FIN-01）に列挙された各問題について、監査ファイルから合格世代（machine_report と review_result がともに `pass` かつ対応する増分 set_check レポートが `pass` の最大世代）を収集（命名・対応関係の不整合は E-CONTRACT-03）。
-  5. 合格問題数が1以上 `requested_count` 以下であり、`final_question_ids` の集合と監査上の合格世代を持つ問題の集合が一致することを検査（不一致・0件は E-CONTRACT-04。減数（`docs/interaction-flow.md` DLG-81/DLG-82・`docs/subagent-review-spec.md` S6）により `requested_count` 未満で確定することは正常である）。
+  5. 合格問題数が1以上 `requested_count` 以下であり、`final_question_ids` の集合と監査上の合格世代を持つ問題の集合が一致することを検査する。さらに、`review/slot.<slot_question_id>.outcome.json`が要求数N件揃い、初期スロット`q01`〜`qNN`、全試行IDの一意な所属、`gen1`からの連続性、不採用試行の`generation_max`までの正当な消費、T10採用またはS6教師承認済み減数という終端状態を立証することを検査する。配置・命名・内容形式・対応関係の不整合はE-CONTRACT-03、終端条件・確定集合の不成立または0件はE-CONTRACT-04とする。減数（`docs/interaction-flow.md` DLG-81/DLG-82・`docs/subagent-review-spec.md` S6）により `requested_count` 未満で確定することは、教師承認済み終端監査があれば正常である。
   6. セット横断検査を set_check.py の全体最終モード（CLI-19-2）と同一の実装（共有関数）で内部再実行し、`config_snapshot.limits.distractor_reuse_max` を適用する（不合格は E-CONTRACT-04）。
   7. `set.json` を組み立て、`set.schema.json` で検証（不通過は E-CONTRACT-01。これは内部バグを意味する）。
-  8. 同一ディレクトリ内の一時ファイル `set.json.tmp` に書き込み、`os.replace` で `set.json` へ原子的に改名する(MUST)。
+  8. 同一ディレクトリ内に予測不能な名前の一時ファイルを排他的かつシンボリックリンク非追跡で作成し、flush・fsyncする。次にハードリンク作成を使って`set.json`を上書き不能かつ原子的に公開し、一時リンクを削除する(MUST)。既存の通常ファイル・ディレクトリ・シンボリックリンク、または並行finalizeの先着公開により`set.json`を作成できない場合はE-CONTRACT-05、公開前のその他のI/O失敗はE-ENV-05で停止する。`os.link`による公開成功を確定境界とし、その後の一時リンク削除だけが失敗した場合は`set.json`を変更せず、終了コード0・CLI-22成功stdoutとstderrのW-CLEANUP-01警告で完了する。
 - **CLI-22** stdout: `{"set_id": "<set_id>", "set_json_path": "output/<set_id>/set.json", "question_count": <int>, "data_version": "<書式は第7節>", "schema_version": "<set.schema.jsonのsemver>"}`。
+- **CLI-22a** 公開済み`set.json`の一時リンク削除だけが失敗した場合、CLI-22のstdoutを変更せず、stderrへ次の正準JSON文書1個を出力して終了コード0とする。`temp_path`は残留した一時リンクのリポジトリ相対パスとする。オーケストレータは正本完成として扱い、S99へ遷移してはならない(MUST NOT)。
+  `{"detail":{"temp_path":"output/<set_id>/.set.json.tmp.<予測不能部分>"},"message":"set.jsonは完成しましたが一時リンクを削除できませんでした","remedy":"set.jsonを変更せず、権限を確認して表示された一時リンクだけを削除してください。finalize_set.pyは再実行しないでください。","warning_code":"W-CLEANUP-01"}`
 
 ### 5.7 build_html.py
 
@@ -247,9 +249,9 @@ cefr_j_agents/
 |---|---|---|---|
 | E-CONTRACT-01 | スキーマ検証不通過（汎用）: 9スキーマのいずれかに対する検証で不当と判定された | スキーマ識別子・スキーマsemver・違反箇所のJSONポインタと理由を全件（50件超は先頭50件と総数）明記 | 発生文脈で分岐する。①候補問題（candidate）: 同一世代内1回の再指示（規則の正は `docs/subagent-review-spec.md`）。②レビュー結果（review_result）: インフラ障害扱い・最大2回再実行→セット中止（同上）。③set.json・machine_report: 内部バグとして報告する。④設定・正規化データ: E-DATA-04/05の対処に従う |
 | E-CONTRACT-02 | schema_version メジャー不一致: 入力文書の `schema_version` のメジャー番号が、実行中ツールの対応メジャーと不一致 | 文書側semver・ツール対応メジャー・対象ファイルパスを明記 | `git pull` で最新化し `python scripts/doctor.py` を実行する（OPS-04）。旧版の文書を使い続ける場合は当該セットを新版で再作成する |
-| E-CONTRACT-03 | 監査ファイル配置不整合: `review/` 配下のファイルが命名規則（`<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json` および補助監査ファイル。目録の正は `docs/json-output-spec.md` ID-07）に反する、candidate に対応する machine / review が欠落している、または合格世代が存在しない（set_check.py の増分・全体最終モード別の条件は CLI-19） | 不整合のファイル名（または欠落した期待ファイル名）を全件列挙 | 当該セットは再開せず（再開はv2課題、`docs/requirements.md` 参照）、新しい set_id でセットを最初から作成する |
-| E-CONTRACT-04 | セット確定条件未達: 合格問題数が0、`final_question_ids` の宣言集合と監査上の合格世代集合の不一致、合格問題数が `requested_count` 超、または finalize 内部のセット横断検査（CLI-21 手順5）が不合格 | 宣言集合・監査上の合格集合・要求数、またはセット横断検査の違反内容を明記 | `docs/interaction-flow.md` の不成立時教師照会フローに戻る（確定を強行しない） |
-| E-CONTRACT-05 | 確定済みセットへの上書き要求: `output/<set_id>/set.json` が既に存在する状態での finalize 実行 | 既存ファイルのパスを明記 | 既存セットを保持したまま、新しい set_id で新規セットとして実行する（set.json の上書き・削除をしない） |
+| E-CONTRACT-03 | 監査ファイル配置不整合: `review/` 配下のファイルが命名規則（`<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json` および補助監査ファイル。目録の正は `docs/json-output-spec.md` ID-07）に反する、candidate に対応する machine / review が欠落している、スロット終端監査の6フィールド契約・ファイル名・対応関係に反する、設定上限を超える世代監査がある、または合格世代が存在しない（set_check.py の増分・全体最終モード別の条件は CLI-19） | 不整合のファイル名（または欠落した期待ファイル名）を全件列挙 | 当該セットは再開せず（再開はv2課題、`docs/requirements.md` 参照）、新しい set_id でセットを最初から作成する |
+| E-CONTRACT-04 | セット確定条件未達: 合格問題数が0、`final_question_ids` の宣言集合と監査上の合格世代集合の不一致、合格問題数が `requested_count` 超、要求スロットの終端監査不足、試行世代の未完了・欠番・不正な終端、教師承認のない減数、または finalize 内部のセット横断検査（CLI-21 手順5）が不合格 | 宣言集合・監査上の合格集合・要求数、スロット終端状態、またはセット横断検査の違反内容を明記 | `docs/interaction-flow.md` の不成立時教師照会フローに戻る（確定を強行しない） |
+| E-CONTRACT-05 | セット正本への上書き要求: `output/<set_id>/set.json` のディレクトリエントリが既に存在する状態でのfinalize、または並行finalizeの先着処理が`set.json`を公開済み | 既存または競合したパスを明記 | 既存セットを保持したまま、新しい set_id で新規セットとして実行する（set.json の上書き・削除をしない） |
 
 ### 6.4 E-INPUT（入力不正）
 
@@ -257,7 +259,7 @@ cefr_j_agents/
 |---|---|---|---|
 | E-INPUT-01 | CLI引数の不正: 未知のオプション、必須引数の欠落、併用禁止オプションの同時指定 | 問題の引数名と正しい書式を明記 | `--help` の日本語ヘルプを参照して引数を修正する |
 | E-INPUT-02 | 指定ファイル・ディレクトリの不存在または読み取り不可 | 対象パスを明記 | パスの綴りと存在、読み取り権限を確認する |
-| E-INPUT-03 | 入力JSONがUTF-8でない、構文のパース不能、またはcandidate JSONの整数が符号を除く10進4,300桁を超える（stdin・ファイルとも） | 対象（stdinまたはパス）とパーサの位置情報（行・列）を明記。整数上限超過は上限と実測桁数も明記 | 入力をUTF-8の標準JSONに修正し、candidateの整数は4,300桁以下にする。エージェントが生成した入力の場合は生成をやり直す |
+| E-INPUT-03 | 入力JSONがUTF-8でない、構文のパース不能、パース後のstring値・object keyがstrict UTF-8へ符号化不能、またはcandidate JSONの整数が符号を除く10進4,300桁を超える（stdin・ファイルとも） | 対象（stdinまたはパス）と、取得できる位置情報（行・列またはJSON内位置）を明記。整数上限超過は上限と実測桁数も明記 | 入力をstrict UTF-8で表現可能な標準JSONに修正し、candidateの整数は4,300桁以下にする。エージェントが生成した入力の場合は生成をやり直す |
 | E-INPUT-04 | 値域外の値: format 9値以外、level_scale と対応しないレベル値、pos 15種以外、問題数が1〜`limits.json` 上限（既定20）の範囲外、gen が `gen1|gen2|gen3` 以外、`question_id` が `q01`〜`q20` の書式外、ID書式（`lex:<headword>:<pos>` / `gp:<ID>`）不一致、validate.py の未知スキーマ識別子、`--limit` 範囲外 | 対象フィールド名・受け取った値・許容値（列挙または範囲）を明記 | 許容値の一覧（`docs/json-output-spec.md` のID規則・`schemas/` の列挙定義）に従って値を修正する |
 | E-INPUT-05 | `set_id` の書式不正: `^\d{8}-\d{6}-[a-z0-9]{4}$` に不一致（`--set-dir` のディレクトリ名を含む） | 受け取った値と正規表現を明記 | set_id の書式（例 `20260816-142530-k7x2`）に一致するディレクトリを指定する |
 

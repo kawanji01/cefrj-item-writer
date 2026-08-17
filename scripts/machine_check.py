@@ -38,6 +38,7 @@ JSON_NUMBER_PATTERN = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[
 NONSTANDARD_JSON_CONSTANTS = ("-Infinity", "Infinity", "NaN")
 GENERATION_VALUES = ("gen1", "gen2", "gen3")
 JSON_INTEGER_MAX_DIGITS = 4300
+QUESTION_ID_MAX = 20
 FORMAT_VALUES = (
     "vocab_mcq_en2ja",
     "vocab_mcq_ja2en",
@@ -1229,13 +1230,15 @@ def machine_check(
             )
         )
     question_ordinal = int(candidate["question_id"][1:])
-    if question_ordinal > requested_count:
+    trial_question_id_max = min(2 * requested_count, QUESTION_ID_MAX)
+    if question_ordinal > trial_question_id_max:
         violations.append(
             violation(
                 "V-COND-01",
                 "question_id",
-                f"依頼問題数={requested_count}、candidate問題ID={candidate['question_id']}です。",
-                f"question_idをq01〜q{requested_count:02d}の範囲に修正してください。",
+                f"依頼問題数={requested_count}、試行ID上限=q{trial_question_id_max:02d}、"
+                f"candidate問題ID={candidate['question_id']}です。",
+                f"question_idをq01〜q{trial_question_id_max:02d}の範囲に修正してください。",
             )
         )
 

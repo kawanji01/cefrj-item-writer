@@ -100,7 +100,14 @@ def run(argv: list[str] | None = None) -> int:
     repo_root = Path.cwd()
     resources = load_validated_resources(repo_root)
     set_dir = Path(args.set_dir)
-    state = load_audit_state(repo_root, set_dir, resources["meta"]["data_version"])
+    state = load_audit_state(
+        repo_root,
+        set_dir,
+        resources["meta"]["data_version"],
+        resources["limits"]["generation_max"],
+        resources["limits"],
+        resources["proper_nouns"]["words"],
+    )
     selected = select_attempts_for_check(state, args.target)
     report_version = schema_version(repo_root, "machine_report.schema.json")
     report = build_set_report(

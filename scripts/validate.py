@@ -450,10 +450,48 @@ def reject_json_constant(token: str) -> None:
     raise ValueError(f"標準JSONではない数値定数です: {token}")
 
 
+def validate_strict_utf8_strings(document: Any, source_name: str) -> None:
+    """全JSON string値・object keyがstrict UTF-8へ符号化可能か検証する。"""
+
+    stack: list[tuple[str, str, Any]] = [("value", "$", document)]
+    while stack:
+        value_kind, location, value = stack.pop()
+        if isinstance(value, str):
+            try:
+                value.encode("utf-8", errors="strict")
+            except UnicodeEncodeError as exc:
+                code_point = f"U+{ord(value[exc.start]):04X}"
+                raise CliFailure(
+                    "E-INPUT-03",
+                    "E-INPUT-03 入力JSONにstrict UTF-8で表現できない文字列が"
+                    f"あります: {one_line(source_name)}（{location}、{code_point}）。",
+                    detail={
+                        "character_offset": exc.start,
+                        "code_point": code_point,
+                        "error": exc.reason,
+                        "json_location": location,
+                        "source": source_name,
+                        "value_kind": value_kind,
+                    },
+                    remedy=REMEDIES["E-INPUT-03"],
+                ) from exc
+            continue
+        if isinstance(value, list):
+            for index in range(len(value) - 1, -1, -1):
+                stack.append(("value", f"{location}[{index}]", value[index]))
+            continue
+        if isinstance(value, dict):
+            items = list(value.items())
+            for key, child in reversed(items):
+                key_label = json.dumps(key, ensure_ascii=True)
+                stack.append(("value", f"{location}[{key_label}]", child))
+                stack.append(("object_key", f"{location}[key={key_label}]", key))
+
+
 def parse_json_payload(payload: bytes | str, source_name: str) -> Any:
     text = payload if isinstance(payload, str) else decode_utf8(payload, source_name)
     try:
-        return parse_json_text(text)
+        document = parse_json_text(text)
     except json.JSONDecodeError as exc:
         raise CliFailure(
             "E-INPUT-03",
@@ -480,6 +518,8 @@ def parse_json_payload(payload: bytes | str, source_name: str) -> Any:
             },
             remedy=REMEDIES["E-INPUT-03"],
         ) from exc
+    validate_strict_utf8_strings(document, source_name)
+    return document
 
 
 def read_json_document(path_text: str) -> Any:

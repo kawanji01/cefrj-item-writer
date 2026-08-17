@@ -933,9 +933,9 @@
 
 ---
 
-## 8. M5実装に伴う承認決定（M5D-01〜M5D-03）
+## 8. M5実装に伴う承認決定（M5D-01〜M5D-17）
 
-2026-08-17、PLN-05に基づくM5実装前確認で発見した次の3件について、作問者が推奨案を承認した。
+2026-08-17〜18、PLN-05に基づくM5実装前確認およびM5 R1/R3/R5/R6/R7レビューで発見した次の17件について、作問者が推奨案を承認した。
 
 ### M5D-01 監査ファイル上書き衝突の具体的エラーコード
 - **決定**: `output/<set_id>/review/` の同名監査ファイルが既に存在する場合のエラーとして `E-DATA-07` を新設する。既存監査は変更・削除せず、衝突パスを報告して新しい`set_id`での最初からの実行を案内する。
@@ -951,3 +951,74 @@
 - **決定**: 現行のcandidate・machine_report・review_request・review_result各スキーマと監査ファイル命名が表現できる世代は`gen1`〜`gen3`であるため、`limits.json.generation_max`の運用上の許容範囲を1〜3とする。スキーマ上は1以上の整数という既存定義を維持し、3を超える値はdoctorのD10と正規化データを読むCLIの共通事前検査で`E-DATA-05`として拒否する。将来4世代以上へ拡張する場合は、先に関連スキーマ・監査命名・遷移仕様を一括改訂する。
 - **理由**: RG-01が設定値の読取りを要求する一方、現行スキーマのgeneration列挙は3値固定であり、4以上を受理すると監査出力を正規の契約で表現できないため。即席の`gen4`等を生成せず、現行契約内でfail-closedにする。
 - **影響先**: `docs/subagent-review-spec.md` RG-01、`docs/architecture.md` E-DATA-05、`agent/author-core.md`、`scripts/doctor.py`、正規化データ利用CLIの共通事前検査。
+
+### M5D-04 要求スロットの終端状態を立証する監査契約
+- **決定**: 初期`question_id`（`q01`〜要求数Nに対応）を論理スロットIDとし、各スロットがT10で採用された直後またはS6で教師が減数を選択した直後に、`review/slot.<slot_question_id>.outcome.json`を排他的に作成する。内容は`set_id`・`slot_question_id`・`status`（`accepted`/`reduced`）・`attempted_question_ids`・`accepted_question_id`・`teacher_decision`の6フィールドだけとする。`finalize_set.py`はN件の終端監査、全試行IDの一意な所属、世代の連続性と`generation_max`までの正当な消費、採用IDと`final_question_ids`の一致、減数時の`teacher_decision: "reduce"`を検証する。配置・命名・内容形式・対応関係の不整合は`E-CONTRACT-03`、構造上正しい監査が終端条件または確定集合を満たさない場合は`E-CONTRACT-04`とする。この契約は9スキーマの対象外とし、決定的CLIが手動検証する。
+- **理由**: 従来のFIN-01と試行単位監査だけでは、未着手・処理途中の要求スロットを正規の減数と区別できず、教師の減数選択も確定境界で立証できなかった。スロット単位の追記不能監査はAU-04/AU-05と整合し、中断耐性を保ったまま最小の追加でfail-closedな確定条件を構成できるため。
+- **影響先**: `docs/subagent-review-spec.md` T10・S6・RG-08・AU-03〜AU-05、`docs/json-output-spec.md` ID-07・FIN-02・AUD-11、`docs/architecture.md` CLI-21・E-CONTRACT-03/04、`docs/testing-and-acceptance.md` RPL-01・A-11、`agent/author-core.md`、`scripts/set_support.py`、`scripts/finalize_set.py`。
+
+### M5D-05 上書き不能な原子的set.json公開方式
+- **決定**: CLI-21の固定名`set.json.tmp`と`os.replace`を廃止する。同一setディレクトリに予測不能な名前の一時ファイルを`O_CREAT | O_EXCL | O_NOFOLLOW`（利用可能な環境）で排他的に作成し、flush・fsync後に`os.link(..., follow_symlinks=False)`で`set.json`を上書き不能かつ原子的に公開して一時リンクを削除する。既存の通常ファイル・ディレクトリ・シンボリックリンク、または並行finalizeの先着公開により`set.json`を作成できない場合は`E-CONTRACT-05`、一時ファイル作成・書込み・公開のその他のI/O失敗は`E-ENV-05`とする。
+- **理由**: 固定一時名は既存シンボリックリンクを追跡し得て、存在確認後の`os.replace`は並行処理が既存正本を置換する競合を残す。排他的な一時ファイルとハードリンク公開なら、ロックファイル・待機規則・OS固有の`renameat2`を追加せず、最初の1処理だけを成功させて正本の上書きを原子的に禁止できるため。
+- **影響先**: `docs/architecture.md` CLI-21、`docs/testing-and-acceptance.md` CI-SET-04、`scripts/finalize_set.py`、M5 R1回帰確認。
+
+### M5D-06 文法解説に明記する教員版項目名
+- **決定**: 文法5形式の解説に明記する教員版項目名は、正規化文法エントリの`kyoinban.name_ja`（原本「文法項目」列）とする。CHK-10も同じ値との一致を検査する。`kyoinban.name_simple_ja`（「文法項目(平易版)」列）は教師向け表示名としての用途を維持するが、解説の必須名称には使用しない。
+- **理由**: GEN-22と生成側の既存指示が原本「文法項目」列を要求する一方、CHK-10だけが教師向け平易版を要求しており、両値が異なる適格項目で同じ候補の合否を一意に決められなかった。生成仕様を維持し、解説生成とレビューの参照値を最小変更で統一するため。
+- **影響先**: `docs/question-generation-spec.md` GEN-22、`docs/subagent-review-spec.md` CHK-10、`agent/author-core.md`、`agent/reviewer-core.md`、M5レビュー回帰確認。
+
+### M5D-07 generation_maxに一致する進捗・不成立表示
+- **決定**: S80の開始宣言、FMT-80b事象9/10、DLG-81、DLG-82に表示する世代上限・最終世代・監査範囲は、S00で検証・固定した`generation_max`を使ってパラメータ化する。DLG-81の不合格要点は実行済みの`gen1`から`gen{generation_max}`だけを1行ずつ列挙し、監査参照範囲も同じ始点・終点とする。設定値1・2・3のいずれでも未実行世代を表示してはならない。
+- **理由**: 実行制御は設定値1〜3に従う一方、固定の「3世代」「gen1〜gen3」は上限1・2の正常セッションで未実行世代と存在しない監査ファイルを案内していた。セッションスナップショットを表示にも一貫して使い、実績と教師向けログを一致させるため。
+- **影響先**: `docs/interaction-flow.md` IF-41・IF-42・DLG-81・DLG-82、`agent/author-core.md`、M5レビュー回帰確認。
+
+### M5D-08 機械検査誤検出疑い件数の集計と表示
+- **決定**: S80開始時に誤検出疑い件数を0で初期化し、スキーマ検証と正準監査保存に成功した各`review_result`について、保存時に`machine_check_disputes[]`の要素数を1回だけ加算する。invalid出力と同じ監査ファイルの再読込みは加算せず、異なる問題・世代の各要素は独立した報告として数える。S80開始後のFMT-90では「■ 監査ファイル」直下、IF-52では監査保存文の直後に、0件の場合も含めて「機械検査誤検出疑い {n}件（詳細は監査ファイル参照）」を必ず表示する。S80開始前の中止では表示しない。
+- **理由**: FP-04は完了・中止時の件数通知を要求する一方、集計単位・0件時の扱い・固定様式内の位置が未定義だった。監査保存成功を唯一の加算点にすると再実行や再読込みによる二重計上を防げ、0件を常時表示すると集計済みのゼロと表示漏れを区別できるため。
+- **影響先**: `docs/subagent-review-spec.md` FP-04、`docs/interaction-flow.md` FMT-90・IF-52、`agent/author-core.md`、M5レビュー回帰確認。
+
+### M5D-09 T3後の次世代入力と不成立監査案内
+- **決定**: candidate受理検証が同一世代で2回不通過となるT3では、正規のcandidate・machine・request・review監査を作らない。T3後の次世代生成にはセッション固定条件と2回目のcandidate受理検証診断だけを渡し、生のinvalid出力、1回目の診断、存在しない正規監査を入力に要求しない。不成立照会では世代ごとの実際の終端経路を示し、T3は`candidate.invalid1/2.txt`、T8は正規のcandidate・machine・request・review監査、T11は正規監査と増分set_checkを案内する。
+- **理由**: 従来の再生成指示と照会文は全世代に正規監査があると仮定しており、T3で正当に消費された世代の次世代生成・教師向け案内を実行不能にしていた。2回目の診断だけなら直近の修正情報を保持しながら、生出力の再注入と存在しないファイルへの依存を避けられるため。
+- **影響先**: `docs/subagent-review-spec.md` RG-09/RG-10/RG-16・疑似コード・AU-07、`docs/interaction-flow.md` DLG-81、`agent/author-core.md` PRM-12・世代判定・不成立照会、M5 R5回帰確認。
+
+### M5D-10 提案モード補充枯渇時の未処理初期スロット継続
+- **決定**: 提案モードで補充プールが枯渇または試行上限へ達したとき、教師が続行を選んだ場合は現在の論理スロットだけを`reduced`として終端し、未処理の初期スロットを補充なしで順に処理する。未処理初期スロットが残る間は確定済み0問でも続行を提示し、全初期スロットに`accepted`または`reduced`の終端監査が揃い、かつ1問以上が確定した場合だけ最終確定へ進む。未着手スロットを一括で減数扱いしてはならない。
+- **理由**: 従来のDLG-82は続行を直ちに確定処理へ結び付けていたため、後続の初期スロットを未処理のまま終了し、要求スロットごとの終端監査契約と衝突していた。現在スロットだけを終端して既存キューを継続すれば、教師の減数判断と全スロットの帰結を一対一で立証できるため。
+- **影響先**: `docs/interaction-flow.md` DLG-82、`docs/subagent-review-spec.md` S6・RG-06/RG-08/RG-16・疑似コード、`agent/author-core.md` 不成立照会・最終確定条件、M5 R5回帰確認。
+
+### M5D-11 invalid監査の機械検証可能な内容形式
+- **決定**: AUD-09のUTF-8テキストを、(1) 非空の生出力・区切り行1個・非空の診断からなる標準形、(2) 固定`kind`と非空の`reason`・`position`からなるUTF-8符号化失敗形、(3) 固定`kind`と`exit_code`・`stderr`からなるプロセス失敗形の3形に固定する。監査読込みは全invalidファイルをstrict UTF-8で内容検証し、不適合ファイルをファイル名付き`E-CONTRACT-03`で拒否して世代消費の証拠に数えない。
+- **理由**: ファイル名と連番だけでは、空ファイルや非UTF-8ファイルでもT3/T7の帰結を偽って確定処理へ進めた。例外経路を含む有限のテキスト契約を固定し、監査収集時に検証すれば、既存の追記不能監査を保ったまま帰結の証拠を機械判定できるため。
+- **影響先**: `docs/json-output-spec.md` AUD-09、`docs/subagent-review-spec.md` AU-03/AU-07、`agent/author-core.md` candidate・review出力受理、`scripts/set_support.py`、M5 R5回帰確認。
+- **置換**: M5D-12により、予約行を使う3形式から衝突不能な正準JSON封筒へ置換した。
+
+### M5D-12 invalid監査の衝突不能な正準JSON封筒
+- **決定**: AUD-09をJS-01正準JSON文書へ変更し、`audit_format: "aud09-v2"`と3値の`kind`で判別する。`validation_failure`は非空の生出力バイト列をRFC 4648標準Base64の`raw_output_base64`へバイト完全保存し、非空のUTF-8診断を`diagnostic`へ記録する。`utf8_encode_failure`は非空の`reason`・`position`、`process_failure`は整数またはnullの`exit_code`と、空も許すstderrバイト列の`stderr_base64`を記録する。各kindは固定キーだけを持ち、Base64は再符号化一致で標準形を検証する。旧M5D-11の予約行形式は受理しない。
+- **理由**: LLM生出力は任意テキストであり、予約されたkind先頭行や区切り行と衝突し得る。JSONの判別フィールドとBase64なら、生出力を欠落・改変せず任意バイトを保存しながら、既存の厳格JSON・正準化処理で有限契約を機械検証できるため。
+- **影響先**: `docs/json-output-spec.md` AUD-09、`docs/subagent-review-spec.md` AU-03/AU-07、`agent/author-core.md` candidate・review出力受理、`scripts/set_support.py`、M5 R6回帰確認。
+
+### M5D-13 DLG-82の実終端経路・実在監査表示
+- **決定**: M5D-09の世代別終端経路表示を明示モードDLG-81だけでなく提案モードDLG-82にも適用する。DLG-82は不成立対象ごと、実行世代ごとにT3/T8/T11、診断または違反要約、実在監査パスを表示し、T3で存在しない正規監査や`review_result.violations[]`を案内してはならない。M5D-10の動的な続行選択肢は維持する。
+- **理由**: 提案モードでもT3だけ、またはT3/T8/T11混在で補充枯渇・2N到達へ進み得る。両モードを同じ監査要約契約へ揃えることで、存在しないレビュー指摘の捏造と監査パス誤案内を防ぐため。
+- **影響先**: `docs/interaction-flow.md` DLG-82、`agent/author-core.md` 不成立照会、M5 R6回帰確認。
+
+### M5D-14 set.json公開後の一時リンクcleanup失敗
+- **決定**: `os.link`による`set.json`公開成功を確定境界とする。公開後の一時リンク削除だけが失敗した場合、`set.json`を削除・上書きせず、finalizeは終了コード0とCLI-22の成功stdoutを返し、stderrへ`warning_code: "W-CLEANUP-01"`・残留一時リンクパス・「正本を変更せず表示された一時リンクだけを削除する」対処を持つ正準警告JSONを1個出力する。オーケストレータは正本完成として扱い、S99へ遷移せず、警告と対処を教師へ提示する。公開前のcleanupを含むI/O失敗は従来どおりE-ENV-05とする。
+- **理由**: ハードリンク公開後は有効な正本が既に完成しており、cleanup失敗を未完成エラーへ読み替えると実体と対話状態が矛盾する。成功境界を公開時点へ固定し、機械可読警告で残留物だけを対処対象にすれば、正本不変性とCLI状態を一致させられるため。
+- **影響先**: `docs/architecture.md` CLI-21/CLI-22、`docs/interaction-flow.md` 完成後警告、`agent/author-core.md` finalize結果処理、`scripts/finalize_set.py`、CI-SET-04、M5 R6回帰確認。
+
+### M5D-15 補充・代替question_idの機械検査許容範囲
+- **決定**: `machine_check.py`は既存の必須引数`--requested-count N`から試行ID上限`min(2N, 20)`を決定的に導出し、candidateの`question_id`がこの上限を超える場合だけ`V-COND-01`とする。新しいCLI引数は追加しない。初期スロットが`q01`〜`qNN`であること、補充・代替を含む全試行が2N以下であること、最終採用IDが連続することの立証はオーケストレータと`finalize_set.py`の責務を維持する。
+- **理由**: 補充・代替には`q{N+1}`以降を割り当てる既存契約がある一方、1問機械検査がN超過を即時不合格にしており、正規の補充・代替経路を実行不能にしていた。既存引数から上限を導出すればCLI契約を増やさず、2N試行上限とq20書式上限を同時に保てるため。
+- **影響先**: `docs/question-generation-spec.md` GEN-02、`docs/cefrj-validation-spec.md` MC-01/S4/MC-28、`docs/architecture.md` CLI-16、`docs/testing-and-acceptance.md` CI-MCH-16/RPL-03/RPL-04/RPL-10、`agent/author-core.md`、`scripts/machine_check.py`、M5 R7回帰確認。
+
+### M5D-16 review_resultの厳格UTF-8正準化失敗
+- **決定**: `validate.py`はJSON解析後、全string値とobject keyを再帰的にstrict UTF-8へ符号化できることを検証し、孤立サロゲート等を`E-INPUT-03`で拒否する。review_resultがスキーマ検証後のJS-01正準化またはstrict UTF-8符号化に失敗した場合もレビュー系インフラ障害とし、同一requestを最大2回再実行して3回目の失敗でT7/S99へ進む。invalid監査は、生出力bytes取得済みなら`validation_failure`へ全文と診断、ホスト文字列しかなく符号化不能なら`utf8_encode_failure`、出力なしなら`process_failure`を保存する。
+- **理由**: JSON Schema上は有効なエスケープ済み孤立サロゲートがスキーマ検証を通過し、その後の正準UTF-8保存で未処理例外となり得た。保存可能性を検証ゲートへ含め、後段失敗も既存の有限なレビューインフラ再試行へ送ることで、監査を失わずセットをfail-closedにできるため。
+- **影響先**: `docs/architecture.md` CLI-07/E-INPUT-03、`docs/cross-agent-compatibility.md` COR-08、`docs/subagent-review-spec.md` RC-12/INF-01〜04/AU-03、`docs/json-output-spec.md` JS-02/AUD-09、`docs/testing-and-acceptance.md` RPL-05、`agent/author-core.md`、`scripts/validate.py`、M5 R7回帰確認。
+
+### M5D-17 created_atのISO 8601オフセット部分集合
+- **決定**: FIN-01/SET-01の`created_at`で許容する数値UTCオフセットは、分が00〜59、絶対値が14:00以下、時が14なら分が00のものに限定する。末尾`Z`は従来どおり許容する。`+09:99`や`+14:01`のような値は、標準ライブラリが正規化して日時へ変換できても`E-CONTRACT-01`で拒否する。
+- **理由**: 字句パターンだけでは非正規のオフセットを通し、標準ライブラリの正規化によりset_idとのローカル年月日時照合まで通過し得た。プロジェクトが受理するISO 8601部分集合を数値境界まで固定し、環境依存の寛容な解析へ契約判断を委ねないため。
+- **影響先**: `docs/json-output-spec.md` SET-01/FIN-01、`docs/testing-and-acceptance.md` finalizeメタデータ回帰、`scripts/finalize_set.py`、M5 R7回帰確認。

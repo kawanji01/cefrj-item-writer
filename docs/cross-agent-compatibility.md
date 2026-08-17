@@ -24,7 +24,7 @@
 
 - **COR-06** レビュアー起動は「1問1独立レビュー・再生成のたび新実行・文脈持ち越しなし」でなければならない(MUST)。両アダプタとも、起動ごとに新しい独立コンテキストを作る機構（Claude Code=サブエージェントのTask起動、Codex=`codex exec` 非対話サブプロセス）を使う。
 - **COR-07** レビュアーへ渡す起動プロンプトは配線文のみで構成しなければならない(MUST)。含める要素は次の3つに限る: ①`agent/reviewer-core.md` を読みそれに完全に従う指示、②入力封筒（review_request 準拠JSON。ファイル名・保存位置の正は `docs/subagent-review-spec.md`）のファイルパス、③最終出力を review_result JSON本文のみとする指示。検証規則・チェック項目を起動プロンプトに書いてはならない(MUST NOT)。
-- **COR-08** レビュアーの最終出力の取り込み手順は両ツール共通で次のとおりとする(MUST)。①最終メッセージのテキストを取得 → ②テキスト全体をJSONとしてパースし、失敗した場合に限り最初のコードフェンス（```json または ``` で囲まれた区間）の内側をパースする → ③`python scripts/validate.py --schema review_result --file -` で検証 → ④通過したら監査ファイル `review/<question_id>.<gen>.review.json` として保存（配置の正は `docs/subagent-review-spec.md`）。②③のいずれかに失敗した場合はインフラ障害（問題の不合格に数えない。最大2回再実行→セット中止）として扱う。インフラ障害の判定・再実行・中止規則の正は `docs/subagent-review-spec.md`。
+- **COR-08** レビュアーの最終出力の取り込み手順は両ツール共通で次のとおりとする(MUST)。①最終メッセージの生出力をbytesまたはホスト文字列として取得 → ②テキスト全体をJSONとしてパースし、失敗した場合に限り最初のコードフェンス（```json または ``` で囲まれた区間）の内側をパースする → ③`python scripts/validate.py --schema review_result --file -` でスキーマと全string値・object keyのstrict UTF-8表現可能性を検証 → ④同じJSONをJS-01正準形へstrict UTF-8で直列化 → ⑤同じ正準バイト列だけを監査ファイル `review/<question_id>.<gen>.review.json` として保存（配置の正は `docs/subagent-review-spec.md`）。②〜④のいずれかに失敗した場合はインフラ障害（問題の不合格に数えない。同一requestで最大2回再実行→3回目失敗でセット中止）として扱う。invalid監査には、bytes取得済みなら`validation_failure`へ生出力全文と失敗段階の診断、文字列だけ取得してstrict UTF-8化不能なら`utf8_encode_failure`、出力なしなら`process_failure`を保存する。インフラ障害の判定・再実行・中止規則の正は `docs/subagent-review-spec.md`。
 - **COR-09** レビュアー実行のタイムアウト値と超過時の扱いの正は `docs/subagent-review-spec.md` とする。両アダプタはその値を各起動機構（Taskの待機、サブプロセスの待機）に適用しなければならない(MUST)。
 
 ## 3. Claude Code 配線

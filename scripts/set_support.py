@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
 import json
 import re
@@ -28,8 +30,22 @@ CANDIDATE_INVALID_PATTERN = re.compile(
 REVIEW_INVALID_PATTERN = re.compile(
     r"^(q(?:0[1-9]|1[0-9]|20))\.(gen[1-3])\.review\.invalid([123])\.txt$"
 )
+INVALID_AUDIT_FORMAT = "aud09-v2"
+INVALID_AUDIT_KEYS = {
+    "validation_failure": {
+        "audit_format",
+        "diagnostic",
+        "kind",
+        "raw_output_base64",
+    },
+    "utf8_encode_failure": {"audit_format", "kind", "position", "reason"},
+    "process_failure": {"audit_format", "exit_code", "kind", "stderr_base64"},
+}
 SET_CHECK_PATTERN = re.compile(
     r"^set_check\.(q(?:0[1-9]|1[0-9]|20))\.(gen[1-3])\.json$"
+)
+SLOT_OUTCOME_PATTERN = re.compile(
+    r"^slot\.(q(?:0[1-9]|1[0-9]|20))\.outcome\.json$"
 )
 FINAL_SET_CHECK_NAME = "set_check.final.json"
 CODEX_WORK_PATTERN = re.compile(
@@ -48,6 +64,12 @@ FORMAT_VALUES = (
 )
 VOCAB_FORMATS = set(FORMAT_VALUES[:4])
 GRAMMAR_FORMATS = set(FORMAT_VALUES[4:])
+BRIEF_EXPLANATION_FORMATS = {
+    "grammar_mcq",
+    "grammar_cloze",
+    "grammar_reorder",
+    "grammar_rewrite",
+}
 CEFR_VALUES = ("A1", "A2", "B1", "B2")
 CEFRJ_VALUES = (
     "A1.1",
@@ -60,6 +82,12 @@ CEFRJ_VALUES = (
     "B2.1",
     "B2.2",
 )
+CEFR_CEILING = {
+    "A1": "A1.3",
+    "A2": "A2.2",
+    "B1": "B1.2",
+    "B2": "B2.2",
+}
 READABLE_RESOURCES = (
     "data/normalized/lexicon.json",
     "data/normalized/grammar.json",
@@ -84,6 +112,37 @@ SCHEMA_LABEL_BY_KIND = {
     "review": "review_result",
     "set_check": "machine_report",
 }
+SLOT_OUTCOME_KEYS = {
+    "accepted_question_id",
+    "attempted_question_ids",
+    "set_id",
+    "slot_question_id",
+    "status",
+    "teacher_decision",
+}
+SENTENCE_FIELDS_BY_FORMAT = {
+    "vocab_mcq_en2ja": {"body.stem"},
+    "vocab_mcq_ja2en": {"body.sentence_with_blank#filled:answer"},
+    "vocab_flashcard_en2ja": {"body.example.en"},
+    "vocab_flashcard_ja2en": {"body.example.en"},
+    "grammar_mcq": {
+        "body.context_sentence",
+        "body.sentence_with_blank#filled:answer",
+    },
+    "grammar_cloze": {
+        "body.context_sentence",
+        "body.sentence_with_blank#filled:answer",
+    },
+    "grammar_reorder": {"body.answer_sentence"},
+    "grammar_rewrite": {
+        "body.source_sentence",
+        "body.target_sentence_with_blank#filled:answer",
+    },
+    "grammar_example_selfcheck": {"body.context_sentence", "body.example.en"},
+}
+GRAMMAR_MCQ_CHOICE_SENTENCE_PATTERN = re.compile(
+    r"^body\.sentence_with_blank#filled:choices\[[0-3]\]$"
+)
 
 REMEDIES = {
     "E-CONTRACT-01": (
@@ -124,18 +183,32 @@ def schema_version(repo_root: Path, schema_file_name: str) -> str:
 
 
 def contract_failure(code: str, problems: list[str], detail: Any = None) -> CliFailure:
-    rendered = "; ".join(problems[:50])
-    if len(problems) > 50:
+    reported_problems = problems if code == "E-CONTRACT-03" else problems[:50]
+    rendered = "; ".join(reported_problems)
+    if code != "E-CONTRACT-03" and len(problems) > 50:
         rendered = f"先頭50件: {rendered}; 総数{len(problems)}件"
     labels = {
         "E-CONTRACT-01": "スキーマまたは内部契約に適合しません",
         "E-CONTRACT-03": "監査ファイルの配置・命名・対応関係が不整合です",
         "E-CONTRACT-04": "セット確定条件を満たしていません",
     }
+    if detail is None:
+        failure_detail: Any = {
+            "problems": list(reported_problems),
+            "total": len(problems),
+        }
+    elif code == "E-CONTRACT-03" and isinstance(detail, dict):
+        failure_detail = {
+            **detail,
+            "problems": list(problems),
+            "total": len(problems),
+        }
+    else:
+        failure_detail = detail
     return CliFailure(
         code,
         f"{code} {labels[code]}: {rendered}",
-        detail=detail if detail is not None else {"problems": problems[:50], "total": len(problems)},
+        detail=failure_detail,
         remedy=REMEDIES[code],
     )
 
@@ -178,6 +251,69 @@ def read_json_file(path: Path, label: str, input_error: bool = True) -> Any:
         ) from exc
 
 
+def strict_utf8_json_problems(value: Any, location: str = "$") -> list[str]:
+    """JSON値内の全string値・object keyのstrict UTF-8不適合を列挙する。"""
+
+    problems: list[str] = []
+    stack: list[tuple[str, str, Any]] = [("value", location, value)]
+    while stack:
+        value_kind, current_location, current = stack.pop()
+        if isinstance(current, str):
+            try:
+                current.encode("utf-8", errors="strict")
+            except UnicodeEncodeError as exc:
+                problems.append(
+                    f"{current_location} の{value_kind}がstrict UTF-8へ符号化できません"
+                    f"（文字位置{exc.start}、U+{ord(current[exc.start]):04X}）"
+                )
+            continue
+        if isinstance(current, list):
+            for index in range(len(current) - 1, -1, -1):
+                stack.append(("string値", f"{current_location}[{index}]", current[index]))
+            continue
+        if isinstance(current, dict):
+            for key, child in reversed(list(current.items())):
+                key_label = json.dumps(key, ensure_ascii=True)
+                stack.append(("string値", f"{current_location}[{key_label}]", child))
+                stack.append(("object key", f"{current_location}[key={key_label}]", key))
+    return problems
+
+
+def read_canonical_audit_json(path: Path) -> tuple[Any | None, list[str]]:
+    """JSON監査をstrict UTF-8・標準JSON・JS-01正準バイトで読み込む。"""
+
+    prefix = f"review/{path.name}"
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        return None, [f"{prefix} を読み取れません（{type(exc).__name__}）"]
+    try:
+        text = payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        return None, [f"{prefix} がstrict UTF-8ではありません（{exc.start}バイト目）"]
+    try:
+        document = strict_json_loads(text)
+    except json.JSONDecodeError as exc:
+        return None, [
+            f"{prefix} が標準JSONではありません（{exc.lineno}行{exc.colno}列）"
+        ]
+    except ValueError as exc:
+        return None, [f"{prefix} が標準JSONではありません（{type(exc).__name__}）"]
+
+    utf8_problems = strict_utf8_json_problems(document)
+    if utf8_problems:
+        return None, [f"{prefix} {problem}" for problem in utf8_problems]
+    try:
+        expected_payload = canonical_bytes(document)
+    except (TypeError, ValueError, UnicodeError) as exc:
+        return None, [
+            f"{prefix} をJS-01正準JSONへ直列化できません（{type(exc).__name__}）"
+        ]
+    if payload != expected_payload:
+        return None, [f"{prefix} がJS-01正準JSONのバイト列と一致しません"]
+    return document, []
+
+
 def validate_schema_document(
     repo_root: Path,
     path: Path,
@@ -216,8 +352,14 @@ def question_number(value: str) -> int:
     return int(value[1:])
 
 
-def validate_set_dir(set_dir: Path) -> str:
-    set_id = set_dir.name
+def set_id_from_set_dir(set_dir: Path) -> str:
+    """set directory名からI/Oなしでset_id候補を取得する。"""
+
+    return set_dir.name
+
+
+def validate_set_dir(repo_root: Path, set_dir: Path) -> str:
+    set_id = set_id_from_set_dir(set_dir)
     if SET_ID_PATTERN.fullmatch(set_id) is None:
         raise CliFailure(
             "E-INPUT-05",
@@ -227,10 +369,26 @@ def validate_set_dir(set_dir: Path) -> str:
                 "set_idを書式例20260816-142530-k7x2に一致させたディレクトリを指定してください。"
             ),
         )
+    expected_output = repo_root / "output"
+    lexical_set_dir = set_dir if set_dir.is_absolute() else repo_root / set_dir
+    placement_problems: list[str] = []
+    if lexical_set_dir.parent != expected_output:
+        placement_problems.append(
+            f"--set-dirはリポジトリのoutput/直下ではありません: {set_dir}"
+        )
+    if expected_output.is_symlink():
+        placement_problems.append("output/ がシンボリックリンクです")
+    if lexical_set_dir.is_symlink():
+        placement_problems.append(f"--set-dirがシンボリックリンクです: {set_dir}")
+    if placement_problems:
+        raise contract_failure("E-CONTRACT-03", placement_problems)
+
     try:
-        if not set_dir.is_dir():
+        if not lexical_set_dir.is_dir():
             raise OSError("通常ディレクトリではありません")
-        next(set_dir.iterdir(), None)
+        next(lexical_set_dir.iterdir(), None)
+        output_real = expected_output.resolve(strict=True)
+        set_dir_real = lexical_set_dir.resolve(strict=True)
     except OSError as exc:
         raise CliFailure(
             "E-INPUT-02",
@@ -238,6 +396,11 @@ def validate_set_dir(set_dir: Path) -> str:
             detail={"error": str(exc), "path": str(set_dir)},
             remedy=REMEDIES["E-INPUT-02"],
         ) from exc
+    if set_dir_real.parent != output_real:
+        raise contract_failure(
+            "E-CONTRACT-03",
+            [f"--set-dirの実体がリポジトリのoutput/直下ではありません: {set_dir}"],
+        )
     return set_id
 
 
@@ -254,6 +417,9 @@ def classify_audit_name(name: str) -> tuple[str, Any]:
     set_check = SET_CHECK_PATTERN.fullmatch(name)
     if set_check:
         return "set_check", set_check.groups()
+    slot_outcome = SLOT_OUTCOME_PATTERN.fullmatch(name)
+    if slot_outcome:
+        return "slot_outcome", slot_outcome.groups()
     if name == FINAL_SET_CHECK_NAME:
         return "final_set_check", None
     if CODEX_WORK_PATTERN.fullmatch(name):
@@ -261,9 +427,165 @@ def classify_audit_name(name: str) -> tuple[str, Any]:
     return "invalid", None
 
 
-def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[str, Any]:
-    set_id = validate_set_dir(set_dir)
+def validate_invalid_audit(path: Path) -> list[str]:
+    """AUD-09の3形式を検証し、不適合理由をファイル名付きで返す。"""
+
+    prefix = f"review/{path.name}"
+    try:
+        payload = path.read_bytes()
+    except OSError as exc:
+        return [f"{prefix} を読み取れません: {exc}"]
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return [f"{prefix} がstrict UTF-8ではありません（{exc.start}バイト目）"]
+
+    try:
+        document = strict_json_loads(text)
+    except (json.JSONDecodeError, ValueError) as exc:
+        return [f"{prefix} がAUD-09の標準JSONではありません: {exc}"]
+    if not isinstance(document, dict):
+        return [f"{prefix} のAUD-09トップレベルがobjectではありません"]
+    try:
+        if payload != canonical_bytes(document):
+            return [f"{prefix} がAUD-09のJS-01正準JSONではありません"]
+    except (TypeError, ValueError, UnicodeError) as exc:
+        return [f"{prefix} をAUD-09のJS-01正準JSONへ直列化できません: {exc}"]
+
+    if document.get("audit_format") != INVALID_AUDIT_FORMAT:
+        return [f"{prefix} のaudit_formatが{INVALID_AUDIT_FORMAT!r}ではありません"]
+    kind = document.get("kind")
+    if not isinstance(kind, str) or kind not in INVALID_AUDIT_KEYS:
+        return [f"{prefix} のkindがAUD-09の3種ではありません"]
+    expected_keys = INVALID_AUDIT_KEYS[kind]
+    actual_keys = set(document)
+    if actual_keys != expected_keys:
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        parts = []
+        if missing:
+            parts.append(f"必須フィールド欠落: {', '.join(missing)}")
+        if extra:
+            parts.append(f"未定義フィールド: {', '.join(extra)}")
+        return [f"{prefix} の{kind}固定キーが不正です（{'; '.join(parts)}）"]
+
+    def validate_base64(field: str, allow_empty: bool) -> list[str]:
+        value = document[field]
+        if not isinstance(value, str):
+            return [f"{prefix} の{field}がstringではありません"]
+        try:
+            decoded = base64.b64decode(value, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            return [f"{prefix} の{field}がRFC 4648標準Base64ではありません: {exc}"]
+        if base64.b64encode(decoded).decode("ascii") != value:
+            return [f"{prefix} の{field}が正準Base64ではありません"]
+        if not allow_empty and not decoded:
+            return [f"{prefix} の{field}が空バイト列です"]
+        return []
+
+    if kind == "validation_failure":
+        base64_problems = validate_base64("raw_output_base64", allow_empty=False)
+        if base64_problems:
+            return base64_problems
+        diagnostic = document["diagnostic"]
+        if not isinstance(diagnostic, str) or not diagnostic.strip():
+            return [f"{prefix} のdiagnosticが非空UTF-8文字列ではありません"]
+    elif kind == "utf8_encode_failure":
+        for field in ("reason", "position"):
+            value = document[field]
+            if not isinstance(value, str) or not value.strip():
+                return [f"{prefix} の{field}が非空UTF-8文字列ではありません"]
+    else:
+        exit_code = document["exit_code"]
+        if exit_code is not None and (
+            isinstance(exit_code, bool) or not isinstance(exit_code, int)
+        ):
+            return [f"{prefix} のexit_codeがintegerまたはnullではありません"]
+        base64_problems = validate_base64("stderr_base64", allow_empty=True)
+        if base64_problems:
+            return base64_problems
+    return []
+
+
+def validate_slot_outcome(
+    path: Path,
+    document: Any,
+    set_id: str,
+    file_slot_id: str,
+) -> list[str]:
+    prefix = f"review/{path.name}"
+    if not isinstance(document, dict):
+        return [f"{prefix} のトップレベルがobjectではありません"]
+    problems: list[str] = []
+    actual_keys = set(document)
+    if actual_keys != SLOT_OUTCOME_KEYS:
+        missing = sorted(SLOT_OUTCOME_KEYS - actual_keys)
+        extra = sorted(actual_keys - SLOT_OUTCOME_KEYS)
+        if missing:
+            problems.append(f"{prefix} の必須フィールド欠落: {', '.join(missing)}")
+        if extra:
+            problems.append(f"{prefix} の未定義フィールド: {', '.join(extra)}")
+        return problems
+
+    if document["set_id"] != set_id:
+        problems.append(f"{prefix} のset_idがディレクトリ名と一致しません")
+    slot_id = document["slot_question_id"]
+    if not isinstance(slot_id, str) or QUESTION_ID_PATTERN.fullmatch(slot_id) is None:
+        problems.append(f"{prefix} のslot_question_idがq01〜q20ではありません")
+    elif slot_id != file_slot_id:
+        problems.append(f"{prefix} のslot_question_idがファイル名と一致しません")
+
+    status = document["status"]
+    if not isinstance(status, str) or status not in {"accepted", "reduced"}:
+        problems.append(f"{prefix} のstatusがaccepted/reducedではありません")
+    attempted = document["attempted_question_ids"]
+    attempted_valid = (
+        isinstance(attempted, list)
+        and bool(attempted)
+        and all(
+            isinstance(qid, str) and QUESTION_ID_PATTERN.fullmatch(qid) is not None
+            for qid in attempted
+        )
+    )
+    if not attempted_valid:
+        problems.append(f"{prefix} のattempted_question_idsがq01〜q20の非空配列ではありません")
+    elif len(set(attempted)) != len(attempted):
+        problems.append(f"{prefix} のattempted_question_idsが一意ではありません")
+    elif attempted != sorted(attempted, key=question_number):
+        problems.append(f"{prefix} のattempted_question_idsが割当順の昇順ではありません")
+    elif isinstance(slot_id, str) and attempted[0] != slot_id:
+        problems.append(f"{prefix} の先頭試行IDがslot_question_idではありません")
+
+    accepted_id = document["accepted_question_id"]
+    teacher_decision = document["teacher_decision"]
+    if status == "accepted":
+        if not attempted_valid or accepted_id != attempted[-1]:
+            problems.append(f"{prefix} のaccepted_question_idが最終試行IDではありません")
+        if teacher_decision is not None:
+            problems.append(f"{prefix} のacceptedでteacher_decisionがnullではありません")
+    elif status == "reduced":
+        if accepted_id is not None:
+            problems.append(f"{prefix} のreducedでaccepted_question_idがnullではありません")
+        if teacher_decision != "reduce":
+            problems.append(f"{prefix} のreducedでteacher_decisionがreduceではありません")
+    return problems
+
+
+def load_audit_state(
+    repo_root: Path,
+    set_dir: Path,
+    data_version: str,
+    generation_max: int,
+    limits: dict[str, Any],
+    proper_nouns: list[str],
+) -> dict[str, Any]:
+    set_id = validate_set_dir(repo_root, set_dir)
     review_dir = set_dir / "review"
+    if review_dir.is_symlink():
+        raise contract_failure(
+            "E-CONTRACT-03",
+            ["review/ ディレクトリがシンボリックリンクです"],
+        )
     if not review_dir.is_dir():
         raise contract_failure(
             "E-CONTRACT-03",
@@ -275,6 +597,7 @@ def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[
     candidate_invalids: dict[tuple[str, str], set[int]] = defaultdict(set)
     review_invalids: dict[tuple[str, str], set[int]] = defaultdict(set)
     set_checks: dict[tuple[str, str], dict[str, Any]] = {}
+    slot_outcomes: dict[str, dict[str, Any]] = {}
     final_report = None
     placement_problems: list[str] = []
 
@@ -296,19 +619,50 @@ def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[
         if category == "invalid":
             placement_problems.append(f"review/{path.name} は監査命名規則に一致しません")
             continue
+        generation = None
+        if category in {"regular", "candidate_invalid", "review_invalid", "set_check"}:
+            generation = groups[1]
+        if generation is not None and generation_number(generation) > generation_max:
+            placement_problems.append(
+                f"review/{path.name} の世代がgeneration_max={generation_max}を超えています"
+            )
+            continue
         if category == "candidate_invalid":
             qid, generation, index = groups
+            invalid_problems = validate_invalid_audit(path)
+            if invalid_problems:
+                placement_problems.extend(invalid_problems)
+                continue
             candidate_invalids[(qid, generation)].add(int(index))
             continue
         if category == "review_invalid":
             qid, generation, index = groups
+            invalid_problems = validate_invalid_audit(path)
+            if invalid_problems:
+                placement_problems.extend(invalid_problems)
+                continue
             review_invalids[(qid, generation)].add(int(index))
             continue
         if category == "adapter_work":
             continue
 
+        if category == "slot_outcome":
+            file_slot_id = groups[0]
+            document, audit_problems = read_canonical_audit_json(path)
+            if audit_problems:
+                placement_problems.extend(audit_problems)
+                continue
+            placement_problems.extend(
+                validate_slot_outcome(path, document, set_id, file_slot_id)
+            )
+            slot_outcomes[file_slot_id] = document
+            continue
+
         kind = "set_check" if category in {"set_check", "final_set_check"} else groups[2]
-        document = read_json_file(path, f"監査ファイル review/{path.name}")
+        document, audit_problems = read_canonical_audit_json(path)
+        if audit_problems:
+            placement_problems.extend(audit_problems)
+            continue
         validate_schema_document(repo_root, path, document, kind)
         if category == "regular":
             qid, generation, regular_kind = groups
@@ -376,6 +730,14 @@ def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[
             relation_problems.append(
                 f"review/set_check.{qid}.{generation}.json のdata_versionが現在値と一致しません"
             )
+        attempt = complete_attempts.get(key)
+        if attempt is not None and (
+            attempt["machine"].get("verdict") != "pass"
+            or attempt["review"].get("verdict") != "pass"
+        ):
+            relation_problems.append(
+                f"review/set_check.{qid}.{generation}.json にmachine/review両方passの世代が対応していません"
+            )
 
     if final_report is not None:
         if (
@@ -413,6 +775,42 @@ def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[
             or request.get("machine_report") != machine
         ):
             relation_problems.append(f"{qid}.{generation}.request.json の封筒内容が監査正本と不一致です")
+        format_value = candidate["format"]
+        level_value = candidate["level"]["value"]
+        cefr_band = level_value if format_value in VOCAB_FORMATS else level_value.split(".", 1)[0]
+        expected_level_limits = {
+            "vocabulary_level_max": cefr_band,
+            "grammar_intro_level_max": (
+                CEFR_CEILING[cefr_band]
+                if format_value in VOCAB_FORMATS
+                else level_value
+            ),
+        }
+        if format_value in VOCAB_FORMATS:
+            explanation_char_limit = None
+        elif format_value in BRIEF_EXPLANATION_FORMATS:
+            explanation_char_limit = limits["explanation_char_limits"]["brief"]
+        else:
+            explanation_char_limit = limits["explanation_char_limits"]["detailed"]
+        expected_constraints = {
+            "limits": {
+                "sentence_word_limit": limits["sentence_word_limits"][cefr_band],
+                "explanation_char_limit": explanation_char_limit,
+            },
+            "proper_nouns": proper_nouns,
+        }
+        if request.get("level_limits") != expected_level_limits:
+            relation_problems.append(
+                f"{qid}.{generation}.request.json のlevel_limitsがformat/levelからの導出値と不一致です"
+            )
+        constraints = request.get("constraints_snapshot", {})
+        if (
+            constraints.get("limits") != expected_constraints["limits"]
+            or constraints.get("proper_nouns") != expected_constraints["proper_nouns"]
+        ):
+            relation_problems.append(
+                f"{qid}.{generation}.request.json のconstraints_snapshotが設定スナップショットと不一致です"
+            )
         if tuple(request.get("readable_resources", [])) != READABLE_RESOURCES:
             relation_problems.append(f"{qid}.{generation}.request.json の読み取り許可一覧がRC-10と不一致です")
         if (machine.get("verdict") == "pass") != (len(machine.get("violations", [])) == 0):
@@ -428,7 +826,182 @@ def load_audit_state(repo_root: Path, set_dir: Path, data_version: str) -> dict[
         "review_invalids": dict(review_invalids),
         "set_checks": set_checks,
         "set_id": set_id,
+        "slot_outcomes": slot_outcomes,
     }
+
+
+def validate_request_topics(
+    state: dict[str, Any],
+    expected_topic: str | None,
+) -> None:
+    problems = []
+    for (qid, generation), attempt in sorted(
+        state["attempts"].items(),
+        key=lambda item: (question_number(item[0][0]), generation_number(item[0][1])),
+    ):
+        actual_topic = attempt["request"]["constraints_snapshot"]["topic"]
+        if actual_topic != expected_topic:
+            problems.append(
+                f"{qid}.{generation}.request.json のtopicがFIN-01メタデータと不一致です"
+            )
+    if problems:
+        raise contract_failure("E-CONTRACT-03", problems)
+
+
+def generation_terminal_status(
+    state: dict[str, Any],
+    key: tuple[str, str],
+) -> str:
+    if 2 in state["candidate_invalids"].get(key, set()):
+        return "consumed"
+    attempt = state["attempts"].get(key)
+    if attempt is None:
+        return "incomplete"
+    if (
+        attempt["machine"].get("verdict") == "fail"
+        or attempt["review"].get("verdict") == "fail"
+    ):
+        return "consumed"
+    set_report = state["set_checks"].get(key)
+    if set_report is None:
+        return "incomplete"
+    return "accepted" if set_report.get("verdict") == "pass" else "consumed"
+
+
+def validate_terminal_outcomes(
+    state: dict[str, Any],
+    requested_count: int,
+    declared_ids: list[str],
+    generation_max: int,
+) -> None:
+    expected_slots = {f"q{number:02d}" for number in range(1, requested_count + 1)}
+    actual_slots = set(state["slot_outcomes"])
+    unexpected_slots = sorted(actual_slots - expected_slots, key=question_number)
+    if unexpected_slots:
+        raise contract_failure(
+            "E-CONTRACT-03",
+            [f"要求スロット外の終端監査があります: {unexpected_slots}"],
+        )
+
+    missing_slots = sorted(expected_slots - actual_slots, key=question_number)
+    if missing_slots:
+        raise contract_failure(
+            "E-CONTRACT-04",
+            [f"要求スロットの終端監査が欠落しています: {missing_slots}"],
+            {"actual_slots": sorted(actual_slots), "expected_slots": sorted(expected_slots)},
+        )
+
+    listed_owner: dict[str, str] = {}
+    relation_problems: list[str] = []
+    for slot_id in sorted(actual_slots, key=question_number):
+        outcome = state["slot_outcomes"][slot_id]
+        for qid in outcome["attempted_question_ids"]:
+            previous = listed_owner.get(qid)
+            if previous is not None:
+                relation_problems.append(
+                    f"{qid} が複数スロットに属します: {previous}, {slot_id}"
+                )
+            else:
+                listed_owner[qid] = slot_id
+
+    audit_keys = (
+        set(state["attempts"])
+        | set(state["candidate_invalids"])
+        | set(state["review_invalids"])
+        | set(state["set_checks"])
+    )
+    audited_ids = {qid for qid, _generation in audit_keys}
+    listed_ids = set(listed_owner)
+    if audited_ids != listed_ids:
+        unrecorded = sorted(audited_ids - listed_ids, key=question_number)
+        unaudited = sorted(listed_ids - audited_ids, key=question_number)
+        if unrecorded:
+            relation_problems.append(f"終端監査に属さない試行IDがあります: {unrecorded}")
+        if unaudited:
+            relation_problems.append(f"世代監査が存在しない試行IDがあります: {unaudited}")
+    if audited_ids:
+        maximum_id = max(question_number(qid) for qid in audited_ids)
+        expected_ids = {f"q{number:02d}" for number in range(1, maximum_id + 1)}
+        if audited_ids != expected_ids:
+            relation_problems.append(
+                f"試行question_idがq01から連続していません: {sorted(audited_ids, key=question_number)}"
+            )
+    if relation_problems:
+        raise contract_failure("E-CONTRACT-03", relation_problems)
+
+    attempted_limit = 2 * requested_count
+    if len(listed_ids) > attempted_limit:
+        raise contract_failure(
+            "E-CONTRACT-04",
+            [
+                "終端監査の一意な試行question_id数が"
+                f"2 * requested_count={attempted_limit}を超えています: {len(listed_ids)}"
+            ],
+            {
+                "attempted_question_ids": sorted(listed_ids, key=question_number),
+                "attempted_question_limit": attempted_limit,
+                "requested_count": requested_count,
+            },
+        )
+
+    terminal_problems: list[str] = []
+    accepted_by_outcome: list[str] = []
+    for slot_id in sorted(actual_slots, key=question_number):
+        outcome = state["slot_outcomes"][slot_id]
+        accepted_id = outcome["accepted_question_id"]
+        if accepted_id is not None:
+            accepted_by_outcome.append(accepted_id)
+        for qid in outcome["attempted_question_ids"]:
+            generations = sorted(
+                {generation_number(generation) for audit_qid, generation in audit_keys if audit_qid == qid}
+            )
+            if not generations:
+                terminal_problems.append(f"{qid} に世代監査がありません")
+                continue
+            expected_generations = list(range(1, generations[-1] + 1))
+            if generations != expected_generations:
+                terminal_problems.append(f"{qid} の世代がgen1から連続していません: {generations}")
+                continue
+            statuses = [
+                generation_terminal_status(state, (qid, f"gen{number}"))
+                for number in generations
+            ]
+            if qid == accepted_id:
+                if statuses[-1] != "accepted" or any(
+                    status != "consumed" for status in statuses[:-1]
+                ):
+                    terminal_problems.append(
+                        f"{qid} が消費済み世代の後のT10採用で終端していません: {statuses}"
+                    )
+            elif generations[-1] != generation_max or any(
+                status != "consumed" for status in statuses
+            ):
+                terminal_problems.append(
+                    f"{qid} がgeneration_max={generation_max}まで正当に消費されていません: "
+                    f"世代={generations} 状態={statuses}"
+                )
+
+    accepted_by_outcome.sort(key=question_number)
+    accepted_by_audit = sorted(accepted_attempts(state), key=question_number)
+    if accepted_by_outcome != declared_ids or accepted_by_audit != declared_ids:
+        terminal_problems.extend(
+            [
+                f"終端監査の採用集合={accepted_by_outcome}",
+                f"監査上の合格集合={accepted_by_audit}",
+                f"宣言集合={declared_ids}",
+            ]
+        )
+    if terminal_problems:
+        raise contract_failure(
+            "E-CONTRACT-04",
+            terminal_problems,
+            {
+                "accepted_by_audit": accepted_by_audit,
+                "accepted_by_outcome": accepted_by_outcome,
+                "declared_question_ids": declared_ids,
+                "generation_max": generation_max,
+            },
+        )
 
 
 def accepted_attempts(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -486,6 +1059,17 @@ def normalize_sentence(value: str) -> str:
     return " ".join(unicodedata.normalize("NFC", value).lower().split())
 
 
+def is_sentence_text_field(format_value: str, field: Any) -> bool:
+    if not isinstance(field, str):
+        return False
+    if field in SENTENCE_FIELDS_BY_FORMAT.get(format_value, set()):
+        return True
+    return (
+        format_value == "grammar_mcq"
+        and GRAMMAR_MCQ_CHOICE_SENTENCE_PATTERN.fullmatch(field) is not None
+    )
+
+
 def set_violation(code: str, location: str, evidence: str, suggestion: str) -> dict[str, Any]:
     return {
         "actual_level": None,
@@ -516,6 +1100,8 @@ def build_set_report(
         machine = item["machine"]
         target_to_questions[candidate["target"]["ref"]].add(qid)
         for text_record in machine.get("stats", {}).get("texts", []):
+            if not is_sentence_text_field(candidate["format"], text_record.get("field")):
+                continue
             text = text_record.get("text")
             if isinstance(text, str):
                 normalized = normalize_sentence(text)

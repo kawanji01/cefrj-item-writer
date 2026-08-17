@@ -7,7 +7,7 @@
 - `agent/reviewer-core.md` を追加し、1問1独立レビュー、候補・機械レポート・検証仕様・正規化データだけを読む境界、CHK-01〜19、`level_source`、機械検査誤検出疑いの構造化報告、review_result自己検証を定義した。
 - `agent/author-core.md` をM5へ拡張し、review_request組み立て、毎世代の独立レビュー、直前世代の構造化指摘だけを渡す再生成、提案モード補充、明示モード教師照会、レビュー系インフラ障害、増分・最終set_check、finalizeまでを配線した。M6未実装のHTML生成とS90完了報告は行わない境界を維持した。
 - `scripts/set_support.py` と `scripts/set_check.py` を追加し、監査命名・対応関係、machine/review両方の合格世代、対象重複 `V-SET-01`、例文使い回し `V-SET-02`、誤答再利用 `V-SET-03` を決定的に検査するようにした。
-- `scripts/finalize_set.py` を追加し、FIN-01入力、合格集合、保存済み最終レポートと内部再検査、出典、原本チェックサム、設定スナップショット、provenance、整序問題の`answer_tokens`を検証し、`set.json.tmp`から`os.replace`で正本を原子的に確定するようにした。
+- `scripts/finalize_set.py` を追加し、FIN-01入力、合格集合、保存済み最終レポートと内部再検査、出典、原本チェックサム、設定スナップショット、provenance、整序問題の`answer_tokens`を検証し、排他的な予測不能一時ファイルから上書き不能なハードリンク公開で正本を原子的に確定するようにした。
 - 承認済みM5D-01〜03に基づき、監査上書き衝突を`E-DATA-07`、セッション設定ドリフトを`E-DATA-08`とし、`generation_max`は現行世代列挙で表現できる1〜3だけを運用上許可した。3超はdoctor D10と正規化データ利用CLIの共通事前検査で`E-DATA-05`となる。
 - 設計文書と`DECISIONS.md`は承認内容だけを反映し、`schemas/`は変更していない。
 
@@ -47,6 +47,97 @@
 - `generation_max=4`の隔離コピーではdoctor D10と`lookup.py`共通事前検査がともに`E-DATA-05`となり、`/generation_max`、受取値、許容1〜3を報告した。
 - `set_check.py` / `finalize_set.py`の日本語help、必須引数欠落`E-INPUT-01`、不正set_id `E-INPUT-05`、finalizeの不正stdin優先`E-INPUT-03`を確認した。
 - `.venv/bin/python -m py_compile scripts/doctor.py scripts/lookup.py scripts/set_support.py scripts/set_check.py scripts/finalize_set.py`、`git diff --check`、`doctor.py` 12 pass / 0 failを確認した。
+
+### M5 R1〜R2対応（2026-08-17）
+
+- R1-01/R1-02: FIN-01列挙値の不正型を`E-CONTRACT-01`へ統一し、setディレクトリを実リポジトリの`output/`直下へ限定してset/review/監査のシンボリックリンクを拒否した。
+- 承認済みM5D-04: `slot.<slot_question_id>.outcome.json`の手動検証契約を追加し、要求Nスロット、全試行ID、世代の連続性、`generation_max`までの消費、T10採用、S6教師承認済み減数を`finalize_set.py`の確定境界で検証するようにした。監査形式・対応関係は`E-CONTRACT-03`、終端条件未達は`E-CONTRACT-04`とした。
+- 承認済みM5D-05: 固定`set.json.tmp`＋`os.replace`を、排他的・シンボリックリンク非追跡の一時ファイルと上書き不能なハードリンク公開へ変更した。並行finalizeは1件だけが成功し、後続は`E-CONTRACT-05`となる。
+- R2-01/R2-03/R2-04: reviewer-coreのCHK-07へ3誤答それぞれの同一パラダイム性検査を追加し、review_resultの必須トップレベルを9フィールドへ訂正、直接読取りをRC-10の8リソースへ限定した。
+- R2-02: 検証済み`generation_max`を`set_check.py`と`finalize_set.py`から監査収集へ渡し、上限超過世代を`E-CONTRACT-03`で拒否した。
+- `reviews/m5-r1-resolutions.md`と`reviews/m5-r2-resolutions.md`に全指摘の対応内容を記録した。`schemas/`は変更していない。
+
+### M5 R2対応後のDoD再検証（2026-08-17、5/5 pass）
+
+- DoD 1（RPL-01〜10）
+  - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 3問gen1確定、review fail→gen2採用、candidate.invalid1/2→gen2採用、machine fail＋review pass非採用、V-SET-02、監査参照を合成監査と実CLIで検証 ... PY`、および `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... author-coreの2N補充・教師照会・review再試行と不正review_resultを検証 ... PY`。
+  - 結果: RPL-01〜10は10/10 pass。3問の`set.json`はsetスキーマ適合、gen2採用3経路は終端監査と一致、machine failは覆らず、例文重複は`V-SET-02`、provenance参照は9/9解決した。提案補充は2N、n=3の最悪境界は18試行、明示不成立は教師照会、レビュー不正は同一requestで2回再実行後中止となる固定契約を確認した。
+- DoD 2（独立性）
+  - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... reviewer-coreとreview_requestの読取り境界を照合 ... PY`。
+  - 結果: 入力封筒とRC-10の8リソースだけを読み、生成側会話・他問・過去世代・書込み・ネットワークを禁止する構成だった。
+- DoD 3（機械fail優越）
+  - コマンド: DoD 1のmachine fail＋review pass→gen2合格合成監査。
+  - 結果: gen1は採用集合に入らず、machine/review/set_checkが全passのgen2だけがprovenanceへ採用された。
+- DoD 4（CI-SET-01〜06）
+  - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... build_set_reportの3横断違反、3問finalize、監査目録、set必須ブロックを検証 ... PY`、および `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 固定一時名シンボリックリンク下で並行finalizeを2プロセス実行 ... PY`。
+  - 結果: CI-SET-01〜06は6/6 pass。`V-SET-01/02/03`を個別検出し、正常確定・setスキーマ・監査名・参照・正本内容が適合した。並行処理は1件成功・1件`E-CONTRACT-05`で、リンク先と確定済み`set.json`は不変だった。
+- DoD 5（レビュー出力不正）
+  - コマンド: `validate.py --schema review_result`への必須フィールド欠落JSON投入と、author-coreのT6/T7監査・遷移照合。
+  - 結果: 不正出力は`E-CONTRACT-01`となり、問題不合格・世代消費に数えず、`review.invalid1`〜`3`を保存して初回＋再実行2回の失敗後にセット中止し、`set.json`を書かない契約だった。
+- 追加コマンド: `generation_max=1/2`の隔離コピーで上限内gen1/gen2と上限超過gen2/gen3を`set_check.py`・`finalize_set.py`へ投入、`.venv/bin/python -m py_compile scripts/doctor.py scripts/lookup.py scripts/set_support.py scripts/set_check.py scripts/finalize_set.py scripts/validate.py scripts/machine_check.py`、`.venv/bin/python scripts/doctor.py`、`git diff --check`。
+- 追加結果: 上限内世代は受理、上限超過は`E-CONTRACT-03`かつ`set.json`なし。構文検査と差分検査はpass、doctorは12 pass / 0 fail、試験用`output/`残留物は0件だった。
+
+### M5 R3対応とDoD再検証（2026-08-18、5/5 pass）
+
+- R3-01/R3-02: review_requestの`level_limits`・実効limits・固有名詞allowlistをformat/levelと設定から再導出して照合し、finalize時にtopicをFIN-01へ照合した。終端監査の一意な試行ID数は`2 * requested_count`以下に制限した。
+- 承認済みM5D-06: 文法解説に必須の教員版項目名を`kyoinban.name_ja`へ統一し、生成・レビュー両coreを同期した。R3-04/R3-05として、CHK-04へ全語連鎖・未収録表現・⑧両文の検査、CHK-16へ対象文法操作の核心を空欄が覆う検査を追加した。
+- 承認済みM5D-07/M5D-08: 進捗・不成立表示と監査範囲を`generation_max`でパラメータ化した。保存済みreview_resultの`machine_check_disputes[]`件数を保存時に一度だけ累積し、S80開始後の完了・中止報告へ0件でも固定表示する契約を追加した。
+- DoD 1（RPL-01〜10）
+  - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 3問gen1確定、gen1 review fail→gen2採用、2N境界、candidate/review不正、machine fail非上書き、横断違反、監査参照を実監査ファイルとCLIで検証 ... PY`。
+  - 結果: RPL-01〜10は10/10 pass。3問とgen2採用セットを`finalize_set.py`で実確定し、setスキーマ、監査参照、構造化指摘6フィールド、補充・教師照会・再試行・最悪コスト境界を確認した。
+- DoD 2（独立性）
+  - コマンド: 同上のreview_requestと`agent/reviewer-core.md`の読み取り・禁止境界照合。
+  - 結果: 入力封筒とRC-10の8リソースだけを読み、前世代・他問・生成側会話・許可外ファイル・書込み・ネットワークを禁止する構成だった。
+- DoD 3（機械fail優越）
+  - コマンド: 同上のmachine fail＋review passのgen1と全検査passのgen2を`accepted_attempts`へ投入。
+  - 結果: gen1は採用されず、gen2だけが採用された。
+- DoD 4（CI-SET-01〜06）
+  - コマンド: 同上の`build_set_report`違反3種、正常・不完全setのfinalize、固定一時名シンボリックリンク下での並行finalize 2プロセス実行。
+  - 結果: CI-SET-01〜06は6/6 pass。`V-SET-01/02/03`を個別検出し、正常確定・不完全状態の確定拒否・監査命名/参照・正本必須ブロックを確認した。並行処理は1件成功・1件`E-CONTRACT-05`で、リンク先と確定済み`set.json`は不変だった。
+- DoD 5（レビュー出力不正）
+  - コマンド: `{}`を`validate.py --schema review_result --file -`へ投入し、author coreのT6/T7遷移と`review.invalid1`〜`3`を照合。
+  - 結果: stdoutは`valid=false`、stderrは`E-CONTRACT-01`となり、問題不合格・世代消費に数えず初回＋再実行2回の失敗後にセット中止する契約だった。
+- 追加コマンド: `.venv/bin/python scripts/doctor.py`、`.venv/bin/python -m py_compile scripts/*.py`、`git diff --check`。
+- 追加結果: doctor 12 pass / 0 fail、全Python構文検査と差分検査はpass、試験用`output/`残留物は0件だった。
+
+### M5 R7対応とDoD再検証（2026-08-18、5/5 pass）
+
+- 承認済みM5D-15: `machine_check.py`が`--requested-count N`から試行ID上限`min(2N,20)`を導出し、N=3の補充・代替`q04`〜`q06`を許可しつつ`q07`を`V-COND-01`で拒否するようにした。q20の全体上限とfinalize側のスロット・2N立証は維持した。
+- 承認済みM5D-16: `validate.py`が全JSON string値とobject keyのstrict UTF-8表現可能性を再帰検証し、孤立サロゲートを`E-INPUT-03`で拒否するようにした。review_resultの後段JS-01正準化失敗も、AUD-09監査を残す同一requestのINF-01再試行へ統一した。
+- 承認済みM5D-17: FIN-01 `created_at`の数値UTCオフセットを分00〜59・絶対値14:00以下・14時は00分だけに制限した。`+09:00`・`Z`・`+14:00`を許可し、`+09:99`・`+14:01`を`E-CONTRACT-01`で拒否した。
+- DoDコマンド: `PYTHONPATH=scripts .venv/bin/python .m5_r7_dod_tmp.py`（実行後に一時ハーネスを削除）。実リポジトリ`output/`直下へ記録済み監査フィクスチャを一時投入し、`machine_check.py`・`validate.py`・`set_check.py`・`finalize_set.py`と監査読込みを実行した。
+- DoD 1: RPL-01〜10は10/10 pass。3問gen1確定、review fail後のgen2採用、補充・代替ID境界、review/candidate受理失敗、machine fail非上書き、横断違反、監査参照、`min(2N,20)`最悪境界を確認した。
+- DoD 2: review_requestは候補・machine report・実効制約とRC-10の8リソースだけを含み、reviewer coreは生成側会話・他問・過去世代・書込み・ネットワークを禁止していた。
+- DoD 3: review passでもmachine failの世代は採用されず、machine/review/set_checkが全passの世代だけが採用された。
+- DoD 4: CI-SET-01〜06は6/6 pass。`V-SET-01/02/03`の個別検出、正常確定、不完全確定拒否、監査命名・参照・正本必須内容、固定一時名symlink不変、並行finalizeの1成功/1 `E-CONTRACT-05`を確認した。
+- DoD 5: schema-validなescaped lone surrogate review_resultを3回とも`E-INPUT-03`とし、AUD-09 `validation_failure`封筒3件が妥当で、問題不合格・世代消費に数えず同一requestの3失敗後にT7/S99へ進み`set.json`を書かない契約を確認した。
+- 追加コマンド: `.venv/bin/python -m py_compile scripts/*.py`、`.venv/bin/python scripts/doctor.py`、`git diff --check b146041bb3a78c2eb62f9fcafe1294bb63e22c4e`、`git diff --quiet -- reviews/m5-r7.md`。
+- 追加結果: 全Python構文検査と差分検査はpass、doctorは12 pass / 0 fail、R7レビュー原本は不変、試験用`output/`残留物は0件だった。
+
+### M5 R8対応とDoD再検証（2026-08-18、5/5 pass）
+
+- R8-01/R8-02: reviewer coreのCHK-12へ禁止題材・年齢適合・帯内難度、CHK-13へ学習者視点の正答到達過程・必要知識全列挙・語用／文化／教科／正書法・句読法の4分類を正本どおり追加した。
+- R8-03: 通常candidate/machine/request/review、増分・最終set_check、slot outcomeの全JSON監査を、strict UTF-8文字列・object keyとJS-01正準バイト一致で検証し、不一致をファイル名付き`E-CONTRACT-03`で拒否するようにした。
+- R8-04: FIN-01に孤立サロゲートの未定義キーがある場合、生キーをエラーへ展開する前に安全な`E-CONTRACT-01`を返し、終了コード1・CLI-05正準stderr・`set.json`なしを保証した。
+- 個別回帰コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 7種類のJSON監査へescaped lone surrogate、review監査へ非正準キー順・CRLF・末尾改行欠落、FIN-01へ孤立サロゲート追加キーを投入 ... PY`。
+- 個別回帰結果: 7種類すべてが`E-CONTRACT-03`、3種類の非正準バイトも`E-CONTRACT-03`となった。schema-validな孤立サロゲート入りreview監査は`set_check.py`と`finalize_set.py`の両方で`E-CONTRACT-03`・`set.json`なし、FIN-01は終了コード1・`E-CONTRACT-01`の正準stderrのみを返し、reviewer coreのCHK-12/13必須手順も全件存在した。
+- DoDコマンド: `PYTHONPATH=scripts .venv/bin/python .m5_r8_dod_tmp.py`（実行後に一時ハーネスを削除）。正準監査フィクスチャを実`output/`直下へ一時投入し、`machine_check.py`・`validate.py`・`set_check.py`・`finalize_set.py`を実行した。
+- DoD結果: M5 DoD 5/5、RPL-01〜10 10/10、CI-SET-01〜06 6/6 pass。3問正常確定、gen2採用、machine fail非上書き、補充・代替境界、candidate/review受理失敗、横断3違反、不完全確定拒否、監査参照、固定symlink不変、並行finalizeの1成功/1 `E-CONTRACT-05`、独立レビュー境界を確認した。
+- 追加コマンド: `.venv/bin/python -m py_compile scripts/*.py`、`.venv/bin/python scripts/doctor.py`、`git diff --check b146041bb3a78c2eb62f9fcafe1294bb63e22c4e`。
+- 追加結果: 全Python構文検査と差分検査はpass、doctorは12 pass / 0 fail、試験用ハーネス・`output/`残留物は0件だった。
+
+### M5 R9対応（2026-08-18）
+
+- R9-01: set directory名からの副作用なしset_id抽出と、directoryの存在・配置検証を分離した。`finalize_set.py`はFIN-01内容検証、config snapshot照合、directory実体検証の順に進み、CLI-21のエラー優先順位へ一致した。
+- 回帰コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 同じ不存在set directoryへ空FIN-01、設定不一致FIN-01、正常FIN-01を順に投入 ... PY`。
+- 回帰結果: 空FIN-01は`E-CONTRACT-01`、設定不一致は`E-DATA-08`、内容と設定が正常な場合だけdirectory不存在の`E-INPUT-02`となった。
+- 追加確認: `.venv/bin/python -m py_compile scripts/*.py`と`git diff --check b146041bb3a78c2eb62f9fcafe1294bb63e22c4e`はpass、doctorは12 pass / 0 fail。R9はblocker/major 0件のため、`m-fix`の条件に基づくM5 DoD全件再実行の対象外だった。
+
+### M5レビューサイクル収束（R1〜R9）
+
+- 独立レビューを9ラウンド実施し、blocker 0件、major 29件、minor 10件の全39件を解消して各ラウンドの`reviews/m5-r1-resolutions.md`〜`reviews/m5-r9-resolutions.md`へ対応を記録した。最新R9はblocker/major 0件でコミット可と判定され、残ったminor R9-01も解消した。
+- M5の最終成果として、1問1独立レビュー、世代別監査、構造化指摘による再生成、補充・教師照会、集合横断検査、正本の上書き不能な原子的確定までを一貫した契約として実装し、M6未実装のHTML生成との境界を維持した。
+- 最終の全件DoDはR8対応後にM5 DoD 5/5、RPL-01〜10 10/10、CI-SET-01〜06 6/6 pass。R9対応後はCLI-21優先順位の個別回帰、全Python構文検査、doctor 12 pass / 0 fail、差分検査をpassし、試験用ファイルを残していない。
 
 ## 2026-08-17 — M4 対話＋生成コア
 

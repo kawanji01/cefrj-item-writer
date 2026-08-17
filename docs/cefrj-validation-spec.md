@@ -353,7 +353,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 ### 3.1 契約と前提（MC-01〜MC-05）
 
-**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、セットの確定済み期待条件（format・level・依頼問題数）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。candidateの`level.scale`と期待レベルのscaleが同じ場合、S4〜S6のレベル依存検査は期待レベルを指定レベルとして実行する。format不一致でscaleも異なる場合は`V-COND-01`を発行した上で、実行可能なレベル依存検査をcandidateのscaleと値で継続する。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
+**MC-01** `machine_check.py` は候補問題1問1世代を検査単位とする。入力は candidate JSON（`candidate.schema.json` 適合）、セットの確定済み期待条件（format・level・依頼問題数N）、正規化データ（`data/normalized/`）、設定（`data/config/limits.json` / `data/config/proper_nouns.json`）であり、出力は `machine_report.schema.json`（`scope = "question"`）に適合するレポート1件である。Nはセット規模であると同時に試行ID上限`min(2N, 20)`の導出元であり、補充・代替の`q{N+1}`以降もこの上限までは条件一致とする。candidateの`level.scale`と期待レベルのscaleが同じ場合、S4〜S6のレベル依存検査は期待レベルを指定レベルとして実行する。format不一致でscaleも異なる場合は`V-COND-01`を発行した上で、実行可能なレベル依存検査をcandidateのscaleと値で継続する。引数・stdin/stdout・終了コードは `docs/architecture.md` のCLI契約が正である。
 
 **MC-02（verdict）** `verdict` は `violations` が1件以上あれば `fail`、0件なら `pass` である。他の判定基準を導入してはならない。
 
@@ -374,7 +374,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 | S1 | 前提検査 | CLI引数・正規化データ・設定 | 検証済みリソース | 不備は `E-ENV-*` / `E-DATA-*` で停止 |
 | S2 | 検査対象テキスト抽出 | candidate | 形式別の検査対象フィールド集合（MC-07） | candidateスキーマ不適合は `E-CONTRACT-01` で停止 |
 | S3 | spaCy解析 | 検査対象英文 | Doc（トークン列・レンマ・タグ・文分割） | — |
-| S4 | 構造・セット条件制約検査 | candidate・期待条件・Doc・limits.json | format・level・question_id上限・文数・語数・字数・日本語フィールドの判定 | `V-COND-01`, `V-SENT-01`, `V-LEN-01`, `V-EXP-01`, `V-JPN-01` |
+| S4 | 構造・セット条件制約検査 | candidate・期待条件・Doc・limits.json | format・level・question_id試行上限`min(2N, 20)`・文数・語数・字数・日本語フィールドの判定 | `V-COND-01`, `V-SENT-01`, `V-LEN-01`, `V-EXP-01`, `V-JPN-01` |
 | S5 | 語彙照合 | Doc・lexicon・allowlist | トークン別照合結果・レベル判定・対象語出現数 | `V-LEX-01`, `V-LEX-02`, `V-TGT-02` |
 | S6 | 形式固有検査 | candidate・lexicon・grammar | ターゲット照合・選択肢・誤答由来・整序・穴埋め・書き換えの判定 | `V-TGT-01`, `V-TGT-03`, `V-CHO-01`, `V-DIS-01/02/03`, `V-ORD-01/02`, `V-CLZ-01/02`, `V-RWT-01` |
 | S7 | レポート生成 | S3〜S6の全結果 | machine_report JSON（MC-30） | — |
@@ -577,7 +577,7 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 
 | コード | 意味 | 発行規則 |
 |---|---|---|
-| `V-COND-01` | セットの確定済み条件とcandidateの不一致（format・level・question_id番号上限） | GEN-02 |
+| `V-COND-01` | セットの確定済み条件とcandidateの不一致（format・level・question_id試行上限`min(2N, 20)`） | GEN-02 |
 | `V-SENT-01` | 文数・2文例外の不正（文数≠1・対の不整合・要求元文タイプ値不正） | MC-08 |
 | `V-LEN-01` | 文の語数上限超過 | MC-09 |
 | `V-EXP-01` | 解説の字数上限超過 | MC-09 |

@@ -82,7 +82,7 @@
 | CI-MCH-13 | 2文例文の条件 | (a)先行文脈要求の文タイプ記録付き2文候補 (b)記録なし2文候補 | (a)は当該違反なし、(b)は verdict `fail` |
 | CI-MCH-14 | 整序シャッフルの非同一性 | シャッフル提示順が正解順と同一の `grammar_reorder` 候補 | verdict `fail`、シャッフル同一違反が含まれること |
 | CI-MCH-15 | 出力の決定性 | 任意の候補フィクスチャ1件 | 2回実行の出力がCI-R-02の意味でバイト一致すること |
-| CI-MCH-16 | セット確定条件と候補の一致 | 同一の適合candidateに対し、(a)format・level・question_id番号が期待条件内 (b)format不一致 (c)level不一致 (d)question_id番号がrequested_count超過となるCLI引数 | (a)は`V-COND-01`なし、(b)(c)(d)はverdict `fail`かつ該当フィールドをlocationに持つ`V-COND-01`が含まれること。依頼数に対する欠問の判定はSET-07の責務であり本テストに含めない |
+| CI-MCH-16 | セット確定条件と候補の一致 | 同一の適合candidateに対し、(a)format・level・question_id番号が期待条件内 (b)format不一致 (c)level不一致 (d)N=3で補充ID`q04` (e)N=3で試行上限超過ID`q07`。加えてNが大きい場合も上限は`q20` | (a)(d)は`V-COND-01`なし、(b)(c)(e)はverdict `fail`かつ該当フィールドをlocationに持つ`V-COND-01`が含まれること。依頼数に対する欠問、初期スロットと補充IDの割当、全試行2N以下の立証はfinalizeの責務であり本テストに含めない |
 | CI-MCH-17 | 期待レベル基準の全件列挙 | (a)candidateはB1語彙フラッシュカード・対象`abandon`・11語以上、期待A1 (b)candidateでは適格だが期待文法レベルでは不適格な文法対象 (c)candidateレベルにだけ一致する語彙4択誤答アンカー | scaleが同じ場合は全て期待レベル基準で判定し、(a)は`V-COND-01`と`V-LEN-01`・`V-LEX-02`・`V-TGT-03`、(b)は`V-COND-01`と`V-TGT-01`、(c)は`V-COND-01`と`V-DIS-02`を同一レポートに列挙すること。format不一致でscaleが異なる場合は候補scaleの検査を継続すること |
 | CI-MCH-18 | candidate JSON整数の決定的上限 | トップレベルの余分フィールド値に(a)4,300桁 (b)4,301桁 (c)5,000桁の整数を含むcandidate JSON。(c)は`PYTHONINTMAXSTRDIGITS=4300|0`で同一入力を実行 | (a)は整数桁数を理由とする`E-INPUT-03`にならずスキーマ検証へ進む。(b)(c)は対象・行・列・上限4,300・実測桁数付き`E-INPUT-03`。(c)の2環境はエラーJSONがバイト一致すること |
 
@@ -118,7 +118,7 @@
 | CI-SET-01 | 対象重複の検出 | 同一対象（同一 `lex:` ID）が2問に現れるセット状態フィクスチャ | `set_check.py` が重複違反を報告すること |
 | CI-SET-02 | 例文使い回しの検出 | 2問が同一例文を持つセット状態フィクスチャ | `set_check.py` が使い回し違反を報告すること |
 | CI-SET-03 | 誤答の過度な再利用の検出 | 同一誤答語の再利用が閾値（`docs/cefrj-validation-spec.md` の検証マトリクスが定める値）を超えるセット状態フィクスチャ | `set_check.py` が再利用違反を報告すること |
-| CI-SET-04 | 原子的確定 | (a)全問合格のセット状態 (b)不合格問題が残るセット状態 | (a)は `finalize_set.py` が `output/<set_id>/set.json` を作成しスキーマ合格、(b)は `set.json` を作成せず終了コード非0で停止し、監査ファイルのみが残ること |
+| CI-SET-04 | 原子的確定 | (a)全問合格のセット状態 (b)不合格問題が残るセット状態 (c)固定一時名のシンボリックリンクと同一set_idへの並行finalize | (a)は `finalize_set.py` が `output/<set_id>/set.json` を作成しスキーマ合格、(b)は `set.json` を作成せず終了コード非0で停止し、監査ファイルのみが残ること。(c)はリンク先を変更せず、並行処理のちょうど1件だけが成功し、他方はE-CONTRACT-05となり、成功した`set.json`を変更しないこと |
 | CI-SET-05 | 監査ファイル命名・配置 | (a)の確定済み出力 | `review/<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json` および補助監査ファイル（`docs/json-output-spec.md` ID-07 の目録）の命名規則に合致するファイルのみが存在し、`set.json` からの相対参照が全て解決すること |
 | CI-SET-06 | 正本の内容制約 | (a)の確定済み `set.json` | 合格問題のみが収録され、`question_id` が昇順・一意であり（本フィクスチャ(a)は欠番なしのため `q01` からの連番となる。減数時の欠番は `docs/json-output-spec.md` ID-02/SET-03 により許容される）、`schema_version`・セットメタデータ・原本参照・設定スナップショット・`data_version`＋原本チェックサム・`attribution` の全必須ブロックが存在すること |
 
@@ -175,16 +175,16 @@
 
 | テストID | シナリオ | 合否条件 |
 |---|---|---|
-| RPL-01 | 全問gen1合格（`question_count`=3） | `outcome`=`completed`。`set.json` に3問収録・スキーマ合格。監査に各問 `q0N.gen1.candidate.json` / `.machine.json` / `.request.json` / `.review.json` と増分 `set_check.q0N.gen1.json`・最終 `set_check.final.json` のみ存在 |
+| RPL-01 | 全問gen1合格（`question_count`=3） | `outcome`=`completed`。`set.json` に3問収録・スキーマ合格。監査に各問 `q0N.gen1.candidate.json` / `.machine.json` / `.request.json` / `.review.json` と増分 `set_check.q0N.gen1.json`、各論理スロットの `slot.q0N.outcome.json`、最終 `set_check.final.json` のみ存在 |
 | RPL-02 | 1問がgen1不合格→gen2合格 | gen2の再指示ペイロードにgen1レビューの `violations[]`（`code`・`location`・`evidence`・`expected_level`・`actual_level`・`suggestion`）が含まれること。監査にgen1とgen2の両世代が残ること |
-| RPL-03 | 提案モードで1問が3世代不合格 | 候補プールから自動補充され、補充問題も最大3世代で試行されること。試行対象総数が要求数の2倍を超えた時点で補充が停止すること |
-| RPL-04 | 明示モードで1問が3世代不合格 | 自動代替が行われず、`outcome`=`teacher_consult` となり、不成立理由（3世代分の指摘要約）が教師照会用に構造化されて残ること |
-| RPL-05 | レビュー出力スキーマ不通過（インフラ障害） | 同一世代内で最大2回再実行されること。2回とも失敗した場合セット中止（`outcome`=`aborted`）となり、当該事象が問題の不合格世代に数えられないこと。`set.json` が作成されないこと |
+| RPL-03 | 提案モードで1問が3世代不合格 | 候補プールから`q{N+1}`以降のIDで自動補充され、そのIDが`min(2N,20)`以下ならmachine_checkの`V-COND-01`を受けず、補充問題も最大3世代で試行されること。試行対象総数が要求数の2倍へ達した時点で補充が停止すること |
+| RPL-04 | 明示モードで1問が3世代不合格 | 自動代替が行われず、`outcome`=`teacher_consult` となり、不成立理由（3世代分の指摘要約）が教師照会用に構造化されて残ること。教師指定の代替へ`q{N+1}`を割り当てた場合はmachine_checkの条件照合を通過できること |
+| RPL-05 | レビュー出力の受理失敗（インフラ障害） | JSONパース不能、スキーマ不通過、スキーマ有効だが孤立サロゲート等でstrict UTF-8/JS-01正準化不能の各ケースで、同一request・同一世代内で最大2回再実行されること。初回を含む3回すべてが失敗した場合セット中止（`outcome`=`aborted`）となり、当該事象が問題の不合格世代に数えられず、AUD-09の適切なkindで3件のinvalid監査が残り、`set.json`が作成されないこと |
 | RPL-06 | 生成候補スキーマ不通過 | 同一世代内で1回だけ再指示されること。再指示も失敗した場合に当該世代が消費される（`gen` が進む）こと |
 | RPL-07 | 機械検査fail＋レビューpass | 最終判定が `fail` のままであること（機械検査違反はレビューで覆せない） |
 | RPL-08 | セット横断違反（例文使い回し） | `set_check.py` が違反を報告し、違反が残る限り `finalize_set.py` が `set.json` を作成しないこと。違反検出後の後続処理が `docs/subagent-review-spec.md` の再生成ループ仕様の定義どおり進むこと |
 | RPL-09 | 監査と正本の参照整合 | RPL-01の完成セットで、`set.json` から `review/` への相対参照が全て実在ファイルに解決し、監査ファイルが欠けても `set.json` 単体で全問題を解釈できる（監査への参照以外に監査依存フィールドがない）こと |
-| RPL-10 | 最悪コスト境界 | `question_count`=n の提案モードで全問全世代不合格のとき、生成試行総数がちょうど2n×3世代を上限として停止し、それを超える生成・レビューが発生しないこと（`docs/requirements.md` の非機能要件参照） |
+| RPL-10 | 最悪コスト境界 | `question_count`=n の提案モードで全問全世代不合格のとき、試行対象IDは`q01`〜`q{min(2n,20)}`、生成試行総数は`min(2n,20)×3世代`を上限として停止し、それを超える生成・レビューが発生しないこと（`docs/requirements.md` の非機能要件参照） |
 
 ---
 
@@ -334,7 +334,7 @@ tests/
 
 - **前提**: A-04(1) の完走済みセット。
 - **手順**: `output/<set_id>/` を検査する。
-- **合否条件**: `review/` 配下の全ファイル名が `docs/json-output-spec.md` ID-07 の目録（`<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json`・set_check レポート・invalid テキスト）に合致し、実行された全世代分が揃っている。`set.json` からの相対参照が全て解決する。`set.json` に不合格問題が含まれない。`attribution` にWordlistとGrammar Profileの両引用があり、URL・ダウンロード日が `data/normalized/meta.json` の値と一致する。
+- **合否条件**: `review/` 配下の全ファイル名が `docs/json-output-spec.md` ID-07 の目録（`<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json`・set_check レポート・invalid テキスト・スロット終端監査）に合致し、実行された全世代分と要求数分の終端監査が揃っている。`set.json` からの相対参照が全て解決する。`set.json` に不合格問題が含まれない。`attribution` にWordlistとGrammar Profileの両引用があり、URL・ダウンロード日が `data/normalized/meta.json` の値と一致する。
 
 #### A-12 HTMLのオフライン動作とスマホ表示
 
