@@ -301,7 +301,7 @@ def selected_schema_branch(instance: Any, schema: dict[str, Any]) -> dict[str, A
             definition_name = f"q_{format_value}"
     elif schema.get("title") == "machine_report":
         scope = instance.get("scope")
-        if scope in {"question", "set"}:
+        if isinstance(scope, str) and scope in {"question", "set"}:
             definition_name = f"{scope}_report"
     if definition_name is None:
         return schema

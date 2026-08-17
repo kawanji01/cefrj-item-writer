@@ -6,7 +6,7 @@
 
 - `scripts/validate.py` を追加し、`set` / `candidate` / `machine_report` / `review_request` / `review_result` / `normalized_lexicon` / `normalized_grammar` / `config_limits` / `config_proper_nouns` の9識別子を統一CLIで検証できるようにした。
 - 妥当時は検証結果JSONと終了コード0、不当時は違反JSONポインタ・日本語理由を持つ検証結果をstdout、`E-CONTRACT-01`をstderrへ出力して終了コード1とした。違反は決定的順序で最大50件を返し、総数をエラーdetailへ記録する。
-- stdin・ファイルをUTF-8バイト列として読み、標準JSON構文、非標準数値定数、有限floatへ変換不能な数値を位置付き`E-INPUT-03`で拒否する。正常・エラーJSONはいずれも正準形UTF-8・LFで出力する。
+- stdin・ファイルをUTF-8バイト列として標準JSON構文で解析し、非標準数値定数を位置付き`E-INPUT-03`で拒否する。標準JSON数値はbinary64へ丸めず、正規化係数と任意精度の10進指数で保持してスキーマの数値制約で判定する。正常・エラーJSONはいずれも正準形UTF-8・LFで出力する。
 - PLN-05で承認されたM3D-01を `DECISIONS.md` へ記録し、通常検証と排他的な `--set-dir` 状態確認モードを追加した。`set.json` がなければ `status=incomplete`、存在すればsetスキーマ検証を伴う `status=complete` を返す契約を関連設計文書へ反映した。
 - `schemas/` 9本は変更していない。
 
@@ -51,6 +51,12 @@
 - `validate.py --set-dir` は監査のみのディレクトリを `status=incomplete`・終了コード0・stderrなしで識別した。妥当な`set.json`は`status=complete`かつvalid、不当な`set.json`はcomplete状態を保持して`E-CONTRACT-01`、不存在ディレクトリは`E-INPUT-02`、不正set_idは`E-INPUT-05`となった。
 - 60件の違反を持つ入力でstdoutとstderrの違反列挙が先頭50件、`detail.total_errors=60`となり、同一入力2回の出力がバイト一致した。
 - `PYTHONIOENCODING=ascii|cp932|utf-16`の各環境で同じUTF-8 stdinを受理した。不正UTF-8はstdin・ファイルとも対象・行・列付き`E-INPUT-03`、リポジトリルート外からの実行は`E-ENV-04`となった。
+- `.venv/bin/python - <<'PY' ... 公式config_limitsのdistractor_reuse_maxを1e400と1e9223372036854775806へ個別に置換し、stdin・通常ファイルの両経路を実CLIで検証 ... PY` は4/4条件で`valid=true`・終了コード0・stderrなしとなり、任意精度指数を数学上の整数値として判定した。
+
+### レビューサイクル収束（R1〜R10）
+
+- 独立レビューを10ラウンド実施し、R1〜R10で検出したblocker 0件・major 9件・minor 8件は全件解消した。最新R10の省略オプション3条件は`E-INPUT-01`、日本語ヘルプはUTF-8・ASCII・CP932・Cロケールの4環境で同一UTF-8出力・終了コード0となった。
+- 最終DoDは4/4 pass: 9スキーマのDraft 2020-12自己妥当性9/9、公式妥当例9/9、必須欠落・型不正・additionalProperties違反27/27、candidate 9形式9/9、ID不正5/5、CI-CLI-01入力不正3/3、実`machine_check.py`のmachine_report再検証が`valid=true`となった。
 
 ## 2026-08-16 — M2 機械検査
 
