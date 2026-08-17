@@ -887,11 +887,46 @@
 
 ---
 
-## 7. M4実装に伴う承認決定（M4D-01）
+## 7. M4実装に伴う承認決定（M4D-01〜M4D-08）
 
-2026-08-17、PLN-05に基づくM4実装時の確認で発見した次の未定義事項について、作問者が推奨案を承認した。
+2026-08-17、PLN-05に基づくM4実装時およびM4 R1/R4/R5/R6対応時の確認で発見した次の8件について、作問者が推奨案を承認した。
 
 ### M4D-01 文法項目名の部分一致が複数の適格項目を返す場合の選択
 - **決定**: S32で文法項目名またはその一部を照合し、指定レベルに適格な`lookup.py`結果が1件なら自動採用する。2件以上なら全件をlookup返却順のまま番号付きで提示し、教師に1件を選ばせる。先頭候補を自動採用してはならない。不正番号ではS32に留まり、DLG-43と同じ再質問文言を提示する。選択後に`grammar_reorder` / `grammar_rewrite`の形式適合性を判定する。
 - **理由**: QT-31bが文法項目名の一部入力を許す一方、複数一致時の確定方法が未定義だった。部分一致入力を維持しつつ、教師の明示選択なしに対象を確定しない最も保守的な扱いとするため。
 - **影響先**: `docs/interaction-flow.md` IF-21a・DLG-45、`agent/author-core.md`、M4対話配線。
+
+### M4D-02 単一語語彙ターゲットの表層形優先照合
+- **決定**: 単一語の語彙ターゲットは、MC-15の照合キーで正規化したトークン表層形または補正後レンマのいずれかが対象headwordと一致すれば対象出現として数える。表層形が対象headwordと一致する場合は、レンマが別のWordlistエントリを指してもcandidateが宣言した対象エントリを優先して `decision=target` とする。非ターゲット語の通常照合は従来どおりレンマを使う。
+- **理由**: `lex:been:be-verb` の自然な表層形 `been` はspaCyでlemma=`be`となり、レンマだけをheadwordへ照合すると正規化データ上は適格な対象を出題できないため。表層形完全一致を優先しつつ、`watch`→`watched`のような既存の活用形照合も維持する。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-19、`scripts/machine_check.py`、`agent/author-core.md`、M4 R1回帰確認。
+
+### M4D-03 GEN-13の意味的除外後に判定する品詞プール緩和
+- **決定**: GEN-15の同レベル・同品詞アンカー候補プールは、`lookup.py lex --pool-for` が返す生候補からGEN-13の同義語・正解と区別不能な語を除外した有効候補集合を指す。有効候補が3語未満の場合だけ互換品詞群へ緩和できる。機械検査は生候補数や意味的有効件数から緩和の必要性を推定せず、同レベル・互換品詞群・異品詞誤答の実使用を検査する。緩和の必要性はCHK-06が生候補を意味的に検査し、有効候補数が3語未満であることを独立確認する。
+- **理由**: `do` / `have` は同レベル・同品詞の生候補が3件ある一方、`does` / `has` が正解と区別不能で有効候補は2件以下となる。生候補数だけで緩和を禁止すると、GEN-13とGEN-15を同時に満たすcandidateを生成できないため。
+- **影響先**: `docs/question-generation-spec.md` GEN-15・語彙4択生成手順、`docs/subagent-review-spec.md` CHK-06、`docs/cefrj-validation-spec.md` MC-23、`agent/author-core.md` PRM-07、`scripts/machine_check.py`、M4 R4回帰確認。
+
+### M4D-04 生成JSONの生出力検証と受理失敗のT2/T3分類
+- **決定**: 生成器のcandidate生出力は、ホスト側でパースまたは再直列化する前にUTF-8生バイトのまま`validate.py --schema candidate`へ渡す。生成出力に起因する`E-CONTRACT-01`、`E-INPUT-03`、およびスキーマ通過後の厳格パース・JS-01正準化失敗は、いずれもcandidate受理検証不通過として同じT2/T3カウンタで扱う。invalid監査には、UTF-8で保持できる生出力と、`validate.py`のstdout、stdoutがなければstderr、正準化失敗なら失敗段階・例外型・理由・取得可能な位置を記録する。生出力自体をUTF-8化できない場合は、置換文字で改変保存せず、UTF-8化不能の理由と位置だけをinvalid監査へ記録する。受理検証を全て通過したcandidateだけを正準化し、同一バイト列をcandidate監査保存と`machine_check.py`入力に使う。
+- **理由**: 通常のJSONパーサによる`1e400`の無限大化、非標準数値定数、孤立サロゲートなどを未処理例外にせず、生成内容の不正として既存の再指示・世代消費契約へ統一するため。
+- **影響先**: `docs/subagent-review-spec.md` T1〜T3・RG-04/RG-05・INF-06・AU-03/AU-07、`docs/json-output-spec.md` JS-02・AUD-09、`agent/author-core.md` M4暫定CLI配線、M4 R5回帰確認。
+
+### M4D-05 明示対象の追加・削除後の総件数不変条件
+- **決定**: 明示モードの確定対象集合は、初回確定時、追加後、削除後、およびS40で「はい」を受理する直前に、重複除去済みの総件数が`1..set_question_max`であることを検査する。上限到達時は「対象を追加」を表示・受理しない。追加候補は既存集合と分離して照合し、重複除去後の新規対象数が残り容量を超えた場合は追加操作全体を不受理として元の集合を保持する。新規対象が0件なら重複除去を通知して元の集合のままS40へ戻る。全件削除は不受理として元の集合を保持し、少なくとも1件残すよう同じ削除質問を再提示する。
+- **理由**: 変更操作を原子的に扱い、21件目のquestion_id不能や0件セットへの遷移を防ぎつつ、教師指定を黙って切り捨てないため。
+- **影響先**: `docs/interaction-flow.md` IF-06・IF-14・QT-31・QT-40・RQ-31/RQ-40、`agent/author-core.md` S31/S32/S40、M4 R5回帰確認。
+
+### M4D-06 set_question_maxのセッション固定と動的表示
+- **決定**: S00のdoctor成功後に、検証済み`limits.json.set_question_max`をセッション値として1回読み取り、S10以降は同じ値を質問文、再質問文、理由、受理判定、追加時の残り容量、S80の`--requested-count`へ使う。QT-31a/b・RQ-31・QT-40b・RQ-40にある固定値20は`{set_question_max}`へ置き換える。設定値の許容範囲1〜20とquestion_idの最大`q20`は維持する。
+- **理由**: 変更可能な運用パラメータ契約を維持しつつ、教師へ表示する範囲と実際の受理範囲を常に一致させるため。
+- **影響先**: `docs/interaction-flow.md` S00・QT-31/RQ-31・QT-40/RQ-40、`agent/author-core.md` S00/S31/S40/S80、M4 R5回帰確認。
+
+### M4D-07 対象出現区間の宣言ターゲット優先照合
+- **決定**: 語彙形式の対象出現照合フィールドでは、candidateが宣言した`target.ref`のheadwordを`is_multiword`の値にかかわらず固定spaCyモデルでトークン列化し、文側の正規化表層形列または補正後レンマ列と一致する区間を対象候補とする。対象候補は同一開始位置の一般複数語候補と共通の最長一致で比較し、最大トークン数が同じ場合だけ宣言対象IDを一般のID辞書順より優先する。より長い一般複数語候補がある場合の最長一致は維持する。採用した対象区間の全トークンを同じ対象entry ID・level・`decision=target`で消費し、`target_surface`はその区間の原文スライスと完全一致させる。非対象フィールドと対象候補が採用されない区間は現行MC-14/MC-15の最長一致・ID辞書順・品詞照合を維持する。
+- **理由**: 同一トークン列を持つ複数品詞エントリの後順IDと、`wed`のようにWordlist上は単一語だが固定spaCyモデルが複数トークンへ分割する適格語を、S32の照合結果どおり作問可能にしつつ、非対象語彙の従来の決定的照合を変えないため。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-13〜MC-15・MC-19、`docs/question-generation-spec.md` GEN-08、`agent/author-core.md` PRM-05、`scripts/machine_check.py`、M4 R6回帰確認。
+
+### M4D-08 語義→英単語4択の宣言アンカー区間照合
+- **決定**: `vocab_mcq_ja2en`の`body.choices[*].text`に限り、`choice.anchor.entry_id`がlexiconに存在し、anchorへ記録された`headword` / `pos` / `level`が実値と一致し、かつ選択肢表記が実在headwordとMC-23の小文字化比較で一致する場合、そのheadwordを固定spaCyモデルでトークン列化した宣言アンカー候補を用いる。候補が選択肢フィールド全体と一致すれば、固定トークナイザが複数トークンへ分割するheadwordも区間全体を同じanchor ID・level・`decision=wordlist_match`で消費する。anchor不存在、記録不一致、表記不一致の場合はこの候補を作らず、従来の一般照合とMC-23違反を適用する。他形式・他フィールドの照合は変更しない。
+- **理由**: `wed`や`'m`のようにWordlist上は単一語だが固定spaCyモデルが複数トークンへ分割する見出し語を、`vocab_mcq_ja2en`の正解肢・誤答肢として実在アンカーどおり検査可能にしつつ、不正なanchorで辞書外語違反を迂回できないようにするため。
+- **影響先**: `docs/cefrj-validation-spec.md` MC-13・MC-23、`docs/question-generation-spec.md` GEN-29、`agent/author-core.md` PRM-07、`scripts/machine_check.py`、M4 R6回帰確認。

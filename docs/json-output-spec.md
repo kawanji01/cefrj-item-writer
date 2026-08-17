@@ -26,7 +26,7 @@
   3. オブジェクトのキーは辞書順ソート（`sort_keys=True`）。
   4. インデントは半角スペース2個。
   5. 改行は LF。ファイル末尾に改行1個。
-- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。スキーマ検証を通過したLLM出力を監査ファイルとして保存する際、オーケストレータは正準形に再直列化して保存しなければならない(MUST)（監査ファイルのバイト再現性のため）。
+- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。candidateはホスト側のパース・再直列化より先に生成生出力をUTF-8バイト列として`validate.py`へ渡し、標準JSON・candidateスキーマの検証後に厳格パースして本節の正準形へ再直列化しなければならない(MUST)。これらの受理検証を通過したLLM出力を監査ファイルとして保存する際、オーケストレータは正準形に再直列化して保存しなければならない(MUST)（監査ファイルのバイト再現性のため）。受理失敗時のT2/T3分類は`docs/subagent-review-spec.md`、invalid監査の形式はAUD-09が正である。
 - **JS-03（実行毎に変わるフィールド）**: 決定的CLIが書き出すJSONのうち、実行毎に値が変わるフィールドは machine_report（scope=question / scope=set とも）の `generated_at` のみとしなければならない(MUST)。`generated_at`はUTC・秒精度・末尾`Z`のISO 8601文字列とする。テストのバイト比較（`docs/testing-and-acceptance.md`）は本フィールドのみを比較から除外する。これ以外のフィールドに実行時刻・乱数・環境依存値を書き込んではならない(MUST NOT)（`set_id` と `created_at` は入力として与えられる値であり、この禁止の対象外である）。
 - **JS-04（数値の表現）**: 整数はJSONの整数リテラル、実数は入力（原本xlsx）の値をPython `json` モジュールの既定の表現で保持する。丸め・指数表記への変換を行ってはならない(MUST NOT)。
 
@@ -488,7 +488,7 @@
 | `constraints_snapshot` | object | `{"limits": {"sentence_word_limit": int, "explanation_char_limit": int\|null}, "proper_nouns": [...], "topic": string\|null}` |
 | `readable_resources` | array of string | 読み取り許可パス一覧（許可範囲の正は RC-10） |
 
-- **AUD-09（invalid テキストファイル）**: `*.invalid<k>.txt` は生出力テキスト全文と、その後に区切り行 `---- validation error ----` を挟んでスキーマ検証エラー（`validate.py` の stdout JSON）を連結したUTF-8テキストとしなければならない(MUST)。プロセス失敗で出力が得られない場合は、エラー情報（終了コード・stderr）のみを記録する。
+- **AUD-09（invalid テキストファイル）**: `*.invalid<k>.txt` は、UTF-8で保持できる生成生出力テキスト全文と、その後に区切り行 `---- validation error ----` を挟んで受理検証診断を連結したUTF-8テキストとしなければならない(MUST)。診断は、`validate.py`がstdoutを返した場合はそのJSON全文、stdoutがない場合はstderrのCLI-05 JSON全文、厳格パース・JS-01正準化で失敗した場合は失敗段階・例外型・理由・取得可能な位置を含むUTF-8テキストとする。ホストが受け取った生成テキスト自体を孤立サロゲート等によりUTF-8化できない場合は、置換文字やエスケープで生出力を改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。プロセス失敗で出力が得られない場合は、エラー情報（終了コード・stderr）のみを記録する。
 - **AUD-10（不変性）**: 監査ファイルは書き込み後に変更・削除してはならない(MUST NOT)（`docs/subagent-review-spec.md` AU-05）。
 
 ### 6.1 実例

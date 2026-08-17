@@ -120,6 +120,7 @@ class TextTarget:
     text: str
     sentence_checks: bool
     target_occurrence: bool = False
+    declared_anchor: dict[str, Any] | None = None
 
 
 class JsonIntegerTooLong(json.JSONDecodeError):
@@ -437,7 +438,12 @@ def extract_text_targets(candidate: dict[str, Any]) -> list[TextTarget]:
             )
         )
         targets.extend(
-            TextTarget(f"body.choices[{index}].text", choice["text"], False)
+            TextTarget(
+                f"body.choices[{index}].text",
+                choice["text"],
+                False,
+                declared_anchor=choice["anchor"],
+            )
             for index, choice in enumerate(body["choices"])
         )
     elif fmt in {"vocab_flashcard_en2ja", "vocab_flashcard_ja2en"}:
@@ -585,6 +591,7 @@ class LexicalMatcher:
         self.nlp = nlp
         self.entries = lexicon["entries"]
         self.allowlist = set(allowlist)
+        self.by_id = {entry["id"]: entry for entry in self.entries}
         self.by_key: dict[str, list[dict[str, Any]]] = {}
         for entry in self.entries:
             self.by_key.setdefault(lookup_key(entry["headword"]), []).append(entry)
@@ -602,20 +609,58 @@ class LexicalMatcher:
         doc: Any,
         allowed_level: str,
         target_entry: dict[str, Any] | None,
-    ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, str]], int]:
+    ) -> tuple[
+        dict[str, Any],
+        list[dict[str, Any]],
+        list[dict[str, str]],
+        int,
+        list[str],
+    ]:
         violations: list[dict[str, Any]] = []
         warnings: list[dict[str, str]] = []
         stats: list[dict[str, Any] | None] = [None] * len(doc)
         consumed: set[int] = set()
         target_occurrences = 0
+        target_surfaces: list[str] = []
         target_id = target_entry["id"] if target_entry is not None else None
+        target_pattern = None
+        if target.target_occurrence and target_entry is not None:
+            target_pattern = tuple(
+                lookup_key(token.text)
+                for token in self.nlp.make_doc(target_entry["headword"])
+            )
+        declared_entry = None
+        declared_pattern = None
+        if target.declared_anchor is not None:
+            declared_entry = self.by_id.get(target.declared_anchor["entry_id"])
+            if declared_entry is not None:
+                expected_values = {
+                    "headword": declared_entry["headword"],
+                    "level": declared_entry["level"],
+                    "pos": declared_entry["pos"],
+                }
+                recorded_values = {
+                    "headword": target.declared_anchor["headword"],
+                    "level": target.declared_anchor["level"],
+                    "pos": target.declared_anchor["pos"],
+                }
+                if (
+                    recorded_values == expected_values
+                    and target.text.lower() == declared_entry["headword"].lower()
+                ):
+                    declared_pattern = tuple(
+                        lookup_key(token.text)
+                        for token in self.nlp.make_doc(declared_entry["headword"])
+                    )
 
         surface_keys = [lookup_key(token.text) for token in doc]
         lemma_keys = [lookup_key(token.lemma_ or token.text) for token in doc]
+        corrected_lemma_keys = [lookup_key(corrected_lemma(token)[0]) for token in doc]
         for start in range(len(doc)):
             if start in consumed:
                 continue
             adopted: tuple[tuple[str, ...], str, dict[str, Any]] | None = None
+            adopted_decision = "multiword_match"
             for pattern in self.multiword_patterns:
                 keys, _entry_id, _entry = pattern
                 end = start + len(keys)
@@ -624,15 +669,42 @@ class LexicalMatcher:
                 if tuple(surface_keys[start:end]) == keys or tuple(lemma_keys[start:end]) == keys:
                     adopted = pattern
                     break
+            if target_pattern:
+                target_end = start + len(target_pattern)
+                target_available = target_end <= len(doc) and not any(
+                    index in consumed for index in range(start, target_end)
+                )
+                target_matches = target_available and (
+                    tuple(surface_keys[start:target_end]) == target_pattern
+                    or tuple(corrected_lemma_keys[start:target_end]) == target_pattern
+                )
+                if target_matches and (
+                    adopted is None or len(target_pattern) >= len(adopted[0])
+                ):
+                    adopted = (target_pattern, target_id, target_entry)
+                    adopted_decision = "target"
+            if declared_pattern and start == 0:
+                declared_end = start + len(declared_pattern)
+                declared_matches = declared_end == len(doc) and (
+                    tuple(surface_keys[start:declared_end]) == declared_pattern
+                )
+                if declared_matches and (
+                    adopted is None or len(declared_pattern) >= len(adopted[0])
+                ):
+                    adopted = (declared_pattern, declared_entry["id"], declared_entry)
+                    adopted_decision = "wordlist_match"
             if adopted is None:
                 continue
             keys, _entry_id, entry = adopted
             end = start + len(keys)
             indices = range(start, end)
             consumed.update(indices)
-            is_target = target.target_occurrence and entry["id"] == target_id
+            is_target = adopted_decision == "target"
             if is_target:
                 target_occurrences += 1
+                target_surfaces.append(
+                    doc.text[doc[start].idx : doc[end - 1].idx + len(doc[end - 1].text)]
+                )
             too_high = CEFR_RANK[entry["level"]] > CEFR_RANK[allowed_level]
             if too_high:
                 quoted = " ".join(token.text for token in doc[start:end])
@@ -668,13 +740,9 @@ class LexicalMatcher:
                 stats[index] = self.token_stat(
                     token,
                     lemma,
-                    "violation" if too_high else ("target" if is_target else "multiword_match"),
+                    "violation" if too_high else adopted_decision,
                     entry,
                 )
-
-        single_target_key = None
-        if target.target_occurrence and target_entry is not None and not target_entry["is_multiword"]:
-            single_target_key = lookup_key(target_entry["headword"])
 
         for index, token in enumerate(doc):
             if index in consumed:
@@ -718,13 +786,7 @@ class LexicalMatcher:
                 )
 
             if adopted_entry is not None:
-                is_target = single_target_key is not None and lemma_key == single_target_key
                 too_high = CEFR_RANK[adopted_entry["level"]] > CEFR_RANK[allowed_level]
-                if is_target:
-                    target_occurrences += 1
-                reported_entry = (
-                    adopted_entry if too_high or not is_target else target_entry
-                )
                 if too_high:
                     violations.append(
                         violation(
@@ -747,8 +809,8 @@ class LexicalMatcher:
                 stats[index] = self.token_stat(
                     token,
                     lemma,
-                    "violation" if too_high else ("target" if is_target else "wordlist_match"),
-                    reported_entry,
+                    "violation" if too_high else "wordlist_match",
+                    adopted_entry,
                 )
                 continue
 
@@ -786,7 +848,7 @@ class LexicalMatcher:
             "tokens": stats,
             "word_count": sum(1 for token in doc if token.pos_ not in {"PUNCT", "SYM"}),
         }
-        return text_stat, violations, warnings, target_occurrences
+        return text_stat, violations, warnings, target_occurrences, target_surfaces
 
     @staticmethod
     def token_stat(
@@ -888,6 +950,7 @@ def check_vocab_target(
     candidate: dict[str, Any],
     lexicon_by_id: dict[str, dict[str, Any]],
     target_occurrences: int,
+    target_surfaces: list[str],
     requested_level: str,
     violations: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
@@ -915,19 +978,13 @@ def check_vocab_target(
             )
         )
     body = candidate["body"]
-    if candidate["format"] == "vocab_mcq_en2ja":
-        target_text = body["stem"]
-    elif candidate["format"] == "vocab_mcq_ja2en":
-        target_text = body["sentence_complete"]
-    else:
-        target_text = body["example"]["en"]
-    if body["target_surface"] not in target_text:
+    if body["target_surface"] not in target_surfaces:
         violations.append(
             violation(
                 "V-TGT-02",
                 "body.target_surface",
-                f"target_surface {body['target_surface']!r}が対象英文の部分文字列ではありません。",
-                "対象英文中の実際の表層形をtarget_surfaceへ記録してください。",
+                f"target_surface {body['target_surface']!r}は採用対象区間{target_surfaces!r}の原文スライスと一致しません。",
+                "機械照合で採用される対象区間の原文スライスをtarget_surfaceへ完全一致で記録してください。",
             )
         )
     if candidate["format"] == "vocab_mcq_ja2en":
@@ -999,13 +1056,6 @@ def check_distractor_anchors(
         target_entry["pos"] if target_entry is not None else lexical_pos_from_ref(target_ref)
     )
     distractors = [choice for choice in choices if not choice["is_correct"]]
-    same_pos_pool_count = sum(
-        1
-        for entry in lexicon_by_id.values()
-        if entry["id"] != target_ref
-        and entry["level"] == requested_level
-        and entry["pos"] == target_pos
-    )
     for index, choice in enumerate(choices):
         anchor = choice["anchor"]
         entry = lexicon_by_id.get(anchor["entry_id"])
@@ -1053,13 +1103,13 @@ def check_distractor_anchors(
             ):
                 cross_pos_used = True
                 break
-        if same_pos_pool_count >= 3 or not cross_pos_used:
+        if not cross_pos_used:
             violations.append(
                 violation(
                     "V-DIS-02",
                     "body.pos_pool_relaxed",
-                    f"同レベル・同品詞候補数={same_pos_pool_count}、異品詞誤答使用={cross_pos_used}、緩和=trueです。",
-                    "同レベル・同品詞候補が3語未満で互換品詞の誤答を実際に使う場合だけtrueにしてください。",
+                    f"異品詞誤答使用={cross_pos_used}、緩和=trueです。",
+                    "互換品詞群に属する対象と異なるposの誤答を実際に使う場合だけtrueにしてください。緩和の必要性はCHK-06で確認してください。",
                     expected_level=requested_level,
                     actual_level=requested_level,
                 )
@@ -1265,19 +1315,30 @@ def machine_check(
     # S5: 語彙照合。トークン統計もこの段で確定する。
     stats: list[dict[str, Any]] = []
     target_occurrences = 0
+    target_surfaces: list[str] = []
     for target, doc in zip(targets, docs, strict=True):
-        text_stat, lexical_violations, lexical_warnings, occurrences = matcher.match_doc(
-            target, doc, allowed_level, target_entry
-        )
+        (
+            text_stat,
+            lexical_violations,
+            lexical_warnings,
+            occurrences,
+            matched_surfaces,
+        ) = matcher.match_doc(target, doc, allowed_level, target_entry)
         stats.append(text_stat)
         warnings.extend(lexical_warnings)
         target_occurrences += occurrences
+        target_surfaces.extend(matched_surfaces)
         violations.extend(lexical_violations)
 
     # S6: 形式固有検査。
     if candidate["format"] in VOCAB_FORMATS:
         target_entry = check_vocab_target(
-            candidate, lexicon_by_id, target_occurrences, requested_level, violations
+            candidate,
+            lexicon_by_id,
+            target_occurrences,
+            target_surfaces,
+            requested_level,
+            violations,
         )
     else:
         check_grammar_target(candidate, grammar_by_id, requested_level, violations)

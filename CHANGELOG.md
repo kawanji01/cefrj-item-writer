@@ -9,7 +9,15 @@
 - 承認済みM4D-01に基づき、文法名の部分一致が複数件の場合は全適格候補をlookup返却順で提示し、教師の番号選択を待つ仕様を `DECISIONS.md` と `docs/interaction-flow.md` に反映した。
 - 9形式のcandidate JSON骨格と、PRM-01〜PRM-14の必須制約を生成プロンプト構築仕様へ反映した。
 - M4の暫定配線として、candidateを `validate.py`、`machine_check.py`、machine reportスキーマの順に検証し、正規パスへ保存する手順を定義した。正式な対話ランタイムアダプタは計画どおりM7の範囲とした。
+- 承認済みM4D-03に基づき、品詞プール緩和の要否をGEN-13の意味的除外後の有効候補数で判断し、機械検査は同レベル・互換品詞・異品詞誤答の実使用、CHK-06は意味的除外と緩和の必要性を担当する境界へ改訂した。
+- 承認済みM4D-04に基づき、candidate生出力をホスト側のパース前に検証し、生成起因のUTF-8・標準JSON・スキーマ・厳格パース・JS-01正準化失敗をinvalid監査付きT2/T3へ統一した。
+- 承認済みM4D-05/M4D-06に基づき、明示対象集合の1〜`set_question_max`件不変条件と原子的な追加・削除を定義し、S00後に固定した同じ上限値を質問、再質問、受理境界、残容量、S80のCLIへ反映した。
+- 承認済みM4D-07/M4D-08に基づき、対象出現フィールドでは同長の一般複数語候補より宣言ターゲットを優先し、`vocab_mcq_ja2en`の選択肢では実値が一致する宣言アンカーの全トークン区間を同じentryとして照合するようにした。非対象フィールドの最長一致・ID順と、不正アンカーの通常照合は維持した。
 - `schemas/` は変更していない。
+
+### レビューサイクル
+
+- R1〜R7の7ラウンドを実施し、検出されたblocker 0件・major 10件・minor 2件を全て解消した。R7は未解消blocker 0件・major 0件・minor 0件で収束し、コミット可となった。
 
 ### M4 DoD検証（2026-08-17、5/5 pass）
 
@@ -17,8 +25,46 @@
 - DoD 1: 全状態と遷移順、1ターン1質問、入力検証、固定再質問、およびM4D-01の複数一致選択を確認した。`be` / A1.2 の複数一致ではlookup返却順を保持した。
 - DoD 2: `abandon` / A1 は実データの `verb/B1` と不一致のため拒否し、`Tokyo` はWordlist一致0件のため辞書外として拒否した。
 - DoD 3: 公式例を基にした9形式すべてでcandidateスキーマ、`validate.py`、`machine_check.py`、machine reportスキーマに適合し、機械判定は9/9 passだった。
-- DoD 4: PRM-01〜PRM-14、現行 `limits.json`、実行時に全件展開する50語の機能語allowlistを確認した。
+- DoD 4: PRM-01〜PRM-14、現行 `limits.json`、実行時に全件展開する `data/config/proper_nouns.json` の50語の固有名詞allowlistを確認した。
 - DoD 5: 9レベルすべてで教師版の直接割当だけが提案対象となった。適格件数はA1.1=28、A1.2=50、A1.3=61、A2.1=65、A2.2=63、B1.1=76、B1.2=67、B2.1=53、B2.2=34。未割当16 IDと `gp:47` は拒否した。
+
+### M4 R4対応後の再検証（2026-08-17）
+
+- R4-01回帰コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... do/haveの生プール、互換品詞緩和candidate、不正フラグ、CHK-06境界を検証 ... PY`。
+- R4-01回帰結果: `do` / `have` は生の同品詞候補が各3件でも、異品詞誤答を実使用した `pos_pool_relaxed=true` candidateがともに `verdict=pass`・`V-DIS-02`なし。フラグfalseの異品詞使用と、異品詞を使わないフラグtrueは `V-DIS-02`。CHK-06は `does` / `has` を区別不能語として有効候補から除外し、有効候補3件以上の不要な緩和をfailにする手順を持つ。
+- DoDコマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 状態機械、lookup実データ、正本文書内9形式例の正準化、validate.py、machine_check.py、設定、文法9レベルを一括検証 ... PY`。
+- DoD 1: S00〜S99の16状態、1ターン1質問、固定再質問、`be` / A1.2の10件をlookup順で扱うM4D-01分岐がpass。
+- DoD 2: `abandon`は実値verb/B1のためA1で拒否、`Tokyo`はWordlist一致0件として拒否しpass。
+- DoD 3: 正準化した9形式すべてでcandidateスキーマ、`machine_check.py`のverdict=pass、machine reportスキーマが9/9 pass。
+- DoD 4: PRM-01〜PRM-14、現行limits、50語の固有名詞allowlist全件実行時展開指示がpass。
+- DoD 5: 9レベルすべてで教員版直接割当だけを返し、親レベル継承枝番と未付与16項目を拒否してpass。適格件数はA1.1=28、A1.2=50、A1.3=61、A2.1=65、A2.2=63、B1.1=76、B1.2=67、B2.1=53、B2.2=34。
+- 結果: M4 DoD 5/5 pass。Python構文検査と `git diff --check` もpassし、`doctor.py` は12 pass / 0 failだった。
+
+### M4 R5対応後の再検証（2026-08-17）
+
+- R5-01回帰コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 1e400、NaN、Infinity、孤立サロゲートの生出力受理、T2/T3分類、invalid監査を検証 ... PY`。
+- R5-01回帰結果: 巨大指数は`E-CONTRACT-01`、`NaN` / `Infinity` は`E-INPUT-03`、エスケープされた孤立サロゲートはJS-01正準化失敗、UTF-8化不能文字列はstrict UTF-8失敗として、全て未処理例外なしでT2/T3監査経路へ分類された。
+- R5-02/R5-03回帰コマンド: `.venv/bin/python - <<'PY' ... 20+1、19+1、重複追加、19+2、全件削除、1件残す削除、set_question_max=10/20の表示・受理境界を検証 ... PY`。
+- R5-02/R5-03回帰結果: 上限超過追加と全件削除は元集合を保持し、上限内追加と1件以上残す削除だけが受理された。上限10/20の質問表示、境界受理、上限+1の拒否理由も一致した。
+- DoD最終コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 16状態と固定再質問、lookup実データ、9形式candidateとmachine report、PRM-01〜14、現行設定、固有名詞allowlist、文法9レベル適格件数、未付与16項目と継承枝番を検証 ... PY`。
+- DoD 1: 16状態、1ターン1質問、固定再質問、動的件数境界、`be` / A1.2の10件複数一致分岐がpass。
+- DoD 2: `abandon` / A1と`Tokyo`辞書外の実lookup拒否がpass。
+- DoD 3: 9形式candidateスキーマ、機械判定、machine reportスキーマが9/9 pass。
+- DoD 4: PRM-01〜14、現行limits、50語の固有名詞allowlistがpass。
+- DoD 5: 教員版直接割当の9レベル適格件数、未付与16項目、`gp:1-1`の拒否がpass。適格件数はA1.1=28、A1.2=50、A1.3=61、A2.1=65、A2.2=63、B1.1=76、B1.2=67、B2.1=53、B2.2=34。
+- 結果: M4 DoD 5/5 pass。Python構文検査と `git diff --check` もpassし、`doctor.py` は12 pass / 0 failだった。
+
+### M4 R6対応後の再検証（2026-08-17）
+
+- R6-01回帰コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 同一複数語キー8組の後順位ターゲット、非対象ID順、最長一致、wedの対象文・選択肢、不正アンカー、'mの分割を実データで検証 ... PY`。
+- R6-01回帰結果: 8組すべてで後順位の宣言ターゲットを対象回数1・対象IDで採用した。非対象の`all right`は従来どおりadjectiveのID順を維持し、短い`right`ターゲットより長い`all right`を優先した。`wed`は完成文と正解選択肢の各2トークンを同じ`lex:wed:verb`として採用して`verdict=pass`となり、記録pos不一致では宣言アンカー照合を使わず`V-DIS-01` / `V-LEX-01`となった。`'m`の2トークンも同じ宣言アンカーで採用した。
+- DoD最終コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... 16状態と固定再質問、lookup実データ、正本内9形式例の正準化、validate.py、machine_check.py、machine reportスキーマ、PRM-01〜14、現行設定、固有名詞allowlist、文法9レベル適格件数、未付与16項目と継承枝番を検証 ... PY`。
+- DoD 1: 16状態、1ターン1質問、固定再質問、動的件数境界、`be` / A1.2の10件複数一致分岐がpass。
+- DoD 2: `abandon` / A1と`Tokyo`辞書外の実lookup拒否がpass。
+- DoD 3: 9形式candidateスキーマ、`validate.py`、機械判定、machine reportスキーマ、machine reportの`validate.py`再検証が9/9 pass。
+- DoD 4: PRM-01〜14、現行limits、50語の固有名詞allowlistがpass。
+- DoD 5: 教員版直接割当の9レベル適格件数、未付与16項目、`gp:1-1`の拒否がpass。適格件数はA1.1=28、A1.2=50、A1.3=61、A2.1=65、A2.2=63、B1.1=76、B1.2=67、B2.1=53、B2.2=34。
+- 結果: M4 DoD 5/5 pass。`.venv/bin/python -m py_compile scripts/machine_check.py scripts/lookup.py scripts/validate.py scripts/doctor.py`と`git diff --check`はpassし、`doctor.py`は12 pass / 0 failだった。
 
 ### M4着手前のM1 DoD再検証（2026-08-17、6/6 pass）
 

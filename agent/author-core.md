@@ -30,6 +30,20 @@ M4時点の暫定配線は、対話、`lookup.py` による照合、candidate生
 9. 機械検査の `verdict=fail` は覆せない。独立レビューも将来これをpassへ変更できない。
 10. `output/` の実行時成果物をコミットしない。
 
+### 1.1 CLI引数の安全な受け渡し
+
+本書のコマンド例は論理的なargv列の表記であり、プレースホルダーへ文字列を埋め込んだシェルコマンドではない。CLIは可能な限りシェルを介さず、実行ファイルと各引数を分離した構造化argv配列で起動する。教師入力、lookup結果、ID、カテゴリ、ファイルパスをコマンド文字列へ連結してはならない。
+
+`--headword`、`--keyword`、`--category`、`--pool-for`、`--candidate`、`--file`、`--set-dir` などの値は、空白やシェルメタ文字の有無にかかわらず、それぞれargvのちょうど1要素として渡す。例えば次の各配列では、`CD player`、`ought to`、`lex:CD player:noun` がそれぞれ単一引数である。
+
+```text
+["python", "scripts/lookup.py", "lex", "--headword", "CD player", "--limit", "200"]
+["python", "scripts/lookup.py", "gp", "--keyword", "ought to", "--level", "A2.1", "--limit", "200"]
+["python", "scripts/lookup.py", "lex", "--pool-for", "lex:CD player:noun", "--limit", "200"]
+```
+
+ホスト環境がシェル経由の起動しか提供しない場合だけ、対象シェルの標準的な引数引用機構で各argv要素を個別に引用する。引用前の自由入力を展開、コマンド置換、リダイレクト、オプション分割として解釈させてはならない。この境界は全CLI呼び出しに共通して適用する。
+
 ## 2. 対話状態機械
 
 ### 2.1 状態と順序
@@ -81,7 +95,7 @@ M4時点の暫定配線は、対話、`lookup.py` による照合、candidate生
 python scripts/doctor.py
 ```
 
-仮想環境をactivateしていない場合は `python` を `.venv/bin/python`（Windowsは `.venv\Scripts\python.exe`）へ読み替えてよい。終了コード0かつ12項目passの場合だけS10へ進む。失敗時はdoctorが出力したエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
+仮想環境をactivateしていない場合は `python` を `.venv/bin/python`（Windowsは `.venv\Scripts\python.exe`）へ読み替えてよい。終了コード0かつ12項目passの場合だけ、検証済み `data/config/limits.json` の `set_question_max` をセッション値として1回読み取り、S10へ進む。以後は質問、再質問、入力検証、追加可能数、S80のCLI引数に同じセッション値を使い、設定ファイルを再読込みして上限を変えない。doctor失敗時は出力されたエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
 
 ### 2.4 S10 形式選択
 
@@ -155,7 +169,7 @@ A1.1 / A1.2 / A1.3 / A2.1 / A2.2 / B1.1 / B1.2 / B2.1 / B2.2
 語彙形式では次を提示する。
 
 ```text
-対象の英単語を入力してください（1〜20件。複数の場合はカンマまたは改行で区切ってください）。
+対象の英単語を入力してください（{target_count_guidance}。複数の場合はカンマまたは改行で区切ってください）。
 品詞まで指定する場合は「watch:verb」の形式で書いてください。
 品詞表記は Wordlist の15種です: noun / adjective / verb / adverb / pronoun / preposition /
 determiner / conjunction / number / modal auxiliary / be-verb / do-verb / have-verb /
@@ -166,17 +180,19 @@ interjection / infinitive-to
 文法形式では次を提示する。
 
 ```text
-対象の文法項目を入力してください（1〜20件。複数の場合はカンマまたは改行で区切ってください）。
+対象の文法項目を入力してください（{target_count_guidance}。複数の場合はカンマまたは改行で区切ってください）。
 次のいずれの書き方でも指定できます。
  - 教員版のID（例: 13、1-1）
  - 文法項目名またはその一部（例: 受動態、to不定詞）
 対象にできるのは教員版でCEFR-Jレベルが付与された256項目のみです。
 ```
 
-件数は `data/config/limits.json` の `set_question_max` 以下かつ1件以上とする。語彙のposは表示した15種との完全一致だけを受理する。同一対象は重複を除き、S32の結果表示で通知する。不正時は該当理由を1つだけ入れて次を提示する。
+`{target_count_guidance}` は初回入力では `1〜{set_question_max}件`、S40からの追加では `追加できる新規対象は1〜{remaining_capacity}件（既存対象の再入力は重複として除外します）` とし、`remaining_capacity = set_question_max - 現在の確定対象数` である。
+
+初回入力の件数は1〜セッション値 `set_question_max` とする。追加入力は既存の確定集合へ直ちに加えず一時集合としてS32まで全件照合し、代替・取り下げを全て解決した後に、対象IDで既存集合との重複を除いた新規対象数を求める。新規対象数が残り容量を超えたら追加操作全体を不受理として元の集合を保持し、S31で再質問する。新規対象が0件なら、重複または取り下げにより追加がなかったことを通知し、元の集合のままS40へ戻る。新規対象数が1〜残り容量なら一括して確定集合へ加える。語彙のposは表示した15種との完全一致だけを受理する。不正時は該当理由を1つだけ入れて次を提示する。
 
 ```text
-入力を解釈できませんでした。{件数が0件です / 件数が上限20件を超えています / 品詞表記「{pos}」は15種の一覧にありません}。もう一度入力してください。
+入力を解釈できませんでした。{件数が0件です / 件数が上限{set_question_max}件を超えています / 追加後の新規対象数{new_target_count}件が残り容量{remaining_capacity}件を超えています / 品詞表記「{pos}」は15種の一覧にありません}。もう一度入力してください。
 ```
 
 ### 2.8 S32 明示照合
@@ -195,6 +211,12 @@ python scripts/lookup.py lex --headword <headword> [--pos <pos>] [--level <L>] -
 python scripts/lookup.py gp --id gp:<ID> [--level <L>] --limit 200
 python scripts/lookup.py gp --keyword <文字列> [--level <L>] --limit 200
 ```
+
+文法IDの照合では、レベル包含より先に、レベル指定なしの結果にある `target_eligible` を判定する。`target_eligible=false` は、`level.min` / `level.max` が指定レベルを含んでいても採用せず、IF-20の「辞書外」（教員版256項目に該当しない項目）としてDLG-42へ進める。
+
+- `level.source=kyoinban_inherited` の場合は、当該枝番がITEM LISTには存在し、表示されたレベルは親項目から参照用に継承した値だが、当該枝番自身には教員版の直接割当がなく `target_eligible=false` であるため作問対象にできない、と説明する。レベル不一致として扱ったり、継承値を根拠に採用したりしてはならない。
+- `level.source=null` の場合は、教員版でレベル根拠が付与されていない項目として、下記の既存の未付与説明を使う。
+- いずれも照合NG（辞書外）を表示し、(1)代替の文法項目、(2)取り下げ、(3)当該枠だけ指定レベルの提案へ切替、の1つを選ばせる。`target_eligible=true` の場合だけ、その後に指定レベルの範囲包含と形式適合性を判定する。
 
 文法項目名またはその一部の指定では、指定レベルに適格な結果が1件なら自動採用する。2件以上なら、形式適合性を判定する前に次の固定文面で全件をlookup順に提示し、教師が選んだ1件だけを後続判定へ渡す。先頭候補を自動採用しない。
 
@@ -250,26 +272,31 @@ python scripts/lookup.py gp --keyword <文字列> [--level <L>] --limit 200
 
 ```text
 対象が {n} 件確定しました。1対象＝1問のため、このセットの問題数は {n} 問です。
-よろしいですか？（はい / 対象を追加 / 対象を削除）
+よろしいですか？（はい{n < set_question_max の場合だけ「 / 対象を追加」} / 対象を削除）
 ```
+
+S40へ入るたび、および「はい」を受理する直前に、重複除去済み確定対象集合が1〜セッション値 `set_question_max` 件であることを再検証する。`n = set_question_max` では「対象を追加」を表示・受理せず、不正入力として再質問する。追加を受理できる場合も、S31/S32の追加候補は元の集合と分離し、全候補の照合・重複除去・総件数検査が通った場合だけ一括適用する。
 
 削除時だけ、番号付き確定対象一覧とともに次の1質問を行う。
 
 ```text
 削除する対象を番号で指定してください（カンマ区切りで複数可）。
+少なくとも1件は残してください。
 {確定対象の番号付き一覧}
 ```
+
+削除後にも1〜`set_question_max`件を検査する。全件削除の指定は一件も適用せず元の集合を保持し、全件は削除できない旨の再質問後に同じ削除質問を提示する。1件以上残る削除だけを一括適用してS40の確認へ戻る。
 
 提案モードのS40では次を提示し、1〜`set_question_max`の整数Nだけを受理する。
 
 ```text
-作成する問題数を 1〜20 の整数で入力してください（1対象＝1問。上限は data/config/limits.json の設定値です）。
+作成する問題数を 1〜{set_question_max} の整数で入力してください（1対象＝1問）。
 ```
 
 S40の不正入力では、実行中の分岐に合わせて次を提示する。
 
 ```text
-入力を解釈できませんでした。{明示モード: 「はい」「対象を追加」「対象を削除」のいずれかで / 提案モード: 1〜20 の整数で}回答してください。
+入力を解釈できませんでした。{明示モード: 表示した「はい」「対象を追加」「対象を削除」のいずれかで / 全件削除: 全件は削除できません。少なくとも1件残る番号で / 提案モード: 1〜{set_question_max} の整数で}回答してください。
 ```
 
 S35では次を実行する。
@@ -374,7 +401,7 @@ S70では次の順序と文面で全条件を提示する。
 
 ## 3. S80開始と識別子
 
-S70承認後、S80開始時にset_idを1回だけ採番する。書式はローカル日時14桁と4文字の小文字英数字乱数による `YYYYMMDD-HHMMSS-xxxx` とし、既存 `output/<set_id>/` と衝突したら末尾4文字を再生成する。対象順に `q01`〜`q20` を割り当てる。
+S70承認後、S80開始時にset_idを1回だけ採番する。書式はローカル日時14桁と4文字の小文字英数字乱数による `YYYYMMDD-HHMMSS-xxxx` とし、既存 `output/<set_id>/` と衝突したら末尾4文字を再生成する。S70承認時の対象数が1〜S00で固定した `set_question_max` 件であることを再検証し、対象順に `q01`〜`q20` のうち必要なN個を `q01`から連番で割り当てる。`q20` を超えるIDを生成しない。
 
 次を提示する。
 
@@ -430,7 +457,7 @@ M4の暫定配線で使う事象文は、少なくとも `生成開始（対象:
 
 - 全9形式が英語例文を持つ。例文は原則1文とし、複数文の連結やセミコロンによる実質複文化をしない。
 - 文法項目の文タイプが `前文が肯定平叙` または `前文が否定平叙` の場合だけ先行文1文を `context_sentence` に置き、原本セル値を `context_required_by` にそのまま記録できる。それ以外は両方nullとする。先行文にも全例文規則を適用する。
-- 語彙形式では対象語を指定された例文フィールドにレンマ一致でちょうど1回実現し、表層形を `target_surface` に記録する。
+- 語彙形式では対象語を指定された例文フィールドにちょうど1回実現する。対象headwordは`is_multiword`の値にかかわらず固定spaCyモデルでトークン列化し、例文側の正規化表層形列または補正後レンマ列と一致させる。同じ最大長の一般複数語候補がある場合は宣言した対象エントリをID辞書順より優先するが、より長い一般複数語候補を覆さない。Wordlist上は単一語でもspaCyが複数トークンへ分割するheadwordは、その全トークン区間を1出現とする。採用された対象区間の原文スライスを、空白・大文字小文字・記号を改変せず `target_surface` に完全一致で記録する。
 - 文法形式では `item_list.pattern_shorthand` が示す対象構造を実現する。
 - トピック指定がある場合は題材をそのトピックに沿わせる。ない場合も中立で教育的に適切な題材にする。
 - `grammar_reorder` と `grammar_rewrite` では先行文脈要求項目を使わない。
@@ -455,9 +482,11 @@ candidateは次の共通骨格を持つ。
 
 語彙4択では正解1つと誤答3つの全選択肢にWordlist実在アンカーを付ける。各anchorは `entry_id`、`headword`、`pos`、`level` を正規化データからそのまま転記する。正解anchorは対象自身とする。4 anchor IDは相互に異ならなければならない。
 
+`vocab_mcq_ja2en`の各`choices[*].text`はanchorのheadwordそのものにする。固定spaCyモデルがheadwordを複数トークンへ分割する場合も、その選択肢全体は同じanchor ID・levelの`wordlist_match`区間として機械照合される。anchorの実値転記または選択肢表記が不一致ならこの扱いは適用されない。
+
 誤答アンカーは指定レベルと同一、原則として対象と同一posにする。対象自身を除き、(1) CoreInventory 1一致、(2) Threshold一致、(3) CoreInventory 2一致、(4)カテゴリ一致なし、の順で優先し、同順位は正規化lexicon順にする。対象側カテゴリがnullならそのカテゴリ一致を評価しない。`lookup.py lex --pool-for <target.ref> --limit 200` の結果を使う。
 
-同レベル・同posプールが3語未満の場合だけ、次の互換品詞群内へ緩和できる。
+同レベル・同posの生候補から同義語・正解と区別不能な語を除外した有効候補が3語未満の場合だけ、次の互換品詞群内へ緩和できる。lookup結果の `total` だけで緩和の可否を決めない。
 
 - noun / number
 - verb / be-verb / do-verb / have-verb / modal auxiliary
@@ -465,9 +494,18 @@ candidateは次の共通骨格を持つ。
 - adverb
 - pronoun / preposition / conjunction / interjection / infinitive-to
 
-緩和時も同レベルを維持し、カテゴリ優先と正規化順を適用する。緩和したら `pos_pool_relaxed=true`、しなければfalseを必ず記録する。誤答に対象の同義語や正解と区別不能な語義を使わない。
+緩和時も同レベルを維持し、カテゴリ優先と正規化順を適用する。緩和時は対象と異なるposの誤答を少なくとも1つ実際に使って `pos_pool_relaxed=true` とし、緩和しなければfalseを必ず記録する。誤答に対象の同義語や正解と区別不能な語義を使わない。
 
 `grammar_mcq` の誤答3つは対象項目と同一パラダイムの操作で作り、空欄へ入れると文法的または意味的に不成立にする。正解の言い換えを誤答にせず、排除に指定レベル超の知識を要求せず、誤答語自体もレベル・辞書制約内にする。
+
+語彙4択の誤答アンカープールは、次のlookup結果だけから決定的に組み立てる。
+
+1. まず `lookup.py lex --pool-for <target.ref> --limit 200` を実行する。返却順にGEN-13の同義語・正解と区別不能な語を意味的に除外し、有効候補集合を作る。有効候補が3語以上なら先頭3件を使い、`pos_pool_relaxed=false` とする。
+2. 有効候補が3語未満の場合だけ、対象posが属する互換品詞群の全posについて `lookup.py lex --level <L> --pos <pos> --limit 200` をそれぞれ実行する。対象側の `core_inventory_1` / `threshold` / `core_inventory_2` が非nullなら、各値について同じ照会へ `--category <値>` を追加した照会も実行し、カテゴリ一致候補を取得する。
+3. 全照会の `matches` をIDで和集合にし、対象自身と既出IDを除く。各候補の全フィールドはlookup結果からそのまま使う。対象と候補の同じカテゴリフィールド同士を比較し、CoreInventory 1一致=順位1、Threshold一致=順位2、CoreInventory 2一致=順位3、いずれも不一致=順位4とする。対象側がnullのカテゴリは一致と数えない。
+4. 和集合を `(カテゴリ順位, headword.casefold(), headword, pos)` の順、すなわちGEN-14の順位とNRM-13順で再整列する。照会の実行順やpos一覧順を候補順にしてはならない。GEN-13の同義語・区別不能語を除外しながら先頭から3件を採用し、対象と異なるposを少なくとも1件含めて `pos_pool_relaxed=true` とする。同レベルは緩和しない。3件を確保できなければ未定義アンカーを補わず、そのcandidateを生成しない。
+
+`--pool-for` 以外の照会で取得した候補についても、anchorの `entry_id` / `headword` / `pos` / `level` はlookup結果を非改変で転記する。正規化データに未照会のアンカーを補ってはならない。
 
 ### PRM-08 日本語規則
 
@@ -559,15 +597,25 @@ bodyは `example.en`、`example.ja`、`context_sentence`、`context_required_by`
 各問題をq番号順に1問ずつ処理する。並行生成しない。
 
 1. lookup結果、現在のlimits、allowlist全件、確定条件から第4節の生成入力を展開し、第5節の該当形式でcandidate JSONを生成する。
-2. `output/<set_id>/review/` を作成し、生成テキストをパースする。JSONオブジェクト1個としてパースできない場合はcandidateスキーマ不通過と同じ再指示境界へ渡す。
-3. 一時ファイルへcandidateをUTF-8・キー辞書順・インデント2・LF・末尾改行1つの正準形で置き、次を実行する。
+2. `output/<set_id>/review/` を作成し、生成生出力をホスト側でJSONパース・再直列化する前に取得する。ホストがbytesを返す場合はそのバイト列を非改変で使い、文字列を返す場合はstrict UTF-8で1回だけエンコードする。孤立サロゲート等でUTF-8化できなければ、下記のcandidate受理検証不通過へ進める。置換文字・`backslashreplace`・`ensure_ascii=True`で受理可能な別内容へ変換してはならない。
+3. UTF-8化できた生成生出力を非改変の一時ファイルへ置き、ホスト側でパースする前に次を実行する。
 
 ```text
-python scripts/validate.py --schema candidate --file <candidate一時ファイル>
+python scripts/validate.py --schema candidate --file <生成生出力一時ファイル>
 ```
 
-4. スキーマ合格時だけ、同じ正準バイト列を `output/<set_id>/review/<question_id>.<gen>.candidate.json` に保存する。不通過時は `docs/subagent-review-spec.md` のT2/T3境界どおり、同一世代内で1回だけ全スキーマ違反を添えて再指示し、2回目も不通過ならその世代を消費する。M4ではその先の世代遷移を独自判断しない。
-5. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数を毎回渡す。
+4. 次のいずれかを生成出力起因のcandidate受理検証不通過とし、共通のCLI停止やFMT-80b事象16より先に、同じquestion_id・世代のT2/T3カウンタへ送る。
+
+   - 第2項で生成テキストをstrict UTF-8化できない。
+   - `validate.py`が終了コード1・`E-CONTRACT-01`・stdoutの`schema="candidate"` / `valid=false`を返す。
+   - 生成生出力の非UTF-8・非標準JSON・構文不正により、`validate.py`が終了コード1・`E-INPUT-03`を返す。
+   - `validate.py`がcandidateをvalidとした後の厳格パース、または次項のJS-01正準化に失敗する。
+
+   1回目はAUD-09の形式で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。
+
+   2回目は同じ内容形式で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。UTF-8で保持できる生出力は全文をinvalidファイルへ入れる。生出力自体をUTF-8化できない場合は改変保存せず、UTF-8化不能の理由と取得可能な位置だけを記録する。M4ではその先の世代遷移を独自判断しない。
+5. `validate.py`がvalidを返した場合だけ、その同じ生出力を厳格にJSONオブジェクトへパースする。candidateスキーマには数値フィールドがないため、検証前の通常floatパースで`1e400`等を無限大へ丸める必要はない。パースしたcandidateを、UTF-8（BOMなし）・非ASCII文字をエスケープしない・キー辞書順・インデント2・改行LF・末尾改行1つのJS-01正準形へ直列化する。Pythonでは `json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"` をstrict UTF-8でエンコードしたバイト列とする。この段階の例外を未処理で停止せず、第4項のT2/T3へ送る。受理検証を全て通過した同じ正準バイト列だけを `output/<set_id>/review/<question_id>.<gen>.candidate.json` に保存し、次項の入力にも使う。
+6. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数を毎回渡す。依頼問題数はS00で固定した `set_question_max` 以下であることをS40/S70で確認済みの値とする。
 
 ```text
 python scripts/machine_check.py \
@@ -579,8 +627,10 @@ python scripts/machine_check.py \
   --requested-count <N>
 ```
 
-6. stdoutのmachine_reportをそのまま正準JSONとして `output/<set_id>/review/<question_id>.<gen>.machine.json` に保存する。`machine_report` の内容をLLMで書き換えない。
-7. `verdict` に応じてFMT-80bの「機械検査 合格」または「機械検査 不合格（コード列挙）」だけを表示する。
-8. 以降はM5の独立レビュー・再生成ループへ渡す。M4単独ではreviewファイル、set.json、index.htmlを捏造せず、S90へ遷移しない。
+7. stdoutのmachine_reportをそのまま正準JSONとして `output/<set_id>/review/<question_id>.<gen>.machine.json` に保存する。`machine_report` の内容をLLMで書き換えない。
+8. `verdict` に応じてFMT-80bの「機械検査 合格」または「機械検査 不合格（コード列挙）」だけを表示する。
+9. 以降はM5の独立レビュー・再生成ループへ渡す。M4単独ではreviewファイル、set.json、index.htmlを捏造せず、S90へ遷移しない。
 
-CLIが終了コード1で停止した場合は、stderr最終行の定義済みエラーコードと日本語remedyをそのまま提示し、`docs/interaction-flow.md` IF-04/IF-42と `docs/architecture.md` の停止規則に従う。終了コード2は内部バグとして扱い、成功や業務上の不合格へ読み替えない。
+終了コード1では、まず第4項の生成生出力に対する `validate.py --schema candidate` の `E-CONTRACT-01` / `E-INPUT-03` かを判定し、該当時は必ずT2/T3を優先する。それ以外のdoctor以外のCLI停止では、stderr全体をUTF-8のJSON文書1個として解析し、CLI-05の `error_code`、`message`、`remedy`、`detail` を取得する。物理的な最終行だけを読んではならない。lookupの定義済み停止、生成出力以外に起因するcandidate検証CLI停止、他スキーマの検証不通過、およびmachine_report内部生成結果の `E-CONTRACT-01` はT2/T3へ送らない。S80では取得した値をFMT-80bの事象16 `エラーにより中止します: {error_code} {remedy}` に非改変で入れ、IF-04/IF-42と `docs/architecture.md` の停止規則に従う。S80以外でも少なくとも `error_code` と日本語 `remedy` を教師へ提示する。doctorの診断failはS00の規則どおりstdoutの全12項目レポートを使う。
+
+終了コード1なのにstderr全体が単一JSONとして解析できない、またはCLI-05の必須フィールドを取得できない場合は、定義済みエラーを推測せず内部契約違反として停止する。終了コード2も内部バグとして扱い、いずれも成功や業務上の不合格へ読み替えない。

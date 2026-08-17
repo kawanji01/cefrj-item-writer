@@ -226,13 +226,14 @@ CHK-02（対象語の用法・語義）・CHK-17（2文例文の正当性）・C
 誤答の由来（headword+pos+level）の実在・同レベル・同品詞（または記録済み緩和）の照合は機械検査の担当である。本項目は意味的判断を担当する。
 
 - **見る対象**: 3つの誤答選択肢（①は日本語語義、②は英単語）と、正解・対象語。
-- **根拠**: `data/normalized/lexicon.json` の各誤答由来エントリ、機械検査レポートの誤答照合結果。
+- **根拠**: `data/normalized/lexicon.json` の各誤答由来エントリと同レベル・同品詞の生候補、機械検査レポートの誤答照合結果。
 - **手順**:
   1. 各誤答が正解の同義語・区別不能語でないことを確認する。学習者が正解と区別できない誤答は `fail`。
   2. ①のみ: 誤答の日本語語義が、**正解語（対象語）の別義**と重なっていないことを確認する。重なる場合は `fail`（例: 対象語に2つの語義があり、誤答文言がその第2義に一致してしまう場合）。
   3. ②のみ: 誤答の英単語が、設問の日本語語義の訳として成立しないことを確認する。成立する場合は `fail`（CHK-05手順1と同根だが、こちらは誤答語の語義側から確認する）。
   4. 誤答の排除（正解の特定）に指定レベル超の語彙知識が不要であることを確認する。必要なら `fail`。
-- **記録**: `fail` 時は `code: "CHK-06"`、`location` に該当誤答、`evidence` に誤答由来の `lex:` ID と重なる語義の説明。
+  5. `body.pos_pool_relaxed = true` の場合、対象自身を除く同レベル・同品詞の生候補を確認し、GEN-13の3により正解語の同義語・正解語と意味の区別が不能な語を除外する。例えば対象 `do` に対する `does`、対象 `have` に対する `has` は生候補には含めるが、正解と区別不能なので有効候補から除外する。除外後の有効候補が3語以上なら、緩和は不要なので `fail`。3語未満なら緩和の必要性を確認できる。生候補数だけで判定してはならない。互換品詞群と異品詞誤答の実使用は機械検査が担当する。
+- **記録**: `fail` 時は `code: "CHK-06"`、`location` に該当誤答または `body.pos_pool_relaxed`、`evidence` に誤答由来の `lex:` ID と重なる語義の説明、または緩和不要と判断した有効な同品詞候補3件の `lex:` ID を記録する。
 
 ### CHK-07 文法誤答の適格性（適用: ⑤）
 
@@ -458,9 +459,9 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 
 | # | 現状態 | 事象・条件 | 次状態 | 監査記録（第8節） |
 |---|---|---|---|---|
-| T1 | 生成(g) | 生成エージェントが候補を出力し、`validate.py` によるスキーマ検証を通過 | 機械検査(g) | `<qid>.<g>.candidate.json` |
-| T2 | 生成(g) | スキーマ検証不通過（同一世代内1回目） | 生成(g) に再指示（同一世代内、再指示は1回まで） | `<qid>.<g>.candidate.invalid1.txt` |
-| T3 | 生成(g)・再指示後 | スキーマ検証不通過（同一世代内2回目） | 世代消費: g<`gen3` なら 生成(g+1)、g=`gen3` なら **不成立** | `<qid>.<g>.candidate.invalid2.txt` |
+| T1 | 生成(g) | 生成エージェントが候補を出力し、candidate受理検証（生出力のUTF-8・標準JSON、`validate.py`のcandidateスキーマ、厳格パース、JS-01正準化）を全て通過 | 機械検査(g) | `<qid>.<g>.candidate.json` |
+| T2 | 生成(g) | candidate受理検証不通過（同一世代内1回目） | 生成(g) に再指示（同一世代内、再指示は1回まで） | `<qid>.<g>.candidate.invalid1.txt` |
+| T3 | 生成(g)・再指示後 | candidate受理検証不通過（同一世代内2回目） | 世代消費: g<`gen3` なら 生成(g+1)、g=`gen3` なら **不成立** | `<qid>.<g>.candidate.invalid2.txt` |
 | T4 | 機械検査(g) | `machine_check.py` が正常終了（違反の有無を問わない） | レビュー(g) | `<qid>.<g>.machine.json`（続けてレビュアー起動直前に `<qid>.<g>.request.json`。AU-02） |
 | T5 | レビュー(g) | レビュアー出力が `review_result` スキーマ検証を通過 | 世代判定(g) | `<qid>.<g>.review.json` |
 | T6 | レビュー(g) | 出力スキーマ不通過・プロセス失敗（k回目、k≤2） | レビュー(g) を再実行（インフラ障害、世代を消費しない。第6節） | `<qid>.<g>.review.invalid1.txt` / `.invalid2.txt` |
@@ -470,8 +471,8 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 | T10 | セット横断検査(g) | `set_check.py`（当該候補×確定済み問題）違反0 | **確定（ACCEPTED）** → 次の問題へ | `set_check.<qid>.<g>.json` |
 | T11 | セット横断検査(g) | 違反あり（対象重複・例文使い回し・誤答の過度な再利用） | g<`gen3` なら 生成(g+1)（set_check違反を指摘として同梱）、g=`gen3` なら **不成立** | `set_check.<qid>.<g>.json` |
 
-- **RG-04**: 世代が消費されるのは T3（スキーマ2連続不通過）・T8（世代判定 `fail`）・T11（セット横断違反）の3遷移のみである。T6（インフラ障害）は世代を消費しては**ならない**（MUST NOT）。
-- **RG-05**: T2 の再指示では、生成エージェントにスキーマ検証エラーの内容（`validate.py` の出力）を渡して同一世代内での再出力を求める。再指示が成功した場合（T1）、その候補が当該世代の候補となる。
+- **RG-04**: 世代が消費されるのは T3（candidate受理検証2連続不通過）・T8（世代判定 `fail`）・T11（セット横断違反）の3遷移のみである。T6（インフラ障害）は世代を消費しては**ならない**（MUST NOT）。
+- **RG-05**: T2 の再指示では、生成エージェントにcandidate受理検証の診断（`validate.py`のstdout、stdoutがない場合はstderr、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置）を渡して同一世代内での再出力を求める。再指示が成功した場合（T1）、その候補が当該世代の候補となる。
 
 ### 5.3 セットループの状態遷移表
 
@@ -555,9 +556,9 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 問題ループ(target, accepted):
     for g in gen1..gen{GEN_MAX}:
         cand = 生成(target, g, 直前世代の指摘 if g > gen1)
-        if not スキーマ通過(cand):                    # T2
+        if not candidate受理検証通過(cand):           # T2
             cand = 再指示して再生成(同一世代, 1回のみ)
-            if not スキーマ通過(cand): continue       # T3: 世代消費
+            if not candidate受理検証通過(cand): continue  # T3: 世代消費
         machine = machine_check(cand)                # T4: 違反有無に関わらず続行
         review = レビュー実行(封筒(cand, machine))     # 常に実行 (RC-15)
         # レビュー実行内部: スキーマ不通過/プロセス失敗は最大2回再実行 (T6)、
@@ -586,7 +587,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 - **INF-03**: 3実行すべてが失敗した場合、**セットを中止**し（S8）、`E-CONTRACT-xx` 系の定義済みエラー（具体コードは `docs/architecture.md` の目録が正）と日本語の対処手順を教師に提示して停止する（MUST）。`set.json` は書かない（RG-07）。
 - **INF-04**: 各失敗実行の生出力（得られた範囲のテキスト全文）とスキーマ検証エラーを監査ファイル `review/<question_id>.<gen>.review.invalid<k>.txt`（k=1,2,3）として保存し**なければならない**（MUST）（第8節）。
 - **INF-05**: `review_result` が **スキーマは通過するが内容がRR-01〜RR-05の記入規則に違反する**場合（例: `verdict: fail` なのに `violations` が空、checks に欠番がある）、スキーマで機械検査可能な範囲はスキーマ側で拒否される設計とする（`schemas/review_result.schema.json` の責務）。スキーマで表現できない記入規則違反をオーケストレータが検出した場合も INF-01 と同じくインフラ障害として扱う（MUST）。
-- **INF-06**: 生成側のインフラ障害のうち、候補のスキーマ不通過は D-20 のとおり同一世代内1回再指示→失敗なら世代消費であり（T2/T3）、インフラ障害としては扱わない。生成エージェント自体のプロセス異常（ホストツールのセッション断）はセット中断であり、`set.json` が存在しないことで未完成が自明となる（再開機能はv2課題。`docs/requirements.md` のスコープ外リスト参照）。
+- **INF-06**: 生成側のインフラ障害のうち、candidate受理検証不通過（生成出力に起因する`E-CONTRACT-01` / `E-INPUT-03`、厳格パース失敗、JS-01正準化失敗）はD-20のとおり同一世代内1回再指示→失敗なら世代消費であり（T2/T3）、インフラ障害としては扱わない。生成エージェント自体のプロセス異常（ホストツールのセッション断）はセット中断であり、`set.json` が存在しないことで未完成が自明となる（再開機能はv2課題。`docs/requirements.md` のスコープ外リスト参照）。
 - **INF-07（タイムアウト）**: オーケストレータはレビュアー1実行に `data/config/limits.json` の運用パラメータ `review_timeout_seconds`（既定300秒）のタイムアウトを適用しなければならない（MUST）。超過は INF-01 の4号（出力を返さない）としてインフラ障害に数え、INF-02 の再実行規則に従う。両アダプタはこの値を各起動機構（Taskの待機・サブプロセスの待機）に適用しなければならない（MUST。`docs/cross-agent-compatibility.md` COR-09）。
 
 ---
@@ -634,7 +635,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 
 | ファイル名 | 内容 | 書き込みタイミング |
 |---|---|---|
-| `review/<question_id>.<gen>.candidate.json` | スキーマ通過済み候補 | T1 通過直後 |
+| `review/<question_id>.<gen>.candidate.json` | candidate受理検証通過済み候補 | T1 通過直後 |
 | `review/<question_id>.<gen>.machine.json` | 機械検査レポート | T4 完了直後 |
 | `review/<question_id>.<gen>.request.json` | `review_request` スキーマ検証通過済みの入力封筒（正準形で保存。内容の正は `docs/json-output-spec.md` AUD-08） | レビュアー起動直前（T4 完了後・RC-08 の検証通過後）。レビュアーにはこのファイルのパスを渡す（`docs/cross-agent-compatibility.md` COR-07） |
 | `review/<question_id>.<gen>.review.json` | スキーマ通過済み `review_result` | T5 通過直後 |
@@ -643,7 +644,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 
 | ファイル名 | 内容 | 書き込みタイミング |
 |---|---|---|
-| `review/<question_id>.<gen>.candidate.invalid<k>.txt`（k=1,2） | スキーマ不通過の生成出力の生テキスト＋`validate.py` のエラー | T2 / T3 |
+| `review/<question_id>.<gen>.candidate.invalid<k>.txt`（k=1,2） | candidate受理検証不通過の生成出力と診断（内容形式はAUD-09） | T2 / T3 |
 | `review/<question_id>.<gen>.review.invalid<k>.txt`（k=1,2,3） | スキーマ不通過・解析不能のレビュー生出力＋エラー（プロセス失敗時はエラー情報のみ） | T6 / T7 |
 | `review/set_check.<question_id>.<gen>.json` | 増分セット横断検査の結果 | T10 / T11 |
 | `review/set_check.final.json` | 確定処理時の全体最終検査の結果 | S9 / S10 |
@@ -651,7 +652,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 - **AU-04**: 書き込みは各遷移の発生直後に行わ**なければならない**（MUST。セット完了までバッファしてはならない）。これによりセット中断時にも全試行の監査が残る。
 - **AU-05**: 監査ファイルを事後に変更・削除しては**ならない**（MUST NOT）。同名ファイルが既に存在する状態での上書きはデータ整合エラー（`E-DATA-xx` 系、目録は `docs/architecture.md`）として停止する（MUST）。
 - **AU-06**: `set.json` からの監査参照は相対パス（`review/` 起点）で行い、監査ファイルが欠けても `set.json` 単体で自立解釈可能でなければならない（MUST）。参照フィールドの仕様は `docs/json-output-spec.md` が正。
-- **AU-07**: 世代が T3（候補スキーマ2連続不通過）で消費された場合、当該世代の `candidate.json` / `machine.json` / `request.json` / `review.json` は存在しない。監査上は `candidate.invalid1.txt` / `candidate.invalid2.txt` の存在が当該世代の試行と帰結を示す。
+- **AU-07**: 世代が T3（candidate受理検証2連続不通過）で消費された場合、当該世代の `candidate.json` / `machine.json` / `request.json` / `review.json` は存在しない。監査上は `candidate.invalid1.txt` / `candidate.invalid2.txt` の存在が当該世代の試行と帰結を示す。
 
 ---
 
