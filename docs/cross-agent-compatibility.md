@@ -60,6 +60,8 @@
 
 - **CCW-11** プロジェクト設定 `.claude/settings.json` の `permissions` は次の要件を満たさなければならない(MUST)。
   - allow: `scripts/` のCLI 8本（`doctor.py` / `build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `lookup.py`）を `python` で実行するBashコマンド、およびリポジトリ配下のファイル読み取り・`output/` 配下への書き込み。
+  - allow: `finalize_set.py`に限り、`output/`配下のset-dirを指定し、区切り語を単引用符で囲んだ`FIN01`ヒアドキュメントから必須のFIN-01 JSONをstdinへ渡す専用Bashコマンド。パイプ、中間メタデータファイル、コマンド置換、区切り語後の追加コマンドを許可してはならない(MUST NOT)。
+  - allow: S80開始時の識別子生成に限り、タイムゾーン付きローカル日時を秒精度で1回取得し、同じ日時から`created_at`と`set_id`を生成し、既存`output/<set_id>`との衝突時は同じ日時のまま4文字接尾辞だけを再生成する、`.claude/settings.json`記載の引数なし固定`python -c`コマンド。許可ルールはコマンド全文の完全一致とし、ワイルドカード、追加引数、標準入力、ファイル書込み、ネットワークアクセスを許可してはならない(MUST NOT)。
   - deny: WebFetch・WebSearch を含むネットワークアクセス系ツール（決定的処理の完全オフライン要件。`docs/architecture.md` ARC-05）。
 - **CCW-12** 権限設定はセッション中の追加確認なしに標準フロー（対話→生成→機械検査→レビュー→確定→HTML）を完走できる範囲とすべきであり(SHOULD)、リポジトリ外への書き込み許可を含めてはならない(MUST NOT)。
 
@@ -74,8 +76,11 @@
 
 - **CDX-03** レビュアー起動は非対話サブプロセスとして、次のコマンドラインで実行しなければならない(MUST)。
 
+  作問側Codexは`codex --sandbox workspace-write --ask-for-approval on-request`で起動しなければならない(MUST)。次の固定コマンドを実行するホスト側シェル呼出しだけは親サンドボックス外での実行を申請し、教師の承認を得なければならない(MUST)。承認対象を別コマンドへ広げてはならず(MUST NOT)、子プロセスの`--sandbox read-only`を緩和してはならない(MUST NOT)。
+
   ```
   codex exec \
+    --ephemeral \
     --cd "<リポジトリルートの絶対パス>" \
     --sandbox read-only \
     --skip-git-repo-check \
@@ -83,6 +88,7 @@
     - < "<起動プロンプトファイルのパス>"
   ```
 
+  - `--ephemeral`: 起動ごとに新しい独立コンテキストを作り、レビュアーのセッション状態を永続化しない。
   - `--cd`: 作業ディレクトリをリポジトリルートに固定する。
   - `--sandbox read-only`: レビュアーに書き込みを許可しない（読み取り専用アクセスの強制。COR-05）。
   - `--skip-git-repo-check`: git管理状態に依存せず起動可能にする。
@@ -101,7 +107,7 @@
 - **CDX-07** サブプロセスの終了コードが非0の場合、および `--output-last-message` の出力ファイルが生成されない・空である場合は、インフラ障害（COR-08 参照）として扱わなければならない(MUST)。
 - **CDX-08** 終了コード0の場合、出力ファイルのテキストを COR-08 の手順で取り込む(MUST)。
 - **CDX-09** サブプロセス起動時に、生成側セッションの会話履歴・環境変数経由の追加コンテキストを渡してはならない(MUST NOT)。レビュアーが読めるのは、read-onlyサンドボックス下のリポジトリファイルのうち、CCW-08②と同じ列挙対象のみである（reviewer-core.md が読み取り許可対象を定める。正は `docs/subagent-review-spec.md`）。
-- **CDX-10** `codex` コマンドがPATH上に存在することは doctor.py の診断項目D12（`docs/architecture.md` CLI-10）で検出する。セットアップ手順書（第7節）は `codex exec --help` の実行確認を含めなければならない(MUST)。インストールされたCodexの版で CDX-03 のオプションが受理されない場合は、セットアップ手順書のトラブルシュートに従いCodexを更新する。
+- **CDX-10** `codex` コマンドがPATH上に存在することは doctor.py の診断項目D12（`docs/architecture.md` CLI-10）で検出する。セットアップ手順書（第7節）は `codex --help` と `codex exec --help` の実行確認を含め、親起動の`--sandbox workspace-write` / `--ask-for-approval on-request`と子起動の`--ephemeral` / `--cd` / `--sandbox read-only` / `--skip-git-repo-check` / `--output-last-message`が受理されることを確認しなければならない(MUST)。インストールされたCodexの版でこれらのオプションが受理されない場合は、セットアップ手順書のトラブルシュートに従いCodexを更新する。
 
 ## 5. 互換性保証範囲
 
@@ -130,7 +136,7 @@
   3. Python環境構築: `python scripts/setup.py` による `.venv` 作成と `requirements.txt` の固定版依存導入。
   4. spaCyモデル取得: en_core_web_sm の取得。ここが唯一のネットワーク許可点であることの明示（`docs/architecture.md` ARC-05）。
   5. 診断: `python scripts/doctor.py` の実行と全項目passの確認。fail時はエラーコード目録（`docs/architecture.md` 第6節）の remedy に従う旨。
-  6. ツール固有設定: Claude Code版=`.claude/` 配下の配線確認と権限設定（第3節）、Codex版=`codex exec --help` の実行確認（CDX-10）とAGENTS.md配線確認（第4節）。
+  6. ツール固有設定: Claude Code版=`.claude/` 配下の配線確認と権限設定（第3節）、Codex版=`codex --help` / `codex exec --help` の実行確認、親起動・固定レビュアー実行承認の確認（CDX-03/CDX-10）、AGENTS.md配線確認（第4節）。
   7. LLM送信の明示: 生成・レビュー時に正規化データ抜粋と問題文がAnthropic（Claude Code利用時）またはOpenAI（Codex利用時）に送信されることの説明（`DECISIONS.md` D-22）。
   8. 初回作問チュートリアル: 語彙4択（`vocab_mcq_en2ja`）A1・3問の1セットを対話開始から `index.html` 確認まで通す手順。
   9. 更新手順: `git pull` → `python scripts/doctor.py`（`docs/architecture.md` OPS-04 参照）。

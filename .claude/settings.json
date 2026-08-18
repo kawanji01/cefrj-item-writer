@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read(./**)",
+      "Edit(./output/**)",
+      "Bash(python scripts/doctor.py *)",
+      "Bash(python scripts/build_normalized.py *)",
+      "Bash(python scripts/machine_check.py *)",
+      "Bash(python scripts/set_check.py *)",
+      "Bash(python scripts/finalize_set.py *)",
+      "Bash(python scripts/finalize_set.py --set-dir output/* <<'FIN01'\n*\nFIN01)",
+      "Bash(python scripts/build_html.py *)",
+      "Bash(python scripts/validate.py *)",
+      "Bash(python scripts/lookup.py *)",
+      "Bash(python -c 'import datetime,json,os,secrets,string;n=datetime.datetime.now(datetime.timezone.utc).astimezone(None);p=n.strftime(\"%Y%m%d-%H%M%S-\");a=string.ascii_lowercase+string.digits;s=next(x for _ in iter(int,1)if not os.path.lexists(os.path.join(\"output\",(x:=p+\"\".join(secrets.choice(a)for _ in range(4))))));print(json.dumps({\"created_at\":n.isoformat(timespec=\"seconds\"),\"set_id\":s},ensure_ascii=False,sort_keys=True,indent=2))')"
+    ],
+    "deny": [
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}

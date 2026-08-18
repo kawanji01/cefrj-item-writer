@@ -1,0 +1,31 @@
+CEFR-Jデータに関する通知
+=========================
+
+1. 原本と著作権者
+
+本リポジトリは、東京外国語大学投野由紀夫研究室による次の原本を使用しています。
+
+- 『CEFR-J Wordlist Version 1.6』
+- 『CEFR-J Grammar Profile』
+
+2. 引用
+
+『CEFR-J Wordlist Version 1.6』 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）
+
+The CEFR-J Wordlist Version 1.6. Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.
+
+『CEFR-J Grammar Profile』（20200220版） 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）
+
+The CEFR-J Grammar Profile (20200220). Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.
+
+3. 利用条件
+
+原本のライセンスでは、適切な引用を伴う研究・教育・商用利用、および改変（別の語彙表や派生データの作成を含む）が許容されています。利用時は上記の出典を明示してください。
+
+4. 再配布時の注意
+
+`data/source/` または `data/normalized/` を含めて本リポジトリを再配布する場合も、上記の出典を明示する必要があります。
+
+5. 免責
+
+原本READMEには内容に誤りが含まれる可能性が明記されています。本システムが生成する問題にも誤りや教育目的に適さない内容が含まれる可能性があります。生成問題を教育利用する前の最終確認は、利用する教師の責任です。
