@@ -526,7 +526,8 @@ M2の`machine_check.py`と`lookup.py`は、上記の自己整合に加えて`doc
 1. lexiconに存在し、`level` = 指定レベル `L` である（LVL-12）。不一致・不存在は `V-TGT-03`。
 2. 対象語出現照合（MC-07の対象フィールド）: `target.ref`のheadwordを`is_multiword`の値にかかわらず固定spaCyモデルでトークン化し、MC-15の照合キーで正規化したパターンを宣言対象候補とする。文側の表層形列またはMC-16補正後レンマ列がそのパターンと一致する区間を候補とし、MC-13/MC-14の最長一致と同長時の対象ID優先を適用する。この例外により、`is_multiword=false`でも固定トークナイザがheadwordを複数トークンへ分割する場合（`wed` など）は1対象区間として照合できる。採用区間数がちょうど1回である（Q12）。0回または2回以上は `V-TGT-02`。活用形（`watch` → `watched`）は補正後レンマ列一致により1回、原本見出しが活用形である語（`been`など）は表層形列一致により1回と数える。採用区間の全トークンの `decision` は `target` とし、同じ対象entry IDとlevelを記録する（MC-30）。`multiword_match`は非ターゲット複数語の一致区間だけに用いる。
 3. `body.target_surface` が、第2項で採用された対象区間の原文スライス（先頭トークンの開始位置から末尾トークンの終了位置まで、トークン間の原文空白・記号を含む）のいずれかと完全一致する。不成立は `V-TGT-02`。
-4. `vocab_mcq_ja2en`では、`body.target_surface`が対象エントリの`headword`と一致し、`body.sentence_with_blank`の`____`を`target_surface`で置換した文字列が`body.sentence_complete`と完全一致しなければならない。不成立は`V-TGT-02`。
+4. `vocab_mcq_en2ja`では`body.stem`、`vocab_flashcard_en2ja` / `vocab_flashcard_ja2en`では`body.example.en`について、`body.target_surface`とコードポイント列が完全一致する開始位置を重なりを含めて列挙し、ちょうど1箇所であることを検査する。大文字小文字変換・Unicode正規化・単語境界推定は適用しない。0箇所または複数箇所は`V-TGT-02`。
+5. `vocab_mcq_ja2en`では、`body.target_surface`が対象エントリの`headword`と一致し、`body.sentence_with_blank`の`____`を`target_surface`で置換した文字列が`body.sentence_complete`と完全一致しなければならない。不成立は`V-TGT-02`。
 
 **MC-20（文法ターゲット照合）** 文法5形式では、candidateが宣言するターゲット文法項目ID（`target.ref`）について次を検査する。
 

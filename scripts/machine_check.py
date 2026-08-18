@@ -988,6 +988,26 @@ def check_vocab_target(
                 "機械照合で採用される対象区間の原文スライスをtarget_surfaceへ完全一致で記録してください。",
             )
         )
+    highlighted_text = None
+    if candidate["format"] == "vocab_mcq_en2ja":
+        highlighted_text = body["stem"]
+    elif candidate["format"] in {
+        "vocab_flashcard_en2ja",
+        "vocab_flashcard_ja2en",
+    }:
+        highlighted_text = body["example"]["en"]
+    if highlighted_text is not None:
+        surface = body["target_surface"]
+        first = highlighted_text.find(surface)
+        if first < 0 or first != highlighted_text.rfind(surface):
+            violations.append(
+                violation(
+                    "V-TGT-02",
+                    "body.target_surface",
+                    f"対象英文中のtarget_surface {surface!r}の完全一致開始位置が一意ではありません。",
+                    "target_surfaceと完全一致する部分文字列が対象区間の1箇所だけになる例文へ修正してください。",
+                )
+            )
     if candidate["format"] == "vocab_mcq_ja2en":
         if target_entry is not None and body["target_surface"] != target_entry["headword"]:
             violations.append(

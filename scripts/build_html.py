@@ -65,6 +65,23 @@ POS_LABELS = {
     "interjection": "[間投詞]",
     "infinitive-to": "[不定詞to]",
 }
+POS_BY_REF_SUFFIX = {
+    "noun": "noun",
+    "verb": "verb",
+    "adjective": "adjective",
+    "adverb": "adverb",
+    "pronoun": "pronoun",
+    "preposition": "preposition",
+    "determiner": "determiner",
+    "conjunction": "conjunction",
+    "number": "number",
+    "modal-auxiliary": "modal auxiliary",
+    "be-verb": "be-verb",
+    "interjection": "interjection",
+    "do-verb": "do-verb",
+    "have-verb": "have-verb",
+    "infinitive-to": "infinitive-to",
+}
 CHOICE_LABELS = ("A", "B", "C", "D")
 
 REMEDIES = {
@@ -215,7 +232,7 @@ def reject_input_output_alias(input_path: Path, output_path: Path) -> None:
 
 
 def pos_from_ref(reference: str) -> str:
-    return reference.rsplit(":", 1)[-1].replace("-", " ")
+    return POS_BY_REF_SUFFIX[reference.rsplit(":", 1)[-1]]
 
 
 def completed_sentence(sentence_with_blank: str, answer: str) -> str:
@@ -271,7 +288,7 @@ def install_template_helpers(environment: Any) -> None:
         if not marker:
             return escape(text)
         return Markup(
-            "{}<span class=\"blank\" role=\"img\" aria-label=\"空欄\">_______</span>{}"
+            "{}<span class=\"blank\" role=\"img\" aria-label=\"空欄\" lang=\"ja\">_______</span>{}"
         ).format(escape(before), escape(after))
 
     def blank_input(text: str, question_id: str, cue: str | None = None) -> Any:
@@ -279,7 +296,7 @@ def install_template_helpers(environment: Any) -> None:
         if not marker:
             return escape(text)
         input_markup = Markup(
-            '<span class="cloze-slot"><label class="visually-hidden" for="{}-input">'
+            '<span class="cloze-slot"><label class="visually-hidden" for="{}-input" lang="ja">'
             '空欄に入る語句</label><input id="{}-input" type="text" autocomplete="off" '
             'autocapitalize="off" spellcheck="false" lang="en"></span>'
         ).format(escape(question_id), escape(question_id))
@@ -311,7 +328,7 @@ def render_html(
         questions=prepare_questions(document),
         set_data=document,
     )
-    normalized = rendered.rstrip("\r\n") + "\n"
+    normalized = rendered.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n") + "\n"
     return normalized.encode("utf-8")
 
 

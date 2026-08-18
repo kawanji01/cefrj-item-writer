@@ -124,6 +124,7 @@ summary {
   font: inherit;
 }
 button {
+  min-width: 44px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 10px 14px;
@@ -160,6 +161,10 @@ button:not(:disabled):hover {
   background: var(--color-wrong-bg);
   color: var(--color-wrong);
   font-weight: 700;
+}
+.choice.is-correct:disabled,
+.choice.is-wrong:disabled {
+  opacity: 1;
 }
 .feedback {
   min-height: 1.65em;
@@ -328,8 +333,8 @@ button:not(:disabled):hover {
 {% elif set_data.format == "vocab_mcq_ja2en" %}
     <p class="translation-line" hidden><span lang="en">{{ question.body.sentence_complete }}</span><br><span class="label">日本語訳: </span>{{ question.body.sentence_ja }}</p>
 {% else %}
-    <p class="translation-line" hidden><span class="label">日本語訳: </span>{{ question.body.example_ja }}</p>
     <details class="explanation" hidden><summary>解説</summary><p>{{ question.explanation.text }}</p></details>
+    <p class="translation-line" hidden><span class="label">日本語訳: </span>{{ question.body.example_ja }}</p>
 {% endif %}
   </section>
 {% endfor %}
@@ -517,7 +522,7 @@ button:not(:disabled):hover {
     <p><span lang="en">{{ question.answer_label }}　{{ question.answer_text }}</span></p>
     <p>{{ question.explanation.text }}</p>
 {% elif set_data.format == "grammar_cloze" %}
-    <p lang="en">{{ question.body.answer }}{% if question.body.answer_equivalents %}（別解: {{ question.body.answer_equivalents|join(", ") }}）{% endif %}</p>
+    <p><span lang="en">{{ question.body.answer }}</span>{% if question.body.answer_equivalents %}（別解: {% for equivalent in question.body.answer_equivalents %}<span lang="en">{{ equivalent }}</span>{% if not loop.last %}, {% endif %}{% endfor %}）{% endif %}</p>
     <p>{{ question.explanation.text }}</p>
 {% elif set_data.format == "grammar_reorder" %}
     <p lang="en">{{ question.body.answer_sentence }}</p>
@@ -578,12 +583,14 @@ button:not(:disabled):hover {
         correctChoice.classList.add("is-correct");
         const correctLabel = document.createElement("span");
         correctLabel.className = "judgement-label";
+        correctLabel.lang = "ja";
         correctLabel.textContent = "（正解）";
         correctChoice.append(correctLabel);
         if (!correct) {
           choice.classList.add("is-wrong");
           const selectedLabel = document.createElement("span");
           selectedLabel.className = "judgement-label";
+          selectedLabel.lang = "ja";
           selectedLabel.textContent = "（あなたの選択）";
           choice.append(selectedLabel);
         }
@@ -646,6 +653,9 @@ button:not(:disabled):hover {
       unknownList.replaceChildren();
       unknown.forEach((text) => {
         const item = document.createElement("li");
+        if (deck.dataset.format === "vocab_flashcard_en2ja") {
+          item.lang = "en";
+        }
         item.textContent = text;
         unknownList.append(item);
       });

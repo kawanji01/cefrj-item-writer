@@ -53,6 +53,13 @@
 - 実セットと9形式フィクスチャのいずれも試験用一時ファイル以外を入力にせず、生成内容に実行時刻・乱数・環境値を混入させなかった。M6の設計反映以外の文書と全スキーマを変更していない。
 - `.venv/bin/python -m py_compile scripts/*.py`、`.venv/bin/python scripts/doctor.py`、`git diff --check`を実行し、全Python構文検査、doctor 12 pass / 0 fail、差分検査がpassした。試験用のM5完成セットと一時HTTPサーバーを削除し、`output/`配下に試験成果物を残していない。
 
+### レビューサイクル（r1〜r4、全10件解消）
+
+- 独立レビュー4ラウンドでblocker 0件・major 5件・minor 5件を検出し、全件を対応記録付きで解消した。最終R4はblocker/major 0件で収束判定となった。
+- R1では15種の品詞復元、対象表層形の完全一致、disabled選択肢のコントラスト、44px操作領域、穴埋め印刷解答の言語指定を修正した。R2では全文改行正規化と動的日本語判定ラベル・英例文リストの言語指定を修正した。R3では支援技術向け空欄ラベルの日本語指定、R4では文法4択のDOM順序をUI-05へ一致させた。
+- 最終DoD再検証コマンド: `PYTHONPATH=scripts .venv/bin/python .m6_r4_dod.py`（実行後に一時ハーネスを削除）、9形式の`validate.py`・`build_html.py`二重生成・`node --check`、実M5フロー3セット、アプリ内ブラウザの375px実操作、Chrome印刷プレビュー、`py_compile scripts/*.py`、`doctor.py`、`git diff --check`。
+- 最終結果: M6 DoD 1〜3は3/3 pass。9/9形式が決定的生成・自己完結・状態遷移・44px操作領域・横溢れ0を満たし、schema major 2は終了コード1・`E-CONTRACT-02`・HTML未生成となった。実M5セット3/3はmachine/増分・最終set_check/finalize/set検証/HTML二重生成を通過し、A-12〜A-14の375px、2ページ印刷、出典表示を確認した。文法4択は`feedback → explanation → translation-line`の順で、判定後の解説自動展開と日本語訳表示を維持した。最終健全性確認はdoctor 12 pass / 0 fail、Python構文・差分検査passだった。
+
 ## 2026-08-17 — M5 レビューループ
 
 ### 実装

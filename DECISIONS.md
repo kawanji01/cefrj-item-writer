@@ -1025,9 +1025,9 @@
 
 ---
 
-## 9. M6実装に伴う承認決定（M6D-01〜M6D-05）
+## 9. M6実装に伴う承認決定（M6D-01〜M6D-06）
 
-2026-08-18、PLN-05に基づくM6実装前確認で発見した次の5件について、作問者が推奨案を承認した。
+2026-08-18、PLN-05に基づくM6実装前確認およびM6 R1レビューで発見した次の6件について、作問者が推奨案を承認した。
 
 ### M6D-01 build_htmlの入力境界
 - **決定**: `build_html.py`を`docs/cefrj-validation-spec.md` NRM-30の正規化データ読取りCLI列挙から除外し、入力を`set.json`だけに限定する。前提検査は`docs/architecture.md`の【基本】、setスキーマ検証、schema_versionメジャー一致とし、正規化データ・設定・監査・ネットワークを参照しない。
@@ -1053,3 +1053,8 @@
 - **決定**: `build_html.py`は書込み前に`--set`と`--out`のパス・既存ファイル実体の同一性を検査し、同一なら`E-INPUT-01`で拒否する。入力`set.json`と既存出力は変更しない。通常の既存`index.html`は決定性確認と再生成のため上書きを許可する。
 - **理由**: `--out`へ入力正本自身を指定した場合の扱いが未定義であり、そのまま受理すると確定済み`set.json`をHTMLで破壊できるため。既存の引数不正コードでfail-closedにし、通常の再生成だけを維持する。
 - **影響先**: `docs/architecture.md` CLI-23a、`docs/html-output-spec.md` CON-02a、`scripts/build_html.py`、M6 CLI回帰確認。
+
+### M6D-06 対象語表層形の部分文字列一意性
+- **決定**: HTMLで対象語を強調する語彙形式①・③・④では、対象英文中で`target_surface`とコードポイント列が完全一致する開始位置を、重なりを含めてちょうど1箇所とする。0箇所または複数箇所は機械検査の`V-TGT-02`とし、候補を再生成する。大文字小文字変換・Unicode正規化・単語境界推定はこの検査に適用しない。
+- **理由**: 現行のcandidate/setは対象区間の位置を保持せず、`target_surface`だけでは`The ... he ...`のような先行部分文字列と対象トークンをHTML生成時に識別できない。原文完全一致の一意性を生成・機械検査で保証すれば、スキーマ変更やHTML生成器による再解析なしに正しい区間だけを強調できるため。
+- **影響先**: `docs/question-generation-spec.md` GEN-08、`docs/cefrj-validation-spec.md` MC-19、`agent/author-core.md` PRM-05、`scripts/machine_check.py`、`scripts/build_html.py`、M6 R1回帰確認。
