@@ -92,17 +92,17 @@
 - **FR-38 互換構造**: 挙動規則は共通コア指示書（`agent/`）と決定的スクリプトに集約し、アダプタ（Claude Code / Codex）は配線のみとしなければならない(MUST)。アダプタに挙動規則を書いてはならない(MUST NOT)（D-18）。正: `docs/cross-agent-compatibility.md`。
 - **FR-39 版管理**: 全スキーマはsemverを持ち、破壊的変更でメジャーを上げなければならない(MUST)。HTML生成器は現行メジャーのみ対応し、不一致は定義済みエラーで拒否しなければならない(MUST)。data_versionを正規化データと全成果物に記録しなければならない(MUST)（D-23）。正: `docs/architecture.md`。
 - **FR-40 テスト**: 決定的pytest CI・フィクスチャ・リプレイ・リリース時手動受け入れチェックリストの3層テストを備えなければならない(MUST)（D-21）。正: `docs/testing-and-acceptance.md`。
-- **FR-41 法務・透明性文書**: NOTICE（出典・ライセンス条件・再配布注意）、LLM送信の明示（生成・レビュー時に正規化データ抜粋や問題文がAnthropic/OpenAIに送信されること）、生成問題の教育利用の最終確認が教師の責任である旨の免責を文書化しなければならない(MUST)（D-22）。要件の正: `docs/architecture.md`（運用文書要件）、`docs/cross-agent-compatibility.md`（手順書要件）。
+- **FR-41 法務・透明性文書**: NOTICE（原本ごとに分離した出典・確認済みの利用条件・再配布注意）、LLM送信の明示（生成・レビュー時に正規化データ抜粋や問題文がAnthropic/OpenAIに送信されること）、生成問題の教育利用の最終確認が教師の責任である旨の免責を文書化しなければならない(MUST)。一次資料で確認できない利用権を、引用だけで許容されると案内してはならない(MUST NOT)（D-22、M7D-08）。要件の正: `docs/architecture.md`（運用文書要件）、`docs/cross-agent-compatibility.md`（手順書要件）。
 
 ## 5. 非機能要件（NFR）
 
 - **NFR-01 完走時間（参考目標）**: 10問セットの完走（対話開始からHTML出力まで、再生成込み）は両ツールで30分以内を目標とすべきである(SHOULD)。時間は参考目標であり、テスト・受け入れの合否条件にしてはならない(MUST NOT)（DD-10, D-21）。
-- **NFR-01a レビュー実行時間（参考目標）**: 独立レビュー1実行あたりの目標時間は、Claude Code（Taskによるサブエージェント起動）=3分以内、Codex（`codex exec` サブプロセス）=3分以内とすべきである(SHOULD)。参考目標であり、テスト・受け入れの合否条件にしてはならない(MUST NOT)（D-15, D-21）。実行に適用する強制タイムアウトの正は `docs/subagent-review-spec.md` INF-07（`data/config/limits.json` の `review_timeout_seconds`、既定300秒）である。
+- **NFR-01a レビュー実行時間（参考目標）**: 独立レビュー1実行あたりの目標時間は、Claude Code（`.claude/run_reviewer.py`が監視する`claude -p`サブプロセス）=3分以内、Codex（`.codex/run_reviewer.py`が監視する`codex exec`サブプロセス）=3分以内とすべきである(SHOULD)。参考目標であり、テスト・受け入れの合否条件にしてはならない(MUST NOT)（D-15, D-21, M7D-13, M7D-16）。実行に適用する強制タイムアウトの正は `docs/subagent-review-spec.md` INF-07（`data/config/limits.json` の `review_timeout_seconds`、既定300秒）である。
 - **NFR-02 最悪コスト上限**: 1セットの生成+レビューの実行回数は最悪で要求問題数の6倍（試行対象総数≤要求数の2倍 × 各3世代）を超えてはならない(MUST NOT)（D-14）。
 - **NFR-03 決定性**: 正規化・機械検査・スキーマ検証・セット横断検査・HTML生成は決定的でなければならない(MUST)。同一入力に対し同一出力（HTMLはバイト一致）を返さなければならない(MUST)（D-09, D-21）。
-- **NFR-04 オフライン動作とテレメトリ**: 決定的スクリプトは完全オフラインで動作しなければならない(MUST)。唯一の例外はセットアップ時のspaCyモデル取得である。テレメトリ送信をしてはならない(MUST NOT)（D-22）。LLM呼び出し（生成・レビュー）はホストツール経由のネットワーク通信を伴い、この要件の対象外である。
+- **NFR-04 オフライン動作とテレメトリ**: セットアップ完了後の決定的スクリプトは完全オフラインで動作しなければならない(MUST)。唯一の例外処理はセットアップであり、固定版依存パッケージとspaCyモデルの取得に限りネットワーク接続してもよい(MAY)。テレメトリ送信をしてはならない(MUST NOT)（D-22、M7D-07）。LLM呼び出し（生成・レビュー）はホストツール経由のネットワーク通信を伴い、この要件の対象外である。
 - **NFR-05 言語**: 対話・エラー文言・運用文書・設計文書は日本語でなければならない(MUST)（D-02, DD-10）。問題の英文・JSONキー（英語snake_case）はこの要件の対象外である。
-- **NFR-06 対応環境**: macOS / Linux / Windows で Python 3.11+ が動作する環境をサポートしなければならない(MUST)（DD-10）。
+- **NFR-06 対応環境**: macOS / Linux、およびWindowsホスト上のWSL2 Linux環境でPython 3.11+が動作する環境をサポートしなければならない(MUST)。ネイティブWindowsのPowerShell・コマンドプロンプト上の作問実行はサポート対象外とする（DD-10、M7D-11）。
 - **NFR-07 互換性保証範囲**: Claude Code と Codex の間で手順・契約・決定的処理の同一性を保証しなければならない(MUST)。LLM出力（生成文・レビュー判断）の同一性は保証対象外であることを文書に明記しなければならない(MUST)（D-18）。
 - **NFR-08 出典表示**: 全正本JSONとHTMLフッターにCEFR-J出典（Wordlist・Grammar Profile両引用）を含めなければならない(MUST)（D-16, D-17, D-22）。
 - **NFR-09 透明性（LLM送信）**: 正規化データ抜粋・問題文が生成・レビュー時にLLM事業者（Anthropic / OpenAI）に送信されることを、教師向け文書で明示しなければならない(MUST)（D-22）。
@@ -131,8 +131,8 @@
 
 - **ENV-01 実行ホスト**: Claude Code または Codex（GPT-5.6 sol）が動作し、教師のアカウントで各ツールのLLMを利用できること（D-02, DD-09）。
 - **ENV-02 Python**: Python 3.11以上がインストールされていること。決定的スクリプトはvenv内で実行する（D-09）。
-- **ENV-03 spaCy**: spaCy と en_core_web_sm がセットアップスクリプトで導入されること。モデル取得時のみネットワーク接続を要する（D-09, NFR-04）。
-- **ENV-04 OS**: macOS / Linux / Windows のいずれか（NFR-06）。
+- **ENV-03 spaCy**: spaCy と en_core_web_sm がセットアップスクリプトで導入されること。固定版依存パッケージとモデルの取得時にネットワーク接続を要する（D-09, NFR-04）。
+- **ENV-04 OS**: macOS / Linux / Windowsホスト上のWSL2 Linux環境のいずれか。Windowsではリポジトリ、Python、Claude CodeまたはCodex、全作問コマンドをWSL2シェル内で実行しなければならない(MUST)。ネイティブPowerShell・コマンドプロンプトから作問フローを実行してはならない(MUST NOT)（NFR-06、M7D-11）。
 - **ENV-05 リポジトリ**: 非公開リポジトリのクローンを保持し、git pull が実行できること。原本xlsxは `data/source/` に配置済みであること（P-01, D-23）。
 - **ENV-06 ブラウザ（生徒側）**: 生成HTMLは配布時点で追加インストールなしにモダンブラウザ（PC・スマートフォン）で動作すること。ブラウザ要件の正: `docs/html-output-spec.md`。
 - **ENV-07 セットアップ手順書**: 両ツール向けセットアップ手順書（実装物）に従い、`doctor.py` が全項目正常を報告する状態で利用を開始すること（D-02, FR-34）。手順書の要件定義の正: `docs/cross-agent-compatibility.md`。

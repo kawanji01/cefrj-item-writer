@@ -26,7 +26,7 @@
   3. オブジェクトのキーは辞書順ソート（`sort_keys=True`）。
   4. インデントは半角スペース2個。
   5. 改行は LF。ファイル末尾に改行1個。
-- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。candidateはホスト側のパース・再直列化より先に生成生出力をUTF-8バイト列として`validate.py`へ渡し、標準JSON・candidateスキーマの検証後に厳格パースして本節の正準形へ再直列化しなければならない(MUST)。review_resultもスキーマ検証後に全string値・object keyのstrict UTF-8表現可能性を確認し、JS-01正準形へstrict UTF-8で直列化しなければならない(MUST)。これらの受理検証を通過した同じ正準バイト列だけを監査ファイルとして保存する。candidate側の失敗はT2/T3、review_result側のパース・スキーマ・strict UTF-8・JS-01正準化失敗はINF-01のレビュー系インフラ障害とし、invalid監査の形式はAUD-09が正である。
+- **JS-02（LLM出力の受理形）**: LLM（生成エージェント・レビュアー）が出力するJSON（candidate・review_result）は、正準形であることを要求しない(MAY)。candidateはホスト側のパース・再直列化より先に生成生出力をUTF-8バイト列として`validate.py`へ渡し、標準JSON・candidateスキーマの検証後に厳格パースして本節の正準形へ再直列化しなければならない(MUST)。検証前candidateをファイルで渡すホストは、M7D-12の`output/<set_id>/.staging/<question_id>.<gen>.candidate.raw<1|2>.json`へ排他的に保存し、正規監査名を検証前の一時保存に使ってはならない(MUST NOT)。review_resultもスキーマ検証後に全string値・object keyのstrict UTF-8表現可能性を確認し、JS-01正準形へstrict UTF-8で直列化しなければならない(MUST)。これらの受理検証を通過した同じ正準バイト列だけを監査ファイルとして保存する。candidate側の失敗はT2/T3、review_result側のパース・スキーマ・strict UTF-8・JS-01正準化失敗はINF-01のレビュー系インフラ障害とし、invalid監査の形式はAUD-09が正である。一時ファイルは監査ではなく、対応する正規監査またはinvalid監査の排他保存後に削除する。review_requestの一時保存・寿命もM7D-12と`docs/subagent-review-spec.md` AU-02aに従う。
 - **JS-03（実行毎に変わるフィールド）**: 決定的CLIが書き出すJSONのうち、実行毎に値が変わるフィールドは machine_report（scope=question / scope=set とも）の `generated_at` のみとしなければならない(MUST)。`generated_at`はUTC・秒精度・末尾`Z`のISO 8601文字列とする。テストのバイト比較（`docs/testing-and-acceptance.md`）は本フィールドのみを比較から除外する。これ以外のフィールドに実行時刻・乱数・環境依存値を書き込んではならない(MUST NOT)（`set_id` と `created_at` は入力として与えられる値であり、この禁止の対象外である）。
 - **JS-04（数値の表現）**: 整数はJSONの整数リテラル、実数は入力（原本xlsx）の値をPython `json` モジュールの既定の表現で保持する。丸め・指数表記への変換を行ってはならない(MUST NOT)。
 

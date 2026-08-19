@@ -95,7 +95,7 @@ M5時点の配線は、対話、`lookup.py` による照合、candidate生成と
 python scripts/doctor.py
 ```
 
-仮想環境をactivateしていない場合は `python` を `.venv/bin/python`（Windowsは `.venv\Scripts\python.exe`）へ読み替えてよい。終了コード0かつ12項目passの場合だけ、検証済み `data/config/limits.json` の全オブジェクトと `data/config/proper_nouns.json` の `words` 全配列を `{"limits": <全オブジェクト>, "proper_nouns": <words全配列>}` のセッション設定スナップショットとして1回だけ読み取り、S10へ進む。以後の問題数上限、世代上限、レビュータイムアウト、各制約値はこのスナップショットから取り、設定ファイルの再読込みで適用値を変えない。`generation_max` はdoctorで検証済みの1〜3であり、即席の `gen4` 以降を生成しない。S80開始時と各決定的CLI・レビュー実行前に現在の2設定ファイルを検証し、スナップショットとJSON値として完全一致することを確認する。不一致なら `E-DATA-08` でS99へ遷移する。doctor失敗時は出力されたエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
+仮想環境をactivateしていない場合は `python` を `.venv/bin/python` へ読み替えてよい。終了コード0かつ12項目passの場合だけ、検証済み `data/config/limits.json` の全オブジェクトと `data/config/proper_nouns.json` の `words` 全配列を `{"limits": <全オブジェクト>, "proper_nouns": <words全配列>}` のセッション設定スナップショットとして1回だけ読み取り、S10へ進む。以後の問題数上限、世代上限、レビュータイムアウト、各制約値はこのスナップショットから取り、設定ファイルの再読込みで適用値を変えない。`generation_max` はdoctorで検証済みの1〜3であり、即席の `gen4` 以降を生成しない。S80開始時と各決定的CLI・レビュー実行前に現在の2設定ファイルを検証し、スナップショットとJSON値として完全一致することを確認する。不一致なら `E-DATA-08` でS99へ遷移する。doctor失敗時は出力されたエラーコードと日本語対処手順をそのまま提示し、S10へ進まずセッションを終了する。
 
 ### 2.4 S10 形式選択
 
@@ -604,11 +604,12 @@ bodyは `example.en`、`example.ja`、`context_sentence`、`context_required_by`
 全監査ファイルは `output/<set_id>/review/` 直下へ遷移直後に保存する。保存前に同名パスの不存在を確認し、排他的作成を使う。同名ファイルが既に存在する場合は既存内容を変更・削除せず、`E-DATA-07` と衝突相対パスを提示してS99へ遷移する。
 
 1. lookup結果、セッション設定スナップショット、allowlist全件、確定条件から第4節の生成入力を展開し、第5節の該当形式でcandidate JSONを生成する。各世代の開始前にFMT-80b事象1を表示する。
-2. `output/<set_id>/review/` を作成し、生成生出力をホスト側でJSONパース・再直列化する前に取得する。ホストがbytesを返す場合はそのバイト列を非改変で使い、文字列を返す場合はstrict UTF-8で1回だけエンコードする。孤立サロゲート等でUTF-8化できなければ、下記のcandidate受理検証不通過へ進める。置換文字・`backslashreplace`・`ensure_ascii=True`で受理可能な別内容へ変換してはならない。
-3. UTF-8化できた生成生出力を非改変の一時ファイルへ置き、ホスト側でパースする前に次を実行する。
+2. `output/<set_id>/review/` と `output/<set_id>/.staging/` を作成し、生成生出力をホスト側でJSONパース・再直列化する前に取得する。ホストがbytesを返す場合はそのバイト列を非改変で使い、文字列を返す場合はstrict UTF-8で1回だけエンコードする。孤立サロゲート等でUTF-8化できなければ、下記のcandidate受理検証不通過へ進める。置換文字・`backslashreplace`・`ensure_ascii=True`で受理可能な別内容へ変換してはならない。
+3. UTF-8化できた生成生出力を、1回目は`output/<set_id>/.staging/<question_id>.<gen>.candidate.raw1.json`、同一世代内の再出力は`candidate.raw2.json`へ非改変かつ排他的に新規作成する。同名が存在する場合は変更・削除せず`E-DATA-07`でS99へ遷移する。ホスト側でパースする前に次を実行する。
 
 ```text
-python scripts/validate.py --schema candidate --file <生成生出力一時ファイル>
+python scripts/validate.py --schema candidate \
+  --file output/<set_id>/.staging/<question_id>.<gen>.candidate.raw<1|2>.json
 ```
 
 4. 次のいずれかを生成出力起因のcandidate受理検証不通過とし、共通のCLI停止やFMT-80b事象16より先に、同じquestion_id・世代のT2/T3カウンタへ送る。
@@ -618,10 +619,10 @@ python scripts/validate.py --schema candidate --file <生成生出力一時フ�
    - 生成生出力の非UTF-8・非標準JSON・構文不正により、`validate.py`が終了コード1・`E-INPUT-03`を返す。
    - `validate.py`がcandidateをvalidとした後の厳格パース、または次項のJS-01正準化に失敗する。
 
-   1回目はAUD-09の正準JSON封筒で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。生出力バイト列を1バイト以上取得できた場合は`kind: "validation_failure"`とし、全文を標準Base64の`raw_output_base64`へバイト完全保存し、非空診断を`diagnostic`へ入れる。ホスト文字列をstrict UTF-8化できなければ`kind: "utf8_encode_failure"`の`reason`/`position`、生出力が得られなければ`kind: "process_failure"`の`exit_code`/`stderr_base64`を使う。全形に`audit_format: "aud09-v2"`を入れ、固定キーだけをJS-01正準形で保存する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。
+   1回目はAUD-09の正準JSON封筒で `output/<set_id>/review/<question_id>.<gen>.candidate.invalid1.txt` に直ちに保存し、その排他保存に成功した後で対応する`candidate.raw1.json`だけをホスト配線の固定一時ファイル削除機構（Claude Codeでは`.claude/cleanup_staging.py`）で削除する。FMT-80b事象2 `候補スキーマ不通過 → 同一世代内で再指示します` を表示する。生出力バイト列を1バイト以上取得できた場合は`kind: "validation_failure"`とし、全文を標準Base64の`raw_output_base64`へバイト完全保存し、非空診断を`diagnostic`へ入れる。ホスト文字列をstrict UTF-8化できなければ`kind: "utf8_encode_failure"`の`reason`/`position`、生出力が得られなければ`kind: "process_failure"`の`exit_code`/`stderr_base64`を使う。全形に`audit_format: "aud09-v2"`を入れ、固定キーだけをJS-01正準形で保存する。診断は、`validate.py`のstdoutがあればその全文、なければstderr全文、厳格パース・正準化失敗では失敗段階・例外型・理由・取得可能な位置を生成器へ全て渡し、同じ世代を1回だけ再出力させる。世代を消費しない。strict UTF-8化不能または生出力未取得で一時ファイルを作成していない場合は削除を実行しない。
 
-   2回目も同じAUD-09正準JSON封筒で `candidate.invalid2.txt` に直ちに保存し、FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。T3後に次世代へ渡すのは2回目封筒の`diagnostic`、`reason`/`position`、または`exit_code`と復号stderrから構成した診断だけとし、`raw_output_base64`を復号した生出力は渡さない。現在世代がスナップショットの `generation_max` 未満なら、PRM-12のT3入力だけで次世代へ進み、最終世代なら不成立として第9節へ進む。
-5. `validate.py`がvalidを返した場合だけ、その同じ生出力を厳格にJSONオブジェクトへパースする。candidateスキーマには数値フィールドがないため、検証前の通常floatパースで`1e400`等を無限大へ丸める必要はない。パースしたcandidateを、UTF-8（BOMなし）・非ASCII文字をエスケープしない・キー辞書順・インデント2・改行LF・末尾改行1つのJS-01正準形へ直列化する。Pythonでは `json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"` をstrict UTF-8でエンコードしたバイト列とする。この段階の例外を未処理で停止せず、第4項のT2/T3へ送る。受理検証を全て通過した同じ正準バイト列だけを `output/<set_id>/review/<question_id>.<gen>.candidate.json` に保存し、次項の入力にも使う。
+   2回目も同じAUD-09正準JSON封筒で `candidate.invalid2.txt` に直ちに保存し、その排他保存に成功した後で対応する`candidate.raw2.json`だけを削除する。FMT-80b事象3 `候補スキーマ再不通過 → この世代を消費します` を表示してT3として世代を消費する。同名監査ファイルを上書きしない。T3後に次世代へ渡すのは2回目封筒の`diagnostic`、`reason`/`position`、または`exit_code`と復号stderrから構成した診断だけとし、`raw_output_base64`を復号した生出力は渡さない。現在世代がスナップショットの `generation_max` 未満なら、PRM-12のT3入力だけで次世代へ進み、最終世代なら不成立として第9節へ進む。
+5. `validate.py`がvalidを返した場合だけ、その同じ生出力を厳格にJSONオブジェクトへパースする。candidateスキーマには数値フィールドがないため、検証前の通常floatパースで`1e400`等を無限大へ丸める必要はない。パースしたcandidateを、UTF-8（BOMなし）・非ASCII文字をエスケープしない・キー辞書順・インデント2・改行LF・末尾改行1つのJS-01正準形へ直列化する。Pythonでは `json.dumps(candidate, ensure_ascii=False, sort_keys=True, indent=2, allow_nan=False) + "\n"` をstrict UTF-8でエンコードしたバイト列とする。この段階の例外を未処理で停止せず、第4項のT2/T3へ送る。受理検証を全て通過した同じ正準バイト列だけを `output/<set_id>/review/<question_id>.<gen>.candidate.json` に排他的に保存し、保存成功後に対応する`candidate.raw<1|2>.json`だけを削除して、次項の入力にも使う。削除後に`.staging/`が空なら専用機構が同ディレクトリも削除する。
 6. 次を実行する。確定済みの期待format、期待level、S70の依頼問題数Nを毎回渡す。依頼問題数はS00で固定した `set_question_max` 以下であることをS40/S70で確認済みの値とする。`machine_check.py`はこのNから試行ID上限`min(2N, 20)`を導出するため、補充・代替の`q{N+1}`以降でもN自体を変更せず同じ値を渡す。
 
 ```text
@@ -649,11 +650,11 @@ python scripts/machine_check.py \
 - `constraints_snapshot.limits.sentence_word_limit` は指定帯の値、`explanation_char_limit` は語彙形式でnull、文法形式でbrief/detailedに対応する値とする。`proper_nouns` はセッション設定スナップショットの全配列、`topic` は教師指定値またはnullとする。
 - `readable_resources` は `data/normalized/lexicon.json`、`data/normalized/grammar.json`、`data/normalized/meta.json`、`data/config/limits.json`、`data/config/proper_nouns.json`、`docs/cefrj-validation-spec.md`、`docs/subagent-review-spec.md`、`agent/reviewer-core.md` の8件だけをこの順で列挙する。
 
-`python scripts/validate.py --schema review_request --file <一時ファイル>` を通過させ、正準化した同じ封筒をレビュアー起動直前に `<question_id>.<gen>.request.json` として排他的に保存する。不通過は `E-CONTRACT-01` としてセットを中止し、LLM判断で修復しない。
+構築した封筒を`output/<set_id>/.staging/<question_id>.<gen>.request.raw.json`へ排他的に新規作成する。同名が存在する場合は変更・削除せず`E-DATA-07`でS99へ遷移する。`python scripts/validate.py --schema review_request --file output/<set_id>/.staging/<question_id>.<gen>.request.raw.json` を通過させ、正準化した同じ封筒をレビュアー起動直前に `<question_id>.<gen>.request.json` として排他的に保存する。正規request監査の保存成功後に一時ファイルだけを削除する。不通過は `E-CONTRACT-01` として処理した後で一時ファイルだけを削除してセットを中止し、LLM判断で修復しない。
 
 ### 7.2 起動と出力受理
 
-生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行のタイムアウトにする。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
+生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行の壁時計タイムアウトにする。超過時は実行中のレビュアーを停止する。直前に現在の設定ファイルとスナップショットが一致することを確認してから、Claude Codeでは`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`、Codexでは`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`を当該ホスト用配線で実行し、ラッパーの終了コード0かつ非空stdoutの場合だけ生テキストを取り込む。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
 
 最終メッセージはCOR-08の順序で取り込む。ホストがbytesを返す場合はその生バイト列、文字列を返す場合はstrict UTF-8で1回だけエンコードした生バイト列を、JSONパース・再直列化より先に取得する。テキスト全体のJSONパースを先に試し、失敗時だけ最初のJSONコードフェンス内を試し、`python scripts/validate.py --schema review_result --file -` でスキーマと全string値・object keyのstrict UTF-8表現可能性を検証する。スキーマでは表現できないRR-01〜RR-05違反も受理しない。通過後も同じJSONをJS-01正準形へstrict UTF-8で直列化し、その同じ正準バイト列だけを `<question_id>.<gen>.review.json` に排他的に保存する。保存成功時だけ、その `machine_check_disputes[]` の要素数を `machine_check_dispute_count` へ1回加算する。invalid出力や同じ監査ファイルの再読込みでは加算せず、異なる問題・世代の各要素は独立して数える。
 

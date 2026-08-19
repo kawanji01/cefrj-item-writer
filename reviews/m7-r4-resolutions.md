@@ -1,0 +1,2 @@
+- R4-01: 承認済みM7D-15に従いD-15とCCW-01・レビュー実行単位・INF-01・NFR-01aの旧起動方式を監視付き`claude -p`非対話サブプロセスへ統一した (`DECISIONS.md`, `docs/cross-agent-compatibility.md`, `docs/subagent-review-spec.md`, `docs/requirements.md`)
+- R4-02: 承認済みM7D-15に従いPLN-07のネットワーク例外を`setup.py`による固定版依存パッケージとspaCyモデルの取得だけに限定する現行契約へ統一した (`DECISIONS.md`, `IMPLEMENTATION_PLAN.md`)

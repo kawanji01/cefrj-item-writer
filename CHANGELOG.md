@@ -1,5 +1,116 @@
 # CHANGELOG
 
+## 2026-08-19 — M7 R5〜R8対応・レビュー収束
+
+### レビュー収束
+
+- M7はR1〜R8の8ラウンドを実施した。最新R8でR7-01の解消と新規指摘なしを独立確認し、blocker 0件・major 0件・minor 0件で収束した。R1〜R7の指摘と対応は各`reviews/m7-r<N>.md`・`reviews/m7-r<N>-resolutions.md`に保存している。
+- M7 DoDは最終状態で5/5 pass。両ツールの2問セット完走、両監視ラッパーの壁時計停止と3失敗時中止、machine report互換一致、クリーン環境セットアップ、Codex実効user入力のCOR-07完全一致を確認した。
+
+### 実装・設計整合
+
+- R5-01: `.claude/hooks/guard_build_html.py`を追加し、`build_html.py`は`python scripts/build_html.py --set output/<set_id>/set.json`の固定全文だけを実行可能にした。新規`dontAsk`セッションで標準コマンドは成功し、別セットの`set.json`および`docs/set.json`を`--out`にした呼出しは実行前拒否、既存正本のSHA-256は不変だった。
+- R6-02: `.claude/settings.json`の`machine_check.py --requested-count` 1〜20の20規則を単一の構文規則へ統合し、`.claude/hooks/guard_machine_check.py`でコマンド全文、固定引数順、監査パスのset_id・generation一致、追加引数なしを検査するようにした。設定内値は`dontAsk`でpass、追加引数はフック拒否、設定外値21はガードを通過してCLI自身の`E-INPUT-04`で停止した。
+- R7-01 / 承認済みM7D-16: `.codex/run_reviewer.py`を追加し、固定request監査パス1件から、専用`CODEX_HOME`、全コンテキスト無効化引数、`--ephemeral`、`--sandbox read-only`、モデル無指定、COR-07の3行stdin、導出`codex-last`作業ファイルを持つ固定`codex exec` argvをシェル不使用で構築するようにした。現在の`review_timeout_seconds`をサブプロセス全体の壁時計期限に適用し、超過時はプロセスグループへTERM、残存プロセスへKILLを送って終了124とする。ラッパーは1実行と停止だけを担当し、再実行・監査保存・セット中止は既存INF規則へ返す。同じ停止契約を持つ`.claude/run_reviewer.py`も、親がTERMで先に終了した場合に残存子をKILLするよう補強した。
+- D-15、AD-28、M7D-16、C6、NFR-01a、INF-01/07、COR-02/06、CDX-01/03〜10、SUP-02、共通作問コア、`AGENTS.md`、Codexセットアップ手順、M7成果物・DoDを監視付きCodex起動へ統一した。スキーマ、決定的CLI、原本、正規化データ、設定値は変更していない。対応記録は`reviews/m7-r5-resolutions.md`、`reviews/m7-r6-resolutions.md`、`reviews/m7-r7-resolutions.md`に保存し、レビュー原本は変更していない。
+
+### M7 R7後のDoD再検証（2026-08-19、5/5 pass）
+
+- DoD 1（アダプタ純度）
+  - コマンド: `CLAUDE.md`、`.claude/`、`AGENTS.md`、`.codex/`を対象に、語数・解説字数・問題数・世代数・検査ID・生成プロンプト規則の転記を`rg`で検索し、`machine_check.py`の問題数別許可と旧Codex直接起動表記も検索した。
+  - 結果: 挙動転記、問題数別許可、旧標準起動表記はいずれも0件。アダプタは起動・権限・参照・ツール固有の壁時計停止配線だけで、問題数の意味判定は決定的CLIに留まった。
+- DoD 2（両ツール完走・両ホスト壁時計停止）
+  - コマンド: Codex完成セット`output/20260818-153251-cd28`とClaude完成セット`output/20260819-092134-jk41`の全candidate/machine/request/review/set、`validate.py --set-dir`、`set_check.py`を再実行した。承認済み固定`python .codex/run_reviewer.py --request output/20260818-153251-cd28/review/q01.gen1.request.json`を実Codexで1回実行し、最終メッセージをreview_resultスキーマとRR記入規則へ照合した。停止しない擬似親子を設定1秒で3回起動し、Codex異常系`output/20260819-130400-tm16`のAUD-09監査と状態を検証した。Claude異常系`output/20260819-095749-1tg9`も再検証した。
+  - 結果: 両完成セットは`grammar_mcq`・2問でcompleteかつset_check pass。実Codexラッパーは終了0、4,819 bytes、CHK-01〜19、`verdict=pass`、review_resultスキーマvalidだった。擬似Codexは3回とも約2.0秒でプロセスグループを停止し、終了124の`process_failure`監査3件、状態incomplete、`.staging`と`set.json`なし。Claude異常系も3件の終了124監査と`set.json`なしを維持した。
+- DoD 3（machine_check.py互換一致）
+  - コマンド: Claude完成セットの`q01.gen1.candidate.json`を同じ確定引数で再実行し、保存済みmachine_reportと`generated_at`除外後のJS-01正準バイトを比較した。
+  - 結果: 8,266 bytesが一致し、SHA-256は双方`9fdab693d5f56c1427b7958794d6219fbf64ef784743e358fdc0fcca95a3b150`だった。
+- DoD 4（クリーン対応環境セットアップ）
+  - コマンド: 現在のM7差分を重ねた自動回収一時macOS cloneで`python3 scripts/setup.py`、`.venv/bin/python -m spacy validate`、`build_normalized.py --diff`、`doctor.py`、Claude/Codex公開help、`.codex/run_reviewer.py --help`、両セットアップ手順書の11節を確認した。
+  - 結果: spaCy 3.8.15、`en_core_web_sm` 3.8.0、正規化差分ゼロ、doctor 12 pass / 0 fail、Claude Code 2.1.234、Codex CLI 0.147.0、ラッパーhelp pass、両手順書11/11節だった。
+- DoD 5（Codex独立レビュアー実効入力）
+  - コマンド: `.codex/run_reviewer.py`が生成する実request用3行プロンプトを、専用`CODEX_HOME`、2件のコンテキスト無効化設定、4件の`--disable`と同じ条件の`codex debug prompt-input`へ渡してuserメッセージ配列を機械検査した。
+  - 結果: `{"additional_user_context_count": 0, "input_text_count": 1, "user_message_count": 1, "user_prompt_exact_match": true}`で、COR-07以外の追加userコンテキストは0件だった。
+
+### 最終回帰
+
+- `.venv/bin/python -m py_compile scripts/*.py .claude/*.py .claude/hooks/*.py .codex/*.py`、`.claude/settings.json`解析、`doctor.py`、`build_normalized.py --diff`、M7D-16規範文書の旧表記検索、M7D決定16件、`git diff --check`を確認した。
+- 結果は全てpass。doctorは12 pass / 0 fail、正規化差分0、旧Codex直接起動の現行表記0件で、`schemas/`・`scripts/`・`data/source/`・`data/normalized/`・`data/config/`にR5〜R7対応差分はない。
+
+## 2026-08-19 — M7 R4対応
+
+### 設計整合
+
+- R4-01 / 承認済みM7D-15: D-15、`docs/cross-agent-compatibility.md` CCW-01、`docs/subagent-review-spec.md` 1.3節/INF-01、`docs/requirements.md` NFR-01aに残っていたClaude Codeの当初レビュー起動方式を、M7D-13の`.claude/run_reviewer.py`が監視する新規`claude -p`非対話サブプロセスへ統一した。`.claude/agents/cefrj-reviewer.md`は宣言確認用であり標準フローの起動には使わないことを明記した。
+- R4-02 / 承認済みM7D-15: `IMPLEMENTATION_PLAN.md` PLN-07のネットワーク例外をM7D-07へ揃え、`python scripts/setup.py`による`requirements.txt`固定版依存パッケージとspaCy `en_core_web_sm`の取得だけを許可し、セットアップ完了後の決定的スクリプトは完全オフライン・テレメトリなしとする現行契約へ統一した。
+- `DECISIONS.md`へM7D-15を記録し、M7承認決定の範囲をM7D-01〜15へ更新した。実装・スキーマ・レビュー契約・ネットワーク許可範囲は変更していない。対応記録は`reviews/m7-r4-resolutions.md`へ指摘ID順に保存し、レビュー原本`reviews/m7-r4.md`は変更していない。
+
+### M7 R4後のDoD再検証（2026-08-19、5/5 pass）
+
+- DoD 1（アダプタ純度）
+  - コマンド: `CLAUDE.md`、`.claude/`、`AGENTS.md`を対象に質問文・生成/判定規則・違反IDの転記キーワードを`rg`で検索し、規範文書群の旧起動方式も検索した。
+  - 結果: アダプタへの挙動転記0件、旧標準フロー表記0件。CCW-01と実`CLAUDE.md`は同じ固定ラッパー起動を示した。
+- DoD 2（両ツール実LLM完走・Claude staging/timeout）
+  - コマンド: Codexセット`output/20260818-153251-cd28`とClaudeセット`output/20260819-092134-jk41`の全candidate/machine/request/review/set、セット状態、集合検査を再検証し、異常系`output/20260819-095749-1tg9`の3件のAUD-09監査と`set.json`不在を確認した。
+  - 結果: 両完成セットは`grammar_mcq`・2問でcompleteかつ全検査pass。完成セットと異常系に`.staging`はなく、異常系は同一requestの3回全てが`process_failure`・終了124で`set.json`なしだった。
+- DoD 3（machine_check.py互換一致）
+  - コマンド: Claude完走セットの`q01.gen1.candidate.json`を同一引数で再実行し、保存済み出力と`generated_at`除外後の正準バイトを比較した。
+  - 結果: 4,666 bytesが一致し、SHA-256は双方`101508cc7d27284134a404a0cae9ce7293d9215fcf21b1b6a3ba003596ea3c9e`だった。
+- DoD 4（クリーン対応環境セットアップ）
+  - コマンド: R4改訂を含む一時macOS cloneで`python3 scripts/setup.py`、`.venv/bin/python -m spacy validate`、`build_normalized.py --diff`、`doctor.py`、Claude/Codex版と必須helpフラグを確認した。
+  - 結果: 固定依存4件と`en_core_web_sm` 3.8.0を新規導入し、差分ゼロ、doctor 12 pass / 0 fail、Claude Code 2.1.234、Codex CLI 0.147.0、両手順書11/11節を確認した。
+- DoD 5（Codex独立レビュアー実効入力）
+  - コマンド: 専用`CODEX_HOME`、2件のコンテキスト無効化設定、4件の`--disable`で`codex debug prompt-input`を実行した。
+  - 結果: `{"additional_user_context_count": 0, "input_text_count": 1, "user_message_count": 1, "user_prompt_exact_match": true}`でCOR-07以外の追加userコンテキストは0件だった。
+
+## 2026-08-19 — M7 R3対応
+
+### 実装
+
+- R3-01 / 承認済みM7D-12: Claude Codeのcandidateとreview_requestを`output/<set_id>/.staging/`の用途別固定raw名へ排他的に保存し、同じ一時ファイルをスキーマ検証してから正準監査名へ一度だけ保存する配線を追加した。`.claude/hooks/guard_staging.py`は対象名・世代・raw試行番号・set配下境界・既存パス衝突を検査し、`.claude/cleanup_staging.py`は許可された一時ファイル1件と空ディレクトリだけを削除する。正準保存後に一時ファイルを残さない。
+- R3-02 / 承認済みM7D-13・M7D-14: `.claude/run_reviewer.py`が新規`claude -p`をsafe mode、読取専用3ツール、空MCP、セッション非永続、COR-07の3行だけで起動し、現在の`review_timeout_seconds`をプロセスグループ全体の壁時計期限として適用するようにした。超過時はSIGTERM後1秒でSIGKILLし、再実行と中止判定は共通コアに返す。Bashサンドボックスの通信許可は子Claudeのモデル通信に必要な`api.anthropic.com`だけとし、WebFetch/WebSearch拒否と空MCPを維持した。
+- R3-03: 共通コアの未activate時フォールバックからネイティブWindows形式を削除し、対応3環境で`.venv/bin/python`へ統一した。
+- 対応記録は`reviews/m7-r3-resolutions.md`へ指摘ID順に保存した。レビュー原本`reviews/m7-r3.md`は変更していない。`schemas/`は変更していない。
+
+### M7 R3後のM1 DoD再検証（2026-08-19、6/6 pass）
+
+1. 決定性
+   - コマンド: `PYTHONPATH=scripts .venv/bin/python - <<'PY' ... output/配下の隔離出力先2件へbuild_normalized.pyを各1回実行し、2組と正本3成果物をバイト比較 ... PY`。
+   - 結果: `lexicon.json`・`grammar.json`・`meta.json`は2回分と正本が全てバイト一致した。SHA-256は順に`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`だった。
+2. スキーマ・meta適合
+   - コマンド: 同じinline Pythonで2正規化スキーマを`Draft202012Validator`、metaを`validate_meta_document`でNRM-29へ照合した。
+   - 結果: 3成果物が適合し、`data_version=wl1.6+gp20200220+norm1.0.2`と件数転記の一致を確認した。
+3. 件数不変条件
+   - コマンド: 同じinline Pythonと`openpyxl`で生成JSONと原本xlsxをCI-NRM-03へ照合した。
+   - 結果: 語彙7,988件（A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859）、`(headword,pos)`一意7,988件、ALL 7,801行、併記179群、文法501件（親263・枝番238）、target eligible 256件、全枝番の親存在、未付与親16件のID一致を確認した。
+4. レベル継承・範囲分解
+   - コマンド: grammar全件の直接付与`level_raw`分解と継承元の`min` / `max` / `source` / `inherited_from`を検査した。
+   - 結果: 教員版の単一値152件・範囲値104件、継承220件が全件一致し、`gp:1-1` / `gp:1-2` / `gp:1-3`も`gp:1`を正しく継承した。
+5. doctor完全環境・異常模擬
+   - コマンド: `.venv/bin/python scripts/doctor.py`と、`output/`配下の隔離コピーで正規化欠落、原本改変、config欠落を個別実行し、原本改変環境では`build_normalized.py`も実行した。
+   - 結果: 完全環境は12 pass / 0 fail。正規化欠落は終了コード1・`E-DATA-03`、原本改変はdoctor/buildとも終了コード1・`E-DATA-02`、config欠落は終了コード1・`E-DATA-05`だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`。
+   - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全て0件、`written=[]`、終了コード0だった。
+
+### M7 R3後の最終DoD再検証（2026-08-19、5/5 pass）
+
+- DoD 1（アダプタ純度）
+  - コマンド: `CLAUDE.md`、`.claude/`、`AGENTS.md`を目視し、質問文・生成/判定規則・違反IDの転記キーワードを`rg`で検索した。
+  - 結果: 転記0件。共通挙動は`agent/`と`scripts/`にあり、アダプタは起動・権限・参照・ツール固有の実行境界だけだった。
+- DoD 2（両ツール実LLM完走・Claude staging/timeout）
+  - コマンド: Codexセット`output/20260818-153251-cd28`と新規Claude Code `dontAsk`セット`output/20260819-092134-jk41`について、全candidate/machine/request/review/setを`validate.py`、セット状態を`validate.py --set-dir`、集合を`set_check.py`で検証した。ClaudeのJSONLトレースで両問のstaging raw保存→スキーマ検証→正準監査保存→限定削除→監視reviewerの順序を照合し、`.staging`不在を確認した。さらに`review_timeout_seconds=1`の承認済み受入試験を新規`dontAsk`セッションで実行し、直後に300へ復元してconfigスキーマと差分なしを確認した。
+  - 結果: 両完成セットは`grammar_mcq`・A1.2・2問でcomplete、全契約・集合検査・HTMLがpassした。Claude set/HTML SHA-256は`d1cccd3bc0e25265b5838c435e84ece80e7384b9cce96bd7f9757956b4f81867` / `cce8f41301497dddd480362cdeaf9752e101998707998bee3ea7fc399f56df12`。異常系`output/20260819-095749-1tg9`は同一request SHA-256 `178c8b1131c6661064a8392bff6bfb7af68604d8d236a4152b88cdf1404e1bf7`を許可コマンドで3回実行し、3件ともAUD-09 `process_failure`・終了124、`.staging`と`set.json`なし、状態`incomplete`だった。
+- DoD 3（machine_check.py互換一致）
+  - コマンド: Claude完走セットの`q01.gen1.candidate.json`を同じ引数で再実行し、保存済みClaude出力と`generated_at`除外後の正準バイトを比較した。
+  - 結果: 4,666 bytesが一致し、SHA-256は双方`101508cc7d27284134a404a0cae9ce7293d9215fcf21b1b6a3ba003596ea3c9e`だった。
+- DoD 4（クリーン対応環境セットアップ）
+  - コマンド: 現在のM7差分を反映した一時macOS cloneで`python3 scripts/setup.py`、`.venv/bin/python -m spacy validate`、`build_normalized.py --diff`、`doctor.py`、Claude/Codex版と手順書指定の必須helpフラグを確認した。
+  - 結果: 固定依存4件と`en_core_web_sm` 3.8.0を新規導入し、差分ゼロ、doctor終了コード0・12 pass / 0 fail、Claude Code 2.1.234、Codex CLI 0.147.0、両手順書11/11節を確認した。Windowsホストは同じLinux手順をWSL2内で実行する契約である。
+- DoD 5（Codex独立レビュアー実効入力）
+  - コマンド: 専用`CODEX_HOME`、`project_doc_max_bytes=0`、`include_environment_context=false`、4件の`--disable`で`codex debug prompt-input`を実行し、userメッセージ配列を機械検査した。
+  - 結果: `{"additional_user_context_count": 0, "input_text_count": 1, "user_message_count": 1, "user_prompt_exact_match": true}`で、COR-07の3行以外の追加userコンテキストは0件だった。
+
 ## 2026-08-18 — M7 アダプタ＋手順書＋NOTICE
 
 ### 実装
@@ -8,7 +119,58 @@
 - `AGENTS.md`を追加し、Codex作問側を共通コアへ、独立レビューを`codex exec --ephemeral --sandbox read-only`の新規非対話サブプロセスへ配線した。作問側は`workspace-write`を維持し、固定レビュアー起動だけを親サンドボックス外で個別承認する。
 - 完全日本語の`docs/setup-claude-code.md`と`docs/setup-codex.md`を追加し、前提環境から免責までの必須11節、実行コマンド、成功時期待結果、LLM送信、初回3問チュートリアル、更新・トラブルシュートを記載した。
 - `NOTICE`と`README.md`を追加し、CEFR-J Wordlist Version 1.6 / Grammar Profileの和英引用、利用条件、原本・正規化データ再配布時の出典明示、LLM送信、ツール間保証範囲、教育利用前の教師による最終確認責任を明示した。
-- PLN-05で承認されたM7D-01〜05（Codexレビューの`--ephemeral`、固定子プロセスだけの親サンドボックス外実行、M8正式フィクスチャ前の互換確認入力、Claude Codeの固定S80識別子生成、引用付き`FIN01`ヒアドキュメント）を`DECISIONS.md`と`docs/cross-agent-compatibility.md`へ反映した。`schemas/`は変更していない。
+- PLN-05で承認されたM7D-01〜11を反映した。R2対応ではCodex実効user入力をCOR-07の3行1件へ完全一致させ、Claude Codeのreview_resultを引用付き`REV01`ヒアドキュメントでstdin検証する専用ガードを追加し、Windowsホストの対応境界をWSL2 Linux内実行へ統一した。`schemas/`は変更していない。
+
+### M7 R2対応
+
+- R2-01: Codex独立レビュアーの固定起動へ`--disable recommended_plugins` / `apps` / `plugins` / `workspace_dependencies`と`-c include_environment_context=false`を追加した。専用`CODEX_HOME`、`--ignore-user-config`、`--ignore-rules`、`project_doc_max_bytes=0`と併用し、`codex debug prompt-input`で実効user入力の件数と本文を完全一致検査する手順へ更新した。
+- R2-02: `.claude/settings.json`へ`validate.py --schema review_result --file -`の限定許可を追加し、`.claude/hooks/guard_review_result.py`で引用付き`REV01`の固定先頭・終端、JSON object本文、追加コマンドなしを検査するようにした。Claude Code 2.1.234の新規`dontAsk`セッションで正常形は`permission_denials=[]`・`valid=true`となり、ファイルstdin、パイプ、コマンド置換、終端後の追加コマンドは4/4件とも実行前拒否となった。
+- R2-03/R2-04: Claude Codeのfail-closed Bash sandboxとCodexのPOSIX固定コマンドを維持したまま、対応Windows環境をWSL2 Linuxへ限定した。ネイティブPowerShell・コマンドプロンプト上の作問実行は対象外とし、リポジトリ、Python、対象ツール、全作問・レビューコマンドをWSL2内で実行する要件へ統一した。
+- 対応記録は`reviews/m7-r2-resolutions.md`へ指摘ID順に1行ずつ保存した。レビュー本文`reviews/m7-r2.md`は変更していない。
+
+### M7 R2後のM1 DoD再検証（2026-08-18、6/6 pass）
+
+1. 決定性
+   - コマンド: リポジトリ内の隔離一時出力先へ`.venv/bin/python scripts/build_normalized.py --source-dir data/source --out-dir <temp>`を2回実行し、3成果物を`cmp`で比較した。
+   - 結果: `lexicon.json`・`grammar.json`・`meta.json`は全てバイト一致した。コミット済み成果物のSHA-256は順に`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`だった。
+2. スキーマ・meta適合
+   - コマンド: 同じ隔離出力を`Draft202012Validator`で正規化語彙・文法スキーマへ、`validate_meta_document`でNRM-29へ照合した。
+   - 結果: 3成果物が全て適合した。
+3. 件数不変条件
+   - コマンド: inline Pythonと`openpyxl`で正規化JSONと原本xlsxをCI-NRM-03へ照合した。
+   - 結果: 語彙7,988件（A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859）、`(headword,pos)`一意7,988件、ALL 7,801行、併記179群、文法501件、target eligible 256件、全枝番の親存在、未付与親16件のID一致を確認した。
+4. レベル継承・範囲分解
+   - コマンド: grammar全件の親子関係、`level_raw`、`min` / `max` / `source` / `inherited_from`を検査した。
+   - 結果: `gp:1-1` / `gp:1-2` / `gp:1-3`は`gp:1`を正しく継承し、教員版の単一値152件・範囲値104件は全件正しく分解されていた。
+5. doctor完全環境・異常模擬
+   - コマンド: `.venv/bin/python scripts/doctor.py`と、`/tmp`の隔離リポジトリコピーで正規化欠落、原本セル改変、`limits.json`欠落を個別に実行した。改変原本には通常の`build_normalized.py`も実行した。
+   - 結果: 完全環境は12 pass / 0 fail。正規化欠落は終了コード1・`E-DATA-03`、改変原本はdoctor/buildとも終了コード1・`E-DATA-02`、設定欠落は終了コード1・`E-DATA-05`だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`。
+   - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全て0件、`written=[]`、終了コード0だった。
+
+### M7 R2後の最終DoD再検証（2026-08-18、5/5 pass）
+
+- DoD 1（アダプタ純度）
+  - コマンド: `CLAUDE.md`、`.claude/skills/cefrj-author/SKILL.md`、`.claude/agents/cefrj-reviewer.md`、`.claude/settings.json`、`AGENTS.md`を目視し、挙動・検査規則の転記キーワードを`rg`で検索した。
+  - 結果: 起動・権限・参照とツール固有設定だけで、生成制約、判定規則、質問文、エラー文言の転記は0件だった。
+- DoD 2（両ツール実LLM完走）
+  - コマンド: 既存Codex完走セット`output/20260818-153251-cd28`を全監査・set・集合検査で再検証した。さらにClaude Codeの新規`dontAsk`セッションで`grammar_mcq`・CEFR-J A1.2・提案モード・2問を対話開始から実行し、candidate、machine、1問1独立review、各reviewの`REV01`検証、正準監査保存、増分/最終set check、finalize、set検証、HTML生成まで完走した。
+  - 結果: 新規Claudeセット`output/20260818-221920-g0gp`は`gp:1` / `gp:2`をgen1で採用し、全candidate/machine/request/review/set、集合検査、HTMLがpassした。set/HTMLのSHA-256は`a40967e4a10901260449107584ab26b608c7065eb902602403d5ff18e948950a` / `85b8ffce691e9fa01f769fe20ab85c9e36d0d79e4fdb3bfa08a1db03c0fe9b0b`だった。非正準一時ファイル`output/_tmp/q01.gen1.raw.json`は正本外であることを確認して削除した。
+- DoD 3（machine_check.py互換一致）
+  - コマンド: Claude Code完走セット`output/20260818-162750-wisc/review/q01.gen1.candidate.json`をCodex側で同一引数により再実行し、保存済みClaude出力と`generated_at`除外後のJS-01正準バイトを`cmp`・SHA-256で比較した。
+  - 結果: 両出力はバイト一致し、SHA-256は双方`c78544e4ad20ab10a60844e7046bafc567f3acd7a7437441f99d61bc8c7f5e93`だった。
+- DoD 4（クリーン対応環境セットアップ）
+  - コマンド: `/tmp`のクリーンmacOSコピーで`python3 scripts/setup.py`、`.venv/bin/python -m spacy validate`、`build_normalized.py --diff`、`doctor.py`、Claude/Codexの版と必須helpフラグを確認した。
+  - 結果: 固定依存4件と`en_core_web_sm` 3.8.0を新規導入し、差分ゼロ、doctor終了コード0・12 pass / 0 fail、Claude Code 2.1.234、Codex CLI 0.147.0と必須フラグを確認した。Windowsホストは同じLinux手順をWSL2内で実行する契約である。
+- DoD 5（Codex独立レビュアー実効入力）
+  - コマンド: 専用`CODEX_HOME`と本番同一のコンテキスト無効化設定で`codex debug prompt-input`を機械検査し、その後に承認済み固定`codex exec --ephemeral --sandbox read-only`を実行して最終メッセージを`validate.py --schema review_result`へ渡した。
+  - 結果: `{"user_message_count": 1, "user_prompt_exact_match": true}`、固定プロンプト3行、実レビュー終了コード0、`review_result`スキーマ`valid=true`だった。
+
+### M7 R2後の最終回帰
+
+- `.venv/bin/python -m py_compile scripts/*.py .claude/hooks/*.py`、関連JSONの全解析、`doctor.py`、`build_normalized.py --diff`、3実セットの`validate.py --set-dir`・setスキーマ・`set_check.py`、両手順書の11節確認、`git diff --check`を実行した。
+- 結果は全てpass。doctorは12 pass / 0 fail、正規化差分は0件、3セットの集合判定は全てpassだった。`git diff -- schemas scripts data/source data/normalized data/config CLAUDE.md .claude/agents .claude/skills`は空で、設計承認範囲外の実装・スキーマ・原本・正規化データを変更していない。
 
 ### M7着手時のM1 DoD再検証（2026-08-18、6/6 pass）
 
@@ -31,7 +193,7 @@
    - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`。
    - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全て`count=0, ids=[]`、`written=[]`、終了コード0だった。
 
-### M7 DoD検証（2026-08-18、4/4 pass）
+### M7初回DoD検証（2026-08-18、当時4/4 pass。R2後の現行5項目は上記で再検証）
 
 - DoD 1（アダプタ純度）
   - コマンド: `CLAUDE.md`、`.claude/skills/cefrj-author/SKILL.md`、`.claude/agents/cefrj-reviewer.md`、`.claude/settings.json`、`AGENTS.md`をCOR-02 / CAT-02に対して目視・検索し、JSONも`jq empty`で検証した。

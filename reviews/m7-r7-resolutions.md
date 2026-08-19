@@ -1,0 +1,1 @@
+- R7-01: 承認済みM7D-16に従う固定Codex監視ラッパーを追加し、設定秒数でのプロセスグループ停止・終了124・3件のAUD-09 process_failure・set.jsonなしの中止を確認した（.codex/run_reviewer.py, AGENTS.md, agent/author-core.md, docs/architecture.md, docs/requirements.md, docs/subagent-review-spec.md, docs/cross-agent-compatibility.md, docs/setup-codex.md, DECISIONS.md, IMPLEMENTATION_PLAN.md）

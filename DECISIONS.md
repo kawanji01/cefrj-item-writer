@@ -15,7 +15,7 @@
 
 ### P-01 原本データの同梱
 - **決定**: 原本データ（`CEFR-J Wordlist Ver1.6.xlsx`、`CEFR-J Grammar Profile full 20200220.xlsx`）は非公開リポジトリの `data/source/` に同梱する。
-- **理由**: 教師が自分の環境で追加取得なしに完結実行できること、および原本ライセンス（引用付きで研究・教育・商用の無償利用と改変を許容）が非公開リポジトリ内の同梱と整合するため。
+- **理由**: 教師が自分の環境で追加取得なしに完結実行できるため。原本ごとの利用条件は同一ではなく、同梱・利用・派生データ作成・第三者提供が許される範囲は、M7D-08に従って権利者へ確認した許諾範囲に限る。
 - **主な影響先文書**: `docs/architecture.md`（リポジトリ構成・原本更新手順）、`docs/cefrj-validation-spec.md`（正規化の入力）、`docs/cross-agent-compatibility.md`（セットアップ手順書要件）。
 
 ### P-02 一問一答の対話形式
@@ -138,9 +138,9 @@
 - **主な影響先文書**: `docs/subagent-review-spec.md`（再生成ループの正）、`docs/interaction-flow.md`（教師照会フロー）、`docs/requirements.md`（NFR: 最悪コスト）。
 
 ### D-15 レビュー実行方式（Q15）
-- **決定**: 1問1独立レビュー（再生成のたび新実行）。Claude Code=専用レビュアー・サブエージェント定義をTaskで起動。Codex=`codex exec` 非対話サブプロセス。入力=候補問題JSON＋機械検査レポート＋検証仕様＋正規化データへの読み取り専用アクセスのみ。生成側の会話履歴はレビュアーから不可視。出力=review_result JSON（スキーマ検証必須）。セット横断検査（対象重複・例文使い回し・誤答の過度な再利用）は決定的スクリプト。二重レビューは将来オプションとして記載のみ。非機能目標時間はツール別に記載。
+- **決定**: 1問1独立レビュー（再生成のたび新実行）。Claude Code=`.claude/run_reviewer.py`が監視する新規`claude -p`非対話サブプロセス（M7D-13で当初方式を置換済み）。Codex=`.codex/run_reviewer.py`が監視する新規`codex exec`非対話サブプロセス（M7D-16で直接起動を置換済み）。入力=候補問題JSON＋機械検査レポート＋検証仕様＋正規化データへの読み取り専用アクセスのみ。生成側の会話履歴はレビュアーから不可視。出力=review_result JSON（スキーマ検証必須）。セット横断検査（対象重複・例文使い回し・誤答の過度な再利用）は決定的スクリプト。二重レビューは将来オプションとして記載のみ。非機能目標時間はツール別に記載。
 - **理由**: レビューの独立性（P-04）を両ホストツールで同等に実現する具体機構を固定し、セット横断の検査は文脈を要しないため決定的スクリプトに寄せる。
-- **主な影響先文書**: `docs/subagent-review-spec.md`（レビュアー契約の正）、`docs/cross-agent-compatibility.md`（Task / codex exec 配線）、`docs/requirements.md`（v2: 二重レビュー）。
+- **主な影響先文書**: `docs/subagent-review-spec.md`（レビュアー契約の正）、`docs/cross-agent-compatibility.md`（監視付き`claude -p` / `codex exec` 配線）、`docs/requirements.md`（v2: 二重レビュー）。
 
 ### D-16 JSONデータモデル（Q16）
 - **決定**: 正本=`output/<set_id>/set.json`（合格問題のみ）。必須: schema_version、セットメタデータ（形式・レベル・作成日時・ツール・モデル名）、問題ごとの原本参照、設定スナップショット、data_version＋原本チェックサム、CEFR-J出典ブロック。監査=同ディレクトリ `review/` に全世代の候補・機械検査・レビューJSONを試行単位で保存し正本から相対参照（監査が欠けても正本は自立解釈可能）。キーは英語snake_case。format判別共用体9形式をJSON Schemaで固定。
@@ -173,8 +173,8 @@
 - **主な影響先文書**: `docs/testing-and-acceptance.md`（テスト定義の正）、`docs/architecture.md`（フィクスチャ更新の運用手順）。
 
 ### D-22 原本データの取扱・法務（Q22）
-- **決定**: `data/normalized/` を出典ヘッダー付きでコミット（改変物+引用として適法）。ビルドスクリプトは原本更新時用に同梱。NOTICE（出典・ライセンス条件・再配布注意）。README類でLLM送信（生成・レビュー時に正規化データ抜粋や問題文がAnthropic/OpenAIに送信される）を教師に明示。決定的スクリプトは完全オフライン（例外はセットアップ時のspaCyモデル取得のみ）・テレメトリなし。生成問題の教育利用の最終確認は教師の責任である旨を免責として文書化。原本と正規化の整合はチェックサムで起動時検証。
-- **理由**: 原本ライセンスは引用付き利用・改変を許容しており、出典明示・NOTICE・免責でその条件を満たす。LLM送信の明示は第三者利用時の透明性要件。
+- **決定**: `data/normalized/` を出典ヘッダー付きでコミットし、ビルドスクリプトは原本更新時用に同梱する。ただし、原本・派生データの保持、利用、LLM送信、第三者提供は、原本ごとに権利者へ確認した許諾範囲に限る。NOTICEはWordlistとGrammar Profileの確認済み条件を分離し、未確認の利用権を許容済みと表示しない。README類でLLM送信（生成・レビュー時に正規化データ抜粋や問題文がAnthropic/OpenAIに送信される）を教師に明示。セットアップ完了後の決定的スクリプトは完全オフライン（例外処理は固定版依存パッケージとspaCyモデルを取得するセットアップのみ。M7D-07）・テレメトリなし。生成問題の教育利用の最終確認は教師の責任である旨を免責として文書化。原本と正規化の整合はチェックサムで起動時検証。
+- **理由**: Wordlistには引用付き利用・改変の明示条件がある一方、Grammar Profileには同等の商用利用・改変・派生データ作成・再配布条件を確認できない。出典明示は権利者の許諾を代替しないため、M7D-08の保守的な境界をNOTICEと運用へ反映する。LLM送信の明示は第三者利用時の透明性要件。
 - **主な影響先文書**: `docs/architecture.md`（運用手順・チェックサム検証）、`docs/json-output-spec.md`（出典ブロック）、`docs/requirements.md`（NFR: オフライン・プライバシー）。
 
 ### D-23 版管理（Q23）
@@ -237,7 +237,7 @@
 - **主な影響先文書**: `docs/subagent-review-spec.md`、`docs/cross-agent-compatibility.md`。
 
 ### DD-10 非機能参考目標
-- **決定**: 10問セット完走30分以内（両ツール・再生成込み・参考値）。対話・エラー文言・文書は日本語。対応OS: macOS/Linux/Windows（Python 3.11+が動作すること）。
+- **決定**: 10問セット完走30分以内（両ツール・再生成込み・参考値）。対話・エラー文言・文書は日本語。対応環境はmacOS、Linux、およびWindowsホスト上のWSL2 Linux環境（Python 3.11+が動作すること）とし、ネイティブPowerShell・コマンドプロンプト上の作問実行は対象外とする（M7D-11）。
 - **理由**: 授業準備の実用時間内に収まることを目標化しつつ、LLM実行時間は保証不能なため参考値とする（合否条件は正しさのみ、D-21）。
 - **主な影響先文書**: `docs/requirements.md`（NFR）。
 
@@ -368,8 +368,8 @@
 - **理由**: Q18はSkill定義と.claude/agents/定義の存在のみ確定で名前・パスが未定。doctorのD12検査と互換テストが決定的になるよう固定名を与えた。tools制限は読み取り専用アクセス要件（Q15）の最も保守的な実現。
 
 #### AD-28 codex exec起動コマンドライン
-- **既定値**: `codex exec --cd <repo> --sandbox read-only --skip-git-repo-check --output-last-message <file> - < <prompt>`。モデル指定オプションは付けない（ホスト既定=GPT-5.6 sol）。プロンプトは3要素固定テンプレート（reviewer-core読込・封筒パス・JSONのみ出力）。
-- **理由**: Q15/Q18は「codex exec非対話サブプロセス」のみ確定。read-onlyサンドボックスは独立性・読み取り専用要件の強制、--output-last-messageは結果取得の決定的経路として最も保守的。フラグが当該Codex版で受理されることの確認をセットアップ手順書要件（CDX-10/SUP-02）に含めた。
+- **既定値**: 作問側は`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`だけを親サンドボックス外で個別承認して実行する。ラッパーはシェルを使わず、`CODEX_HOME="${HOME}/.codex-cefrj-reviewer" codex exec --ignore-user-config --ignore-rules --disable recommended_plugins --disable apps --disable plugins --disable workspace_dependencies -c project_doc_max_bytes=0 -c include_environment_context=false --ephemeral --cd <repo> --sandbox read-only --skip-git-repo-check --output-last-message <導出済み作業ファイル> -`の固定argvを構築する。専用`CODEX_HOME`は作問側と別に認証し、認証情報以外のユーザー設定・ルール・個人スキル・プラグイン・メモリを置かない。モデル指定オプションは付けない（ホスト既定=GPT-5.6 sol）。プロンプトは3要素固定テンプレート（reviewer-core読込・封筒パス・JSONのみ出力）をstdinへ渡し、実効入力のuserメッセージはこの3行1件だけに固定する（M7D-09）。ラッパーはM7D-16の壁時計期限とプロセスグループ停止を強制する。
+- **理由**: Q15/Q18は「codex exec非対話サブプロセス」のみ確定。専用`CODEX_HOME`とコンテキスト無効化フラグは生成側・ユーザー・プロジェクト・プラットフォーム由来の追加user入力を遮断し、read-onlyサンドボックスは読み取り専用要件を強制し、--output-last-messageは結果取得の決定的経路になる。Codex CLI自身に壁時計タイムアウト指定がないため、固定argvを構築する専用ラッパーが同じ境界を維持したまま期限超過を強制する。Codexが不可避に付与する固定system/developer/tool定義と組み込みsystem skill catalogは実行基盤として扱い、ユーザー・プロジェクト由来コンテキストには含めない。フラグと分離状態の機械検査をセットアップ手順書要件（CDX-10/SUP-02）に含めた。
 
 #### AD-29 Codexアダプタ作業ファイル
 - **既定値**: プロンプト/最終メッセージファイルは `review/<qid>.<gen>.codex-prompt.txt` / `.codex-last.txt` に置いてよい(MAY)。監査正本3種には含めない。
@@ -755,7 +755,7 @@
 
 ### M1D-06 セットアップ実装と固定依存版
 - **決定**: `python scripts/setup.py` が `.venv` を作成し、`requirements.txt` の spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6 と en_core_web_sm 3.8.0を導入する。doctorはこれらの完全一致とモデルロードを検査する。
-- **理由**: macOS/Linux/Windows共通の具体的セットアップコマンドとE-ENV-02/03の要求版を一意にするため。
+- **理由**: macOS/Linux/Windowsホスト上のWSL2 Linux環境で共通の具体的セットアップコマンドとE-ENV-02/03の要求版を一意にするため（Windows境界はM7D-11で更新）。
 - **影響先**: `IMPLEMENTATION_PLAN.md`、`docs/architecture.md`、`docs/cross-agent-compatibility.md`、M1セットアップ・doctor実装。
 
 ### M1D-07 正規化データの出典ヘッダー
@@ -1061,9 +1061,9 @@
 
 ---
 
-## 10. M7実装に伴う承認決定（M7D-01〜M7D-05）
+## 10. M7実装に伴う承認決定（M7D-01〜M7D-16）
 
-2026-08-18、PLN-05に基づきM7の実機確認で発見した次の5件について、作問者が推奨案を承認した。
+2026-08-18〜19、PLN-05に基づきM7の実機確認とM7 R1〜R7レビューで発見した次の16件について、作問者が推奨案を承認した。
 
 ### M7D-01 Codex独立レビューの一時実行
 - **決定**: CDX-03のCodex独立レビュアー起動コマンドへ`--ephemeral`を追加する。モデル指定は追加せず、`--sandbox read-only`を維持し、レビュアーのセッション状態を永続化しない。この決定はAD-28の起動コマンドラインをこの点に限って更新する。
@@ -1089,3 +1089,58 @@
 - **決定**: Claude Codeでは、`finalize_set.py`のFIN-01メタデータを、区切り語`FIN01`を単引用符で囲んだヒアドキュメントからstdinへ渡す。`.claude/settings.json`には、`output/`配下のset-dir、引用付き`FIN01`ヒアドキュメント、FIN-01 JSON本文だけに一致する専用Bash許可ルールを追加する。パイプ、中間メタデータファイル、コマンド置換、区切り語後の追加コマンドは許可しない。既存CLIのstdin契約、FIN-01、スキーマは変更しない。
 - **理由**: `finalize_set.py`は設計どおりFIN-01をstdinからのみ受け取る一方、Claude CodeのBashツールには独立したstdin引数がなく、従来のCLI許可ルールはstdinリダイレクトを含む呼出しに一致しなかった。引用付きヒアドキュメントなら任意のJSON文字列をシェル展開せず渡せ、永続する未定義ファイルや追加の汎用コマンドも不要である。新規セッションの`dontAsk`モードで、従来ルールでは拒否、専用ルールでは確認なしに実行され、未許可の複合コマンドとコマンド置換は拒否されることを確認した。
 - **影響先**: `docs/cross-agent-compatibility.md` CCW-11、`.claude/settings.json`、`docs/setup-claude-code.md`、M7受け入れ確認。
+
+### M7D-06 Codex独立レビュアーのユーザー・プロジェクトコンテキスト分離
+- **決定**: Codex独立レビュアーは`${HOME}/.codex-cefrj-reviewer`を専用`CODEX_HOME`として作問側とは別に認証し、このホームには認証情報以外のユーザー設定・ルール・個人スキル・プラグイン・メモリを置かない。子プロセスは`--ignore-user-config`、`--ignore-rules`、`-c project_doc_max_bytes=0`、`--ephemeral`、`--sandbox read-only`を併用し、モデル指定を追加せず、COR-07の3行プロンプトだけを明示入力として起動する。Codexが不可避に付与する固定system/developer/tool定義と組み込みsystem skill catalogは実行基盤としてRC-02の入力限定から除外するが、ユーザー・プロジェクト由来の追加コンテキストは認めない。初回セットアップと更新後は、専用`CODEX_HOME`で`codex debug prompt-input -c project_doc_max_bytes=0`を実行し、個人・プロジェクト由来の指示、ルール、スキル、プラグイン、メモリが含まれないことを確認し、不一致時はレビューを起動せずfail-closedとする。
+- **理由**: リポジトリルートで従来の`codex exec`を起動すると、3行プロンプトに加えてプロジェクト`AGENTS.md`とユーザーの個人指示・スキル一覧が自動注入され、RC-02の入力限定と独立レビューを満たさなかった。専用ホームを認証境界ごと分離し、設定・ルール・プロジェクト文書を明示的に無効化すれば、生成側の追加コンテキストを子へ渡さずに認証済みの非対話レビューを実行できる。Codex CLI 0.147.0の実機診断では、プロジェクト`AGENTS.md`、個人指示、個人スキルは0件で、プラットフォーム組み込みsystem skill 5件だけが残ることを確認した。
+- **影響先**: AD-28、`docs/subagent-review-spec.md` RC-02、`docs/cross-agent-compatibility.md` CDX-03/CDX-09/CDX-10/SUP-02、`AGENTS.md`、`docs/setup-codex.md`、`IMPLEMENTATION_PLAN.md` M7 DoD、M7受け入れ確認。
+
+### M7D-07 セットアップ時のネットワーク境界
+- **決定**: ネットワークアクセスを許可する例外処理は`python scripts/setup.py`によるセットアップだけとし、`requirements.txt`に固定されたPython依存パッケージのパッケージインデックスからの取得と、en_core_web_sm 3.8.0の取得を許可する。セットアップ完了後の決定的CLIは従来どおり完全オフラインとし、テレメトリを実装しない。「spaCyモデル取得が唯一のネットワーク許可点」という記述は「固定版依存導入とモデル取得を行うセットアップ処理だけがネットワーク許可範囲」へ統一する。wheelhouseは同梱しない。
+- **理由**: クリーン環境の`setup.py`はモデル取得前に`pip install -r requirements.txt`を実行し、wheelhouseを同梱していないため固定版依存の取得にもネットワークが必要である。OPS-07は依存導入とモデル取得をオフライン要件の対象外としていた一方、ARC-05とSUP-02はモデル取得だけを例外としており、M7 DoD 4のクリーン構築手順が矛盾していた。セットアップ処理全体を有限な例外にすれば現行実装と一致し、OS別wheelの保守・容量・再配布条件を新たに導入せず、運用中の完全オフライン要件を維持できる。
+- **影響先**: D-22、`docs/requirements.md` NFR-04/ENV-03、`docs/architecture.md` ARC-05/E-ENV-03/OPS-07、`docs/cross-agent-compatibility.md` SUP-02、`docs/setup-claude-code.md`、`docs/setup-codex.md`、`README.md`、M7 DoD再確認。
+
+### M7D-08 WordlistとGrammar Profileの利用条件の分離
+- **決定**: 2026-08-18時点の一次資料に基づき、WordlistとGrammar Profileの利用条件を分離して案内する。Wordlistは同梱原本READMEと公式ダウンロードページに明記された、適切な引用を伴う研究・教育・商用利用および別語彙表作成の条件を適用する。Grammar Profileは同梱原本と公式ダウンロードページで引用方法と免責を確認できるが、引用だけを条件に商用利用・改変・派生データ作成・再配布を認める条項を確認できないため、これらには権利者の明示的な事前許諾を必要とする。CEFR-J公式利用案内に従い、教育・研究等の非商用利用も権利者へ利用連絡を行う。許諾範囲を確認できるまで、Grammar Profileまたはその派生データを含む本リポジトリを第三者へ提供・公開せず、引用を許諾の代替として扱わない。既存の原本・正規化データ・スキーマは変更せず、その保持・利用・LLM送信・第三者提供が許される範囲を利用者が権利者へ確認する。
+- **理由**: Wordlist原本READMEには研究・教育・商用利用と別語彙表作成の条件がある一方、Grammar Profile workbookには同等の利用許諾文がなく、公式ダウンロードページもGrammar Profileについては引用と免責を示すにとどまる。CEFR-J公式利用案内は非商用利用に利用連絡を求め、商用利用に事前許諾を求めている。両原本をWordlist固有の条件で一括案内すると、一次資料で確認できない権利まで許容済みと誤表示するため、未確認事項をfail-closedで扱う。
+- **影響先**: D-01、D-22、`docs/requirements.md` FR-41、`docs/architecture.md` OPS-06、`NOTICE`、`README.md`、M7 DoD再確認。
+
+### M7D-09 Codex実効入力のuserメッセージ完全一致
+- **決定**: M7D-06の専用`CODEX_HOME`、`--ignore-user-config`、`--ignore-rules`、`-c project_doc_max_bytes=0`に加え、Codex独立レビュアー起動へ`--disable recommended_plugins`、`--disable apps`、`--disable plugins`、`--disable workspace_dependencies`、`-c include_environment_context=false`を必須で付ける。初回セットアップ時とCodex更新後は、同じコンテキスト無効化設定を付けた`codex debug prompt-input`のJSONを機械検査し、`role="user"`メッセージがちょうど1件、その`content`がCOR-07の3行だけを持つ`input_text` 1件と完全一致する場合だけレビューを許可する。件数または本文が不一致ならfail-closedとし、プラットフォーム注入をRC-02の例外へ追加しない。
+- **理由**: M7D-06の診断はプロジェクト`AGENTS.md`・個人指示・個人スキルを除外したが、R2診断では別のuserメッセージとして`recommended_plugins`と`environment_context`が残った。Codex CLI 0.147.0の実機では、上記5設定を加えると実効入力は固定system/developer/tool定義と組み込みsystem skill catalogに加え、COR-07と完全一致するuserメッセージ1件だけになった。禁止語の部分検索では未知の追加user入力を見逃すため、件数と本文の完全一致を成功条件にする。
+- **影響先**: AD-28、M7D-06、`docs/subagent-review-spec.md` RC-02、`docs/cross-agent-compatibility.md` CDX-03/CDX-09/CDX-10、`AGENTS.md`、`docs/setup-codex.md`、`IMPLEMENTATION_PLAN.md` M7 DoD 5、M7受け入れ確認。
+
+### M7D-10 Claude Codeからreview_result検証へstdinを渡す配線
+- **決定**: Claude Codeでは、COR-08のreview_result JSONを、区切り語`REV01`を単引用符で囲んだヒアドキュメントから`python scripts/validate.py --schema review_result --file -`のstdinへ渡す。`.claude/settings.json`には当該validateコマンド接頭辞だけに一致する専用Bash許可を置き、PreToolUseガードは固定先頭行、終端区切り、区切り間の本文がJSON object 1個であることを全文検査する。パイプ、シェルが解釈する位置のコマンド置換、区切り後の追加コマンドは許可しない。単引用符付きヒアドキュメント本文中の文字列はシェル展開されないreview_resultデータとして保持する。既存のCOR-08、`validate.py`のstdin契約、review_resultスキーマ、正準監査保存規則は変更しない。
+- **理由**: Claude CodeのBashツールには独立したstdin引数がなく、引数だけの許可では`--file -`へレビュー出力を渡せなかった。review_resultは複数行JSONになり得て、権限globの複数行本文一致は正常なヒアドキュメントを許可できないため、Bash許可を固定validate接頭辞へ限定したうえでPreToolUseガードがコマンド全文を検査する。これによりデータをシェル展開せず既存stdin契約へ渡し、許可接頭辞の別形は実行前拒否する。一時ファイル方式で新たな命名・衝突・保存期間契約を導入しない。
+- **影響先**: `docs/cross-agent-compatibility.md` COR-08/CCW-11/CCW-12、`.claude/settings.json`、`.claude/hooks/guard_review_result.py`、`docs/setup-claude-code.md`、M7受け入れ確認。
+
+### M7D-11 WindowsホストのWSL2実行境界
+- **決定**: 対応環境はmacOS、Linux、およびWindowsホスト上のWSL2 Linux環境とする。Windowsではリポジトリ、Python、Claude CodeまたはCodex、全セットアップ・作問・レビューコマンドをWSL2シェル内で実行し、ネイティブPowerShell・コマンドプロンプト上の作問実行をサポート対象外とする。生成済みHTMLをWindows側ブラウザで閲覧することは妨げない。両セットアップ手順書はWSL2前提へ統一し、CodexのCDX-03固定POSIXコマンドをWindowsホストでもWSL2内で使用する。
+- **理由**: Claude Codeのfail-closed BashサンドボックスはmacOS・Linux・WSL2を対応対象とし、ネイティブWindowsには同等の外部書込み拒否境界を確認できない。またCDX-03の環境変数代入、`${HOME}`、バックスラッシュ継続、stdinリダイレクトはPOSIXシェル契約である。Windowsホストの実行基盤をWSL2へ一本化すれば、最小権限を緩めず両ツールに同じ配線とコマンドを適用できる。
+- **影響先**: DD-10、M1D-06、`docs/requirements.md` NFR-06/ENV-04、`docs/cross-agent-compatibility.md` SUP-02、`docs/setup-claude-code.md`、`docs/setup-codex.md`、`README.md`、`AGENTS.md`、`IMPLEMENTATION_PLAN.md` M7 DoD 4、M7受け入れ確認。
+
+### M7D-12 検証前JSONの一時保存契約
+- **決定**: candidateとreview_requestの検証前データは、監査正本と分離した`output/<set_id>/.staging/`へ排他的に新規作成する。candidateは`<question_id>.<gen>.candidate.raw<1|2>.json`、review_requestは`<question_id>.<gen>.request.raw.json`の固定名とする。candidateは取得した生出力をパース・再直列化する前に一時名で検証し、受理後だけ同じ内容のJS-01正準形を正規監査名へ排他的に保存する。不通過時はAUD-09監査の保存後、review_requestは検証結果の処理後に一時ファイルを削除する。正常監査保存に成功した場合も対応する一時ファイルを削除し、空になった`.staging/`を削除する。削除は固定一時名だけを受理する専用ヘルパーに限定し、汎用`rm`を許可しない。一時名が既存なら既存ファイルを変更・削除せず`E-DATA-07`で停止し、新しいset_idで最初から実行する。クラッシュ後の再開はv2範囲外とする。
+- **理由**: 正規監査名への検証前保存はJS-02/AUD-08/AUD-10の受理順序と不変性に反し、`review/`内の別名は監査命名検査に反する。セット単位の`.staging/`と固定寿命を定義すれば、生出力検証と監査正本の排他保存を分離し、権限を一時ファイルの検証・削除だけへ限定できる。
+- **影響先**: `docs/architecture.md` E-DATA-07、`docs/json-output-spec.md` JS-02、`docs/subagent-review-spec.md` AU-02/AU-05、`docs/cross-agent-compatibility.md` CCW-11/CCW-12、`agent/author-core.md` 第6節/第7.1節、`.claude/settings.json`、`.claude/hooks/guard_staging.py`、`.claude/cleanup_staging.py`、`docs/setup-claude-code.md`、M7受け入れ確認。
+
+### M7D-13 Claude Code独立レビューの壁時計タイムアウト
+- **決定**: Claude Codeのレビュー1実行は、`.claude/run_reviewer.py`が起動する新規`claude -p`サブプロセスとする。ラッパーは実行直前に検証・セッションスナップショットとの一致確認を済ませた`data/config/limits.json`から`review_timeout_seconds`を読み、サブプロセス全体の壁時計期限として適用する。子は`--safe-mode`、`--system-prompt-file agent/reviewer-core.md`、`--tools Read,Grep,Glob`、`--permission-mode dontAsk`、`--no-session-persistence`、`--no-chrome`、空の厳格MCP設定で起動し、COR-07の3行だけをstdinへ渡す。期限超過時は子のプロセスグループを停止して非0終了し、INF-01/INF-07のインフラ障害として同一requestを最大3実行する既存規則へ返す。成功時はstdoutの生テキストだけをCOR-08へ渡す。ラッパーは1実行と停止だけを担当し、再実行・中止判定を持たない。
+- **理由**: Claude Code 2.1.234の当初検討した組み込みサブエージェント方式には任意秒数の壁時計期限を渡す契約がなく、`maxTurns`やAPI要求単位のタイムアウトではレビュアー実行全体の停止を保証できない。独立CLIプロセスを外部ウォッチドッグで監視すれば、読取専用・ネットワーク遮断・入力分離を維持したままINF-07を強制できる。
+- **影響先**: `docs/architecture.md` C6、`docs/subagent-review-spec.md` INF-07、`docs/cross-agent-compatibility.md` COR-06/COR-09/CCW-09〜CCW-12、`CLAUDE.md`、`.claude/settings.json`、`.claude/hooks/guard_reviewer.py`、`.claude/run_reviewer.py`、`docs/setup-claude-code.md`、`IMPLEMENTATION_PLAN.md` M7 DoD 2、M7受け入れ確認。
+
+### M7D-14 子ClaudeのモデルAPI通信許可
+- **決定**: Claude CodeのBashサンドボックスは`network.allowedDomains`へ`api.anthropic.com`だけを追加し、M7D-13の固定`.claude/run_reviewer.py`が起動する子`claude -p`のモデルAPI通信を許可する。この許可はClaude Code実行基盤のモデル通信だけを対象とし、レビュアーへネットワークツールを付与しない。親の`WebFetch`/`WebSearch` deny、子の`Read,Grep,Glob`限定・空MCP・`safe-mode`、固定Bash許可、`allowUnsandboxedCommands=false`、決定的CLIの完全オフライン要件を維持する。他ドメイン、カスタムAPIエンドポイント、Bedrock/Vertex/Foundry等の別プロバイダ経路は即席で許可せず、必要時はPLN-05で別途決定する。
+- **理由**: 新規`dontAsk`受け入れではcandidate/review_requestの一時検証と正準監査保存まで成功したが、Bashサンドボックスが子CLIの`api.anthropic.com:443`を遮断し、レビュー起動が終了コード1となった。サンドボックス外実行を許可せず、Claude公式の必須APIドメイン1件だけを許可することが、M7D-13を実行可能にする最小の通信境界である。
+- **影響先**: `docs/cross-agent-compatibility.md` CCW-09/CCW-11/CCW-12、`.claude/settings.json`、`docs/setup-claude-code.md`、`IMPLEMENTATION_PLAN.md` M7 DoD 2、M7受け入れ確認。
+
+### M7D-15 現行決定と規範文書の整合
+- **決定**: Claude Codeの標準レビュー方式はM7D-13の監視付き`claude -p`非対話サブプロセスだけとし、D-15、`docs/cross-agent-compatibility.md` CCW-01、`docs/subagent-review-spec.md` 1.3節/INF-01、`docs/requirements.md` NFR-01aに残った当初方式の記述を現行値へ統一する。また、M7D-07のネットワーク境界を`IMPLEMENTATION_PLAN.md` PLN-07へ反映し、`python scripts/setup.py`による固定版依存パッケージとspaCyモデルの取得だけを例外とする。実装・スキーマ・レビュー契約・ネットワーク許可範囲は変更しない。
+- **理由**: M7D-07/M7D-13の承認時に主要な影響先は改訂されたが、先行する決定・規範文書の一部に旧記述が残り、同じ文書群から標準フローとセットアップ通信境界を一意に判定できなかった。後発の承認決定を現行値として旧記述だけを更新すれば、新しい挙動を導入せず矛盾を解消できる。
+- **影響先**: D-15、`docs/cross-agent-compatibility.md` CCW-01、`docs/subagent-review-spec.md` 1.3節/INF-01、`docs/requirements.md` NFR-01a、`IMPLEMENTATION_PLAN.md` PLN-07、M7 R4再確認。
+
+### M7D-16 Codex独立レビューの壁時計タイムアウト
+- **決定**: Codexのレビュー1実行は、`.codex/run_reviewer.py`が起動する新規`codex exec`サブプロセスとする。オーケストレータは実行直前に現在の設定ファイルとセッション設定スナップショットの一致を確認し、ラッパーはその現在の`data/config/limits.json`から`review_timeout_seconds`を読み、サブプロセス全体の壁時計期限として適用する。ラッパーは固定request監査パス1件だけを受理し、専用`CODEX_HOME`、M7D-09の全コンテキスト無効化引数、`--ephemeral`、`--sandbox read-only`、モデル無指定、COR-07の3行stdin、導出した`codex-last`作業ファイルを使う固定argvをシェル不使用で構築する。期限超過時は子のプロセスグループを停止して終了コード124とし、INF-01/INF-07のインフラ障害として同一requestを最大3実行する既存規則へ返す。成功時は最終メッセージの生テキストだけをstdoutへ渡す。ラッパーは1実行と停止だけを担当し、再実行・監査保存・中止判定を持たない。作問側は固定ラッパー呼出しだけを親サンドボックス外で個別承認し、追加引数・環境変数代入・リダイレクト・パイプ・複合コマンドへ承認を広げない。
+- **理由**: Codex CLI 0.147.0の`codex exec`にはサブプロセス全体へ任意秒数の壁時計期限を指定する機能がなく、直接起動では停止しない子をINF-07へ変換できない。Python標準ライブラリの専用ラッパーで固定argvとプロセスグループを監視すれば、CDX-03の専用ホーム・入力分離・read-only・モデル無指定・個別承認境界を維持し、macOS/Linux/WSL2へ追加依存なしで同じ期限を強制できる。
+- **影響先**: D-15、AD-28、`docs/architecture.md` C6、`docs/requirements.md` NFR-01a、`docs/subagent-review-spec.md` 1.3節/INF-01/INF-07、`docs/cross-agent-compatibility.md` COR-02/COR-06/CDX-01/CDX-03〜CDX-10/SUP-02、`agent/author-core.md` 第7.2節、`.codex/run_reviewer.py`、`AGENTS.md`、`docs/setup-codex.md`、`IMPLEMENTATION_PLAN.md` M7成果物2/DoD 2、M7 R7再確認。

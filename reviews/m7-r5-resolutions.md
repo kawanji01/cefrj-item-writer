@@ -1,0 +1,1 @@
+- R5-01: build_html.pyの標準コマンド全文だけを許可するPreToolUseガードを追加し、新規dontAskセッションで正常系成功・別set.jsonおよびdocs/set.jsonへの--out拒否と既存正本不変を確認した（.claude/settings.json, .claude/hooks/guard_build_html.py）

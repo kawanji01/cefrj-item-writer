@@ -16,7 +16,7 @@
 - **ARC-02** 挙動規則（対話手順・生成制約・検証規則・エラー文言）は、共通コア指示書（`agent/author-core.md`・`agent/reviewer-core.md`）と決定的スクリプト（`scripts/` 配下のPython CLI）に集約しなければならない(MUST)。ツール別アダプタ（Claude Code / Codex）は配線のみとし、挙動規則を書いてはならない(MUST NOT)。配線の詳細は `docs/cross-agent-compatibility.md` を正とする。
 - **ARC-03** 決定的に実行できる処理（正規化・機械検査・セット横断検査・スキーマ検証・セット確定・HTML生成・照会・診断）は、すべてPython 3.11+のCLIとして実装しなければならない(MUST)。LLMに委ねてよいのは、対話・問題文生成・機械化不能な適合性判断（独立レビュー）のみである。
 - **ARC-04** 機械検査の違反は覆せない自動不合格としなければならない(MUST)。独立LLMレビューは追加の不合格判定のみ行うことができ、機械検査の違反を上書きしてはならない(MUST NOT)。検査項目の分担の正は `docs/cefrj-validation-spec.md` の検証マトリクス。
-- **ARC-05** 決定的スクリプトは完全オフラインで動作しなければならず(MUST)、ネットワークアクセスをしてはならない(MUST NOT)。唯一の例外はセットアップ時のspaCyモデル（en_core_web_sm）取得である。テレメトリを実装してはならない(MUST NOT)。
+- **ARC-05** セットアップ完了後の決定的スクリプトは完全オフラインで動作しなければならず(MUST)、ネットワークアクセスをしてはならない(MUST NOT)。唯一の例外処理は`python scripts/setup.py`によるセットアップであり、`requirements.txt`の固定版依存パッケージ取得とspaCyモデル（en_core_web_sm）取得に限りネットワークアクセスしてもよい(MAY)。テレメトリを実装してはならない(MUST NOT)。
 - **ARC-06** 全CLIは実行前に前提条件検査を行い、不成立時は本書第6節の定義済みエラーコードと日本語対処手順を出力して停止しなければならない(MUST)。
 - **ARC-07** `set.json` はセット完成時（確定予定の全問題（`final_question_ids`、`docs/json-output-spec.md` FIN-01。減数時は要求数未満でもよい）の合格世代が揃い、セット横断検査に合格し、スキーマ検証を通過した時）のみ書き込まなければならない(MUST)。中断したセットは `output/<set_id>/review/` の監査ファイルのみが残り、`set.json` が存在しないことで未完成と判別できる。処理再開機能は実装してはならない(MUST NOT)（v2課題。`docs/requirements.md` のスコープ外リスト参照）。
 
@@ -29,7 +29,7 @@
 | C3 | 照会サービス | `scripts/lookup.py` | 正規化データの検索（明示指定照合・提案候補列挙・誤答プール取得） | 本書第5節（契約）、検索規則は `docs/cefrj-validation-spec.md`・`docs/question-generation-spec.md` |
 | C4 | 正規化ビルダー | `scripts/build_normalized.py` | 原本xlsx→`data/normalized/`（lexicon.json / grammar.json / meta.json）の決定的変換 | `docs/cefrj-validation-spec.md` 正規化仕様 |
 | C5 | 機械検査器 | `scripts/machine_check.py` | 候補1問の決定的検査（レンマ照合・語数・免除規則・誤答由来照合ほか）と machine_report 出力 | `docs/cefrj-validation-spec.md` 機械検査仕様 |
-| C6 | 独立レビュアー | 独立コンテキストのLLM + `agent/reviewer-core.md`（Claude Code=サブエージェント、Codex=`codex exec`） | 機械化不能なCEFR-J適合性判断、review_result 出力 | `docs/subagent-review-spec.md` |
+| C6 | 独立レビュアー | 独立コンテキストのLLM + `agent/reviewer-core.md`（Claude Code=`.claude/run_reviewer.py`監視下の`claude -p`、Codex=`.codex/run_reviewer.py`監視下の`codex exec`） | 機械化不能なCEFR-J適合性判断、review_result 出力 | `docs/subagent-review-spec.md` |
 | C7 | セット横断検査器 | `scripts/set_check.py` | 対象重複・例文使い回し・誤答の過度な再利用の決定的検査 | 検査項目は `docs/cefrj-validation-spec.md`、監査ファイルの読み取り位置は `docs/subagent-review-spec.md` |
 | C8 | セット確定器 | `scripts/finalize_set.py` | 完成条件の検査と `set.json` の原子的書き込み | `docs/json-output-spec.md`（set.json 内容）、本書 ARC-07（原子性） |
 | C9 | HTML生成器 | `scripts/build_html.py`（Python + Jinja2） | `set.json` から単一自己完結HTMLを決定的に生成 | `docs/html-output-spec.md` |
@@ -52,7 +52,7 @@ flowchart TD
     VC -->|"不通過: 同一世代内1回再指示"| GEN
     VC -->|通過| MC["C5 machine_check.py"]
     MC -->|"machine_report JSON"| AUD[("output/set_id/review/<br/>qNN.genN.candidate.json<br/>qNN.genN.machine.json<br/>qNN.genN.review.json")]
-    MC -->|"candidate + machine_report + 検証仕様"| REV["C6 独立レビュアー<br/>Claude Code: サブエージェント / Codex: codex exec"]
+    MC -->|"candidate + machine_report + 検証仕様"| REV["C6 独立レビュアー<br/>Claude Code: claude -p / Codex: codex exec"]
     ND -.->|読み取り専用| REV
     REV -->|"review_result JSON"| VR["C10 validate.py --schema review_result"]
     VR -->|"不通過: インフラ障害扱い（最大2回再実行）"| REV
@@ -227,7 +227,7 @@ cefr_j_agents/
 |---|---|---|---|
 | E-ENV-01 | 実行中のPythonが3.11未満 | 検出したバージョンと要求バージョン(3.11以上)を明記 | Python 3.11以上をインストールし、`python scripts/setup.py` でvenvを再作成する |
 | E-ENV-02 | `requirements.txt` に固定した依存パッケージのインポート失敗、または要求バージョン不一致 | 欠落・不一致のパッケージ名・要求版・検出版を全件列挙 | リポジトリルートで `python scripts/setup.py` を再実行する |
-| E-ENV-03 | spaCyモデル en_core_web_sm のロード失敗、または要求版3.8.0との不一致 | モデル名 en_core_web_sm・要求版・検出版を明記 | リポジトリルートで `python scripts/setup.py` のモデル取得手順（唯一のネットワーク許可点）を再実行する |
+| E-ENV-03 | spaCyモデル en_core_web_sm のロード失敗、または要求版3.8.0との不一致 | モデル名 en_core_web_sm・要求版・検出版を明記 | リポジトリルートで `python scripts/setup.py` のモデル取得手順（セットアップ処理のネットワーク許可範囲）を再実行する |
 | E-ENV-04 | リポジトリ構成の欠落・不正: カレントディレクトリがリポジトリルートでない、`schemas/`・`data/config/`・`agent/`・`scripts/`・`templates/index.html.j2` のいずれかが欠落または読取り不能、Jinja2テンプレートが構文不正、スキーマファイル自体が欠落・破損、または正規化3ファイル全欠落時にGitを起動できない・リポジトリを判定できない・`HEAD`が欠落または破損して履歴を安全に照会できない | 欠落・不正なパス、または失敗したGit照会とOSエラー・終了コードを明記 | リポジトリルートに移動して再実行する。ファイル欠落・破損の場合は `git status` で確認し `git checkout` で復元する。Git照会失敗の場合は`git --version`と`git rev-parse --verify HEAD`を確認し、Gitまたはリポジトリを復旧してから再実行する |
 | E-ENV-05 | CLIの出力先（`output/`、セットディレクトリ、`build_normalized.py --out-dir`）の作成・書き込み失敗 | 対象パスとOSエラー内容を明記 | ディレクトリの権限と空き容量を確認する |
 | E-ENV-06 | レビュアー配線が未検出: `.claude/agents/` のレビュアー定義が存在せず、かつ `codex` コマンドもPATH上に無い | 探索した2つの配線（ファイルパスとコマンド名）を明記 | `docs/cross-agent-compatibility.md` に従い、使用するツール側のアダプタ配線を整備する |
@@ -242,7 +242,7 @@ cefr_j_agents/
 | E-DATA-04 | 正規化データの不整合または陳腐化: normalized JSONがスキーマ不通過、`meta.json` の `data_version`・チェックサムと lexicon.json / grammar.json の記録値が相互に矛盾、metaの原本版・パイプライン版・3ファイルの`data_version`が現在の`sources.json.version_label` 2値と実行中の正規化パイプライン版から導出した期待値に一致しない、または不適合な既存metaから原本変更防止用の安全根拠を取得できない | 不整合の内容（スキーマ違反箇所または矛盾・陳腐化したフィールド）を明記し、陳腐化の場合はフィールドごとの期待値・実測値を列挙 | `python scripts/build_normalized.py` で再ビルドする。同じE-DATA-04で停止する場合は `git checkout -- data/normalized/meta.json` でコミット済みmetaを復元してから再ビルドする。再発する場合は正規化パイプラインの不具合として報告する |
 | E-DATA-05 | 設定ファイル不正: `data/config/limits.json`・`proper_nouns.json` のいずれかが欠落・スキーマ不通過、または現行スキーマが表現できない `generation_max > 3` | 対象ファイルと違反箇所（JSONポインタ）を明記。世代上限超過時は受取値と許容範囲1〜3を明記 | `git checkout` で復元するか、`python scripts/validate.py --schema config_limits --file data/config/limits.json`（proper_nounsも同様）で違反箇所を確認し修正する。`generation_max`は1〜3へ戻し、4世代以上への拡張は関連スキーマと監査命名の改訂を先行させる |
 | E-DATA-06 | 原本構造・内容不一致: build_normalized.py が期待するシート名・列名・行位置を原本xlsxに見いだせない、必須セル値が値域外、ID結合・親子・併記variant対応が解決不能、またはNRM-31の件数不変条件を満たさない | 見つからなかったシート名・列名・行位置、値域外セル、解決不能ID、または不一致の件数を全件列挙 | 原本の版が設計前提（Wordlist Ver1.6 / Grammar Profile full 20200220）と一致するか確認する。新版へ移行する場合は OPS-01 に従い正規化仕様の改訂を先行させる |
-| E-DATA-07 | 監査ファイル上書き衝突: オーケストレータが書き込もうとした `output/<set_id>/review/` の同名監査ファイルが既に存在する | 衝突した既存監査ファイルの相対パスを明記 | 既存監査ファイルを変更・削除せず保持し、新しい `set_id` でセットを最初から作成する |
+| E-DATA-07 | 出力ファイル上書き衝突: オーケストレータが排他的に作成しようとした `output/<set_id>/review/` の監査ファイル、またはM7D-12の `output/<set_id>/.staging/` 一時ファイルが既に存在する | 衝突した既存ファイルの相対パスを明記 | 既存ファイルを変更・削除せず保持し、新しい `set_id` でセットを最初から作成する |
 | E-DATA-08 | セッション設定スナップショット不一致: doctor成功直後に固定した `limits.json`・`proper_nouns.json` のJSON値と、S80開始時・各処理前・finalize時の現在値が一致しない | 不一致ファイルと、スナップショット値・現在値の差分を明記 | 進行中セットの監査を保持したまま中止し、設定変更後に `python scripts/doctor.py` を実行して新しい `set_id` で最初から作成する |
 
 ### 6.3 E-CONTRACT（スキーマ・契約違反）
@@ -286,10 +286,10 @@ cefr_j_agents/
 - **OPS-06 NOTICE内容要件**: リポジトリ直下の `NOTICE`（実装物。`docs/requirements.md` FR-41）は次の5項を必ず含まなければならない(MUST)。
   1. 両原本の名称と著作権者（『CEFR-J Wordlist Version 1.6』『CEFR-J Grammar Profile』、東京外国語大学投野由紀夫研究室）。
   2. 引用書式（`docs/json-output-spec.md` ATT-02 のテンプレートで組み立てた `citation_ja` / `citation_en` と同文）。
-  3. 利用条件: 適切な引用を伴う研究・教育・商用利用、および改変（別語彙表・派生データの作成）が原本ライセンスで許容される旨。
-  4. 再配布注意: `data/source/`・`data/normalized/` を含む本リポジトリの再配布時も出典明示（前項の引用）が必要である旨。
+  3. 利用条件: Wordlistについて確認できる、適切な引用を伴う研究・教育・商用利用、および別語彙表作成の条件と、Grammar Profileについて確認できる引用・免責およびCEFR-J公式利用案内の条件を原本ごとに分離する。Grammar Profileの商用利用・改変・派生データ作成・再配布を引用だけで許容されると記載してはならず(MUST NOT)、事前に権利者の明示的な許諾とその範囲を確認する必要を記載しなければならない(MUST)（M7D-08）。
+  4. 再配布注意: Grammar Profileまたはその派生データを含む`data/source/`・`data/normalized/`は、権利者から再配布を明示的に許諾された範囲を確認できるまで第三者へ提供・公開してはならず(MUST NOT)、許諾後も出典明示と許諾条件への準拠が必要である旨。
   5. 免責: 原本READMEに内容の誤りの可能性が明記されている旨、および生成問題の教育利用の最終確認は教師の責任である旨。
-- **OPS-07 セットアップスクリプト**: `python scripts/setup.py` はリポジトリ直下の `.venv` を作成し、`requirements.txt` の完全固定版（spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）を導入した後、en_core_web_sm 3.8.0を取得しなければならない(MUST)。依存導入とモデル取得はセットアップ処理であり、決定的CLIのオフライン要件の対象外とする。モデル取得以外の決定的CLIからネットワークへアクセスしてはならない(MUST NOT)。
+- **OPS-07 セットアップスクリプト**: `python scripts/setup.py` はリポジトリ直下の `.venv` を作成し、`requirements.txt` の完全固定版（spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）をパッケージインデックスから取得・導入した後、en_core_web_sm 3.8.0を取得しなければならない(MUST)。依存導入とモデル取得はセットアップ処理であり、決定的CLIのオフライン要件の対象外とする。セットアップ完了後の決定的CLIからネットワークへアクセスしてはならない(MUST NOT)。
 
 ## 9. スコープ外
 

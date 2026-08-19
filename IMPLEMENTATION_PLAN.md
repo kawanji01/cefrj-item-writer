@@ -24,7 +24,7 @@
   4. 承認された決定を `DECISIONS.md` に追記し、影響する設計文書の改訂が必要な場合はその改訂もあわせて行ってから、当該箇所を実装する。
   5. 未定義事項の影響を受けない箇所の作業は、承認待ちの間も継続してよい(MAY)。
 - **PLN-06**: 各マイルストーン完了時に `CHANGELOG.md` へ記載し、コミットしなければならない(MUST)。
-- **PLN-07**: 実装ランタイムはPython 3.11+・spaCy `en_core_web_sm`・Jinja2とし、決定的処理（正規化・機械検査・スキーマ検証・セット横断検査・確定・HTML生成）は全てPythonで実装しなければならない(MUST)。決定的スクリプトはセットアップ時のspaCyモデル取得を唯一の例外として完全オフラインで動作し、テレメトリを送信してはならない(MUST NOT)。
+- **PLN-07**: 実装ランタイムはPython 3.11+・spaCy `en_core_web_sm`・Jinja2とし、決定的処理（正規化・機械検査・スキーマ検証・セット横断検査・確定・HTML生成）は全てPythonで実装しなければならない(MUST)。ネットワークアクセスを許可する唯一の例外処理は`python scripts/setup.py`によるセットアップであり、`requirements.txt`に固定されたPython依存パッケージとspaCy `en_core_web_sm`の取得に限る。セットアップ完了後の決定的スクリプトは完全オフラインで動作し、テレメトリを送信してはならない(MUST NOT)（M7D-07）。
 - **PLN-08**: 全CLIは `docs/architecture.md` のCLI契約一覧（引数・stdin/stdout・終了コード）とエラーコード目録に従い、実行前に前提条件を検査し、定義済みエラーコードと日本語対処手順で停止しなければならない(MUST)。
 
 ---
@@ -142,7 +142,7 @@
 - **目的**: Claude CodeとCodexの両方で同一のコア指示書・CLIが動く配線を完成し、教師向けの導入文書を整える。
 - **成果物**:
   1. `CLAUDE.md`・`.claude/`（Skill定義・`.claude/agents/` のレビュアー定義・権限設定。要件の正は `docs/cross-agent-compatibility.md`）
-  2. `AGENTS.md`（`codex exec` によるレビュアー起動手順を含むCodex配線）
+  2. `AGENTS.md`・`.codex/run_reviewer.py`（壁時計監視付き`codex exec`によるレビュアー起動手順を含むCodex配線）
   3. セットアップ手順書（Claude Code版・Codex版。`docs/cross-agent-compatibility.md` の要件定義に従う）
   4. `NOTICE`（出典・ライセンス条件・再配布注意。`docs/architecture.md` と `docs/requirements.md` の該当要件に従う）
   5. READMEへの記載: LLM送信の明示（生成・レビュー時に正規化データ抜粋や問題文がAnthropic/OpenAIに送信される）と、生成問題の教育利用の最終確認は教師の責任である旨の免責
@@ -150,9 +150,10 @@
 - **依存**: M1〜M6。
 - **DoD**:
   1. アダプタ（`CLAUDE.md`・`.claude/`・`AGENTS.md`）に挙動規則が一切書かれておらず、配線（起動・権限・参照）のみである
-  2. 両ツールそれぞれで1セット（`grammar_mcq`・2問）を完走できる
+  2. 両ツールそれぞれで1セット（`grammar_mcq`・2問）を完走できる。Claude Codeではcandidate/review_requestを`output/<set_id>/.staging/`で検証してから正準監査へ保存し、完成時に一時ファイルを残さない。両ツールの独立レビューは`review_timeout_seconds`を壁時計期限として適用する専用監視ラッパー配下のサブプロセスで実行し、超過した子プロセスグループを停止する。Bashサンドボックスの通信許可は子Claudeのモデル通信に必要な`api.anthropic.com`だけとし、各ツールで3実行すべてのタイムアウトではセットを中止して`set.json`を作成しない
   3. 両ツールの環境で `machine_check.py` の互換用フィクスチャ出力がバイト一致する（CI-CLI-02の合否条件）
-  4. クリーンな環境でセットアップ手順書のみに従って構築→`doctor.py` 終了コード0に到達できる
+  4. クリーンな対応環境（macOS / Linux / Windowsホスト上のWSL2 Linux環境）でセットアップ手順書のみに従って構築→`doctor.py` 終了コード0に到達できる
+  5. Codex独立レビュアーが専用`CODEX_HOME`とコンテキスト無効化フラグで起動し、`codex debug prompt-input`の実効入力JSONで`role="user"`メッセージがちょうど1件、その`content`がCOR-07の3行だけを持つ`input_text` 1件と完全一致し、ユーザー・プロジェクト・プラットフォーム由来の追加userコンテキストが0件であることを機械的に確認できる
 - **参照文書**: `docs/cross-agent-compatibility.md`（正）、`docs/architecture.md`（運用手順）、`docs/testing-and-acceptance.md` 第5.3節 A-01・A-15。
 
 ## 10. M8: テスト＋受け入れ

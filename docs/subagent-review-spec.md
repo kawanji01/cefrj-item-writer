@@ -45,7 +45,7 @@
 
 - レビューは**1問1独立レビュー**である。再生成のたびに新しいレビュー実行を起動し**なければならない**（MUST）。
 - レビュー実行間で文脈を持ち越しては**ならない**（MUST NOT）。前世代のレビュー結果・候補・生成側の会話履歴は、いかなる形でもレビュアーに渡しては**ならない**（MUST NOT）。
-- レビュアーの起動方式はホストツール別に異なる: Claude Code = 専用レビュアー・サブエージェント定義（`.claude/agents/`）をTaskで起動、Codex = `codex exec` 非対話サブプロセス。配線の詳細は `docs/cross-agent-compatibility.md` が正。レビュアーモデルはホストツールのモデル（Claude Code = Claude、Codex = GPT-5.6 sol）とする。
+- レビュアーの起動方式はホストツール別に異なる: Claude Code = `.claude/run_reviewer.py`が監視する新規`claude -p`非対話サブプロセス、Codex = `.codex/run_reviewer.py`が監視する新規`codex exec`非対話サブプロセス。`.claude/agents/cefrj-reviewer.md`は宣言確認用であり、標準フローの起動には使わない。配線の詳細は `docs/cross-agent-compatibility.md` が正。レビュアーモデルはホストツールのモデル（Claude Code = Claude、Codex = GPT-5.6 sol）とする。
 - レビュー1実行あたりの参考目標時間はツール別に `docs/requirements.md` NFR-01a が定める（参考目標であり合否条件ではない）。レビュー1実行に適用するタイムアウトの正は本文書 INF-07 である。
 
 ---
@@ -55,7 +55,7 @@
 ### 2.1 独立性要件
 
 - **RC-01**: レビュアーは生成エージェントと独立したコンテキスト（新規セッション/新規サブプロセス）で実行し**なければならない**（MUST）。
-- **RC-02**: レビュアーの入力は、①入力封筒（2.3節）、②読み取り許可リソース（2.4節）の2種に限定し**なければならない**（MUST）。生成側の会話履歴はレビュアーから不可視でなければならない（MUST）。
+- **RC-02**: レビュアーの入力は、①入力封筒（2.3節）、②読み取り許可リソース（2.4節）の2種に限定し**なければならない**（MUST）。生成側の会話履歴はレビュアーから不可視でなければならない（MUST）。ホストツールが不可避に付与する固定system/developer/tool定義と組み込みsystem skill catalogは実行基盤としてこの2種から除外するが、ユーザーまたはプロジェクト由来の指示、設定、ルール、スキル、プラグイン、メモリを追加入力としては**ならない**（MUST NOT）。Codexでは実効入力JSONの`role="user"`メッセージがちょうど1件で、その`content`がCOR-07の3行だけを持つ`input_text` 1件と完全一致しなければならない(MUST)。プラットフォームが注入する`recommended_plugins`、`environment_context`その他のuserメッセージを許容してはならない(MUST NOT)（M7D-09）。
 - **RC-03**: レビュアーは機械検査の違反を「誤検出の疑いがある」と報告**してもよい**（MAY、様式は第7節）が、その場合でも当該違反による `fail` 判定を覆しては**ならない**（MUST NOT）。当該セットでは不合格のままである。
 - **RC-04**: レビュアーは追加不合格のみ可である。すなわち、機械検査が検出しなかった違反を新たに `fail` として追加**してもよい**（MAY）が、機械検査の判定を緩和・免除しては**ならない**（MUST NOT）。
 - **RC-05**: 同一世代のレビューを複数回実行して結果を選り好みしては**ならない**（MUST NOT）。再実行が許されるのはインフラ障害時のみである（第6節）。
@@ -586,7 +586,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 - **INF-01**: 次の事象をレビュー系インフラ障害として扱わ**なければならない**（MUST）:
   1. レビュアー出力が `review_result.schema.json` のスキーマ検証を通過しない。
   2. レビュアー出力がJSONとして構文解析できない。
-  3. レビュアープロセスの起動失敗・異常終了（Claude Code の Task 失敗、`codex exec` の非ゼロ終了）。
+  3. レビュアープロセスの起動失敗・異常終了（Claude Codeの`.claude/run_reviewer.py`または子`claude -p`の非ゼロ終了、Codexの`.codex/run_reviewer.py`または子`codex exec`の非ゼロ終了）。
   4. レビュアーが出力を返さない（ホストツールのタイムアウト・空出力）。
   5. スキーマ検証後を含め、review_resultの全string値・object keyをstrict UTF-8へ符号化できない、またはJS-01正準化に失敗する。
 - **INF-02**: インフラ障害が発生した場合、同一世代・同一封筒でレビューを再実行する（最大2回。初回と合わせ最大3実行）。封筒の内容を変更しては**ならない**（MUST NOT）。
@@ -594,7 +594,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 - **INF-04**: 各失敗実行を監査ファイル `review/<question_id>.<gen>.review.invalid<k>.txt`（k=1,2,3）としてAUD-09の正準JSON封筒で保存し**なければならない**（MUST）（第8節）。非空の生出力bytesを取得できた場合は`validation_failure`に全文とパース・スキーマ・strict UTF-8・JS-01正準化の失敗段階を含む診断を保存する。ホスト文字列しか得られずstrict UTF-8化できない場合は`utf8_encode_failure`、生出力を得られない場合は`process_failure`を使う。
 - **INF-05**: `review_result` が **スキーマは通過するが内容がRR-01〜RR-05の記入規則に違反する**場合（例: `verdict: fail` なのに `violations` が空、checks に欠番がある）、スキーマで機械検査可能な範囲はスキーマ側で拒否される設計とする（`schemas/review_result.schema.json` の責務）。スキーマで表現できない記入規則違反をオーケストレータが検出した場合も INF-01 と同じくインフラ障害として扱う（MUST）。
 - **INF-06**: 生成側のインフラ障害のうち、candidate受理検証不通過（生成出力に起因する`E-CONTRACT-01` / `E-INPUT-03`、厳格パース失敗、JS-01正準化失敗）はD-20のとおり同一世代内1回再指示→失敗なら世代消費であり（T2/T3）、インフラ障害としては扱わない。生成エージェント自体のプロセス異常（ホストツールのセッション断）はセット中断であり、`set.json` が存在しないことで未完成が自明となる（再開機能はv2課題。`docs/requirements.md` のスコープ外リスト参照）。
-- **INF-07（タイムアウト）**: オーケストレータはレビュアー1実行に `data/config/limits.json` の運用パラメータ `review_timeout_seconds`（既定300秒）のタイムアウトを適用しなければならない（MUST）。超過は INF-01 の4号（出力を返さない）としてインフラ障害に数え、INF-02 の再実行規則に従う。両アダプタはこの値を各起動機構（Taskの待機・サブプロセスの待機）に適用しなければならない（MUST。`docs/cross-agent-compatibility.md` COR-09）。
+- **INF-07（タイムアウト）**: オーケストレータはレビュアー1実行に `data/config/limits.json` の運用パラメータ `review_timeout_seconds`（既定300秒）のタイムアウトを適用しなければならない（MUST）。超過は実行中のレビュアーを停止し、INF-01 の4号（出力を返さない）としてインフラ障害に数え、INF-02 の再実行規則に従う。両アダプタはこの値をサブプロセス全体の壁時計待機に適用しなければならない（MUST。`docs/cross-agent-compatibility.md` COR-09）。Claude CodeではM7D-13の`.claude/run_reviewer.py`、CodexではM7D-16の`.codex/run_reviewer.py`が、それぞれ子プロセスグループを停止して非0終了する。
 
 ---
 
@@ -645,6 +645,8 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 | `review/<question_id>.<gen>.machine.json` | 機械検査レポート | T4 完了直後 |
 | `review/<question_id>.<gen>.request.json` | `review_request` スキーマ検証通過済みの入力封筒（正準形で保存。内容の正は `docs/json-output-spec.md` AUD-08） | レビュアー起動直前（T4 完了後・RC-08 の検証通過後）。レビュアーにはこのファイルのパスを渡す（`docs/cross-agent-compatibility.md` COR-07） |
 | `review/<question_id>.<gen>.review.json` | スキーマ通過済み `review_result` | T5 通過直後 |
+
+- **AU-02a（検証前一時ファイル）**: candidateとreview_requestをファイルで受理検証するホストは、監査ディレクトリ外の`output/<set_id>/.staging/`だけを一時保存先とする（MUST）。candidateは`<question_id>.<gen>.candidate.raw<1|2>.json`、review_requestは`<question_id>.<gen>.request.raw.json`の固定名で排他的に新規作成し、同名が既存なら`E-DATA-07`で停止する。candidateは生出力のstrict UTF-8バイト列をパース前に保存し、対応する正規candidate監査またはAUD-09 invalid監査の排他保存後に削除する。review_requestは構築時のJSONを保存して検証し、検証成功時は同じ内容をJS-01正準化して正規request監査へ排他的に保存した後、検証失敗時は`E-CONTRACT-01`の処理後に削除する。削除はこの固定一時名だけを受理する専用ヘルパーで行い、最後の一時ファイルを削除したときは空の`.staging/`も削除する。クラッシュ等で一時ファイルが残ったセットを再開せず、新しいset_idで最初から実行する（再開はv2範囲外）。一時ファイルは監査ではなく、AU-01の`review/`直下制約およびAU-05の不変監査には含めない。
 
 - **AU-03**: 異常系の補助監査ファイル（本文書が命名の正）:
 

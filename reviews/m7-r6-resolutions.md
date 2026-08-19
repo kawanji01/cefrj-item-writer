@@ -1,0 +1,2 @@
+- R6-01: Codex側壁時計タイムアウト機構をM7D-16として定義するPLN-05提案を提示済みで、承認待ちのため未実装（DECISIONS.md, docs/cross-agent-compatibility.md, AGENTS.md）
+- R6-02: machine_check.pyの問題数別20規則を安全な単一構文規則へ統合し、全文ガードで追加引数を拒否しつつ設定外値をCLIのE-INPUT-04へ委ねることをdontAskセッションで確認した（.claude/settings.json, .claude/hooks/guard_machine_check.py）

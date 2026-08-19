@@ -4,20 +4,98 @@
     "allow": [
       "Read(./**)",
       "Edit(./output/**)",
-      "Bash(python scripts/doctor.py *)",
-      "Bash(python scripts/build_normalized.py *)",
-      "Bash(python scripts/machine_check.py *)",
-      "Bash(python scripts/set_check.py *)",
-      "Bash(python scripts/finalize_set.py *)",
+      "Bash(python scripts/doctor.py)",
+      "Bash(python scripts/build_normalized.py)",
+      "Bash(python scripts/machine_check.py --candidate output/*/review/*.candidate.json --set-id * --generation * --expected-format * --expected-level * --requested-count *)",
+      "Bash(python scripts/set_check.py --set-dir output/*)",
+      "Bash(python scripts/set_check.py --set-dir output/* --target q*)",
       "Bash(python scripts/finalize_set.py --set-dir output/* <<'FIN01'\n*\nFIN01)",
-      "Bash(python scripts/build_html.py *)",
-      "Bash(python scripts/validate.py *)",
-      "Bash(python scripts/lookup.py *)",
+      "Bash(python scripts/build_html.py --set output/*/set.json)",
+      "Bash(python scripts/validate.py --schema config_limits --file data/config/limits.json)",
+      "Bash(python scripts/validate.py --schema config_proper_nouns --file data/config/proper_nouns.json)",
+      "Bash(python scripts/validate.py --schema candidate --file output/*/.staging/*.candidate.raw*.json)",
+      "Bash(python scripts/validate.py --schema candidate --file output/*/review/*)",
+      "Bash(python scripts/validate.py --schema machine_report --file output/*/review/*)",
+      "Bash(python scripts/validate.py --schema review_request --file output/*/.staging/*.request.raw.json)",
+      "Bash(python scripts/validate.py --schema review_request --file output/*/review/*)",
+      "Bash(python scripts/validate.py --schema review_result --file - *)",
+      "Bash(python scripts/validate.py --schema set --file output/*/set.json)",
+      "Bash(python scripts/validate.py --set-dir output/*)",
+      "Bash(python scripts/lookup.py lex --headword * --limit 200)",
+      "Bash(python scripts/lookup.py lex --headword * --pos * --limit 200)",
+      "Bash(python scripts/lookup.py lex --headword * --level * --limit 200)",
+      "Bash(python scripts/lookup.py lex --headword * --pos * --level * --limit 200)",
+      "Bash(python scripts/lookup.py lex --pool-for * --limit 200)",
+      "Bash(python scripts/lookup.py lex --level * --limit *)",
+      "Bash(python scripts/lookup.py lex --level * --pos * --limit *)",
+      "Bash(python scripts/lookup.py lex --level * --category * --limit *)",
+      "Bash(python scripts/lookup.py lex --level * --pos * --category * --limit *)",
+      "Bash(python scripts/lookup.py gp --id * --limit 200)",
+      "Bash(python scripts/lookup.py gp --id * --level * --limit 200)",
+      "Bash(python scripts/lookup.py gp --keyword * --limit 200)",
+      "Bash(python scripts/lookup.py gp --keyword * --level * --limit 200)",
+      "Bash(python scripts/lookup.py gp --level * --limit *)",
+      "Bash(python scripts/lookup.py gp --level * --exclude-context-required --limit *)",
+      "Bash(python .claude/cleanup_staging.py --file output/*/.staging/*)",
+      "Bash(python .claude/run_reviewer.py --request output/*/review/*.request.json)",
       "Bash(python -c 'import datetime,json,os,secrets,string;n=datetime.datetime.now(datetime.timezone.utc).astimezone(None);p=n.strftime(\"%Y%m%d-%H%M%S-\");a=string.ascii_lowercase+string.digits;s=next(x for _ in iter(int,1)if not os.path.lexists(os.path.join(\"output\",(x:=p+\"\".join(secrets.choice(a)for _ in range(4))))));print(json.dumps({\"created_at\":n.isoformat(timespec=\"seconds\"),\"set_id\":s},ensure_ascii=False,sort_keys=True,indent=2))')"
     ],
     "deny": [
       "WebFetch",
       "WebSearch"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "autoAllowBashIfSandboxed": false,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [
+        "api.anthropic.com"
+      ]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_finalize.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_review_result.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_staging.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_reviewer.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_build_html.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_machine_check.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_staging.py\""
+          }
+        ]
+      }
     ]
   }
 }
