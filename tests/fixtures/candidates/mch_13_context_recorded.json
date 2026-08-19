@@ -1,0 +1,41 @@
+{
+  "body": {
+    "choices": [
+      {
+        "is_correct": false,
+        "text": "am"
+      },
+      {
+        "is_correct": true,
+        "text": "is"
+      },
+      {
+        "is_correct": false,
+        "text": "are"
+      },
+      {
+        "is_correct": false,
+        "text": "be"
+      }
+    ],
+    "context_required_by": "前文が肯定平叙",
+    "context_sentence": "My brother is at school.",
+    "example_ja": "私の兄は学生です。",
+    "sentence_with_blank": "My brother ____ a student."
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「時制・相(現在)(be動詞)」です。主語の My brother は3人称単数なので、be動詞の現在形は is を使います。am は主語が I のときの形、are は主語が you または複数のときの形なので、この文では使えません。be は原形で、そのままでは現在の文の述語になれません。",
+    "type": "brief"
+  },
+  "format": "grammar_mcq",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "be動詞の現在の文",
+    "ref": "gp:58",
+    "type": "grammar"
+  }
+}

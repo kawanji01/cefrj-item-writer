@@ -1,0 +1,73 @@
+{
+  "description": "完成セットの監査参照と正本自立性を確認する",
+  "expected": {
+    "attempts_total": 3,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.json",
+      "q02.gen1.candidate.json",
+      "q02.gen1.machine.json",
+      "q02.gen1.request.json",
+      "q02.gen1.review.json",
+      "q03.gen1.candidate.json",
+      "q03.gen1.machine.json",
+      "q03.gen1.request.json",
+      "q03.gen1.review.json",
+      "set_check.final.json",
+      "set_check.q01.gen1.json",
+      "set_check.q02.gen1.json",
+      "set_check.q03.gen1.json",
+      "slot.q01.outcome.json",
+      "slot.q02.outcome.json",
+      "slot.q03.outcome.json"
+    ],
+    "outcome": "completed",
+    "regeneration_payload_checks": [],
+    "set_questions": [
+      "q01",
+      "q02",
+      "q03"
+    ]
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 3,
+    "targets": [
+      "lex:accept:verb",
+      "lex:ability:noun",
+      "lex:abroad:adverb"
+    ]
+  },
+  "scenario_id": "rpl_09_audit_integrity",
+  "steps": [
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "pass_q01_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q02",
+      "review": "pass_q02_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q03",
+      "review": "pass_q03_gen1.json",
+      "review_retries": []
+    }
+  ]
+}

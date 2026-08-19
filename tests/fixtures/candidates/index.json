@@ -1,0 +1,465 @@
+{
+  "cases": [
+    {
+      "expected": "machineゴールデン一致",
+      "file": "compat/grammar_cloze.json",
+      "purpose": "ホスト・OS互換用候補",
+      "test_ids": [
+        "CI-CLI-02"
+      ]
+    },
+    {
+      "expected": "V-LEN-01",
+      "file": "mch_01_word_limit_11.json",
+      "purpose": "A1の11トークン例文",
+      "test_ids": [
+        "CI-MCH-01"
+      ]
+    },
+    {
+      "expected": "V-LEN-01なし",
+      "file": "mch_02_word_limit_10.json",
+      "purpose": "A1の10トークン境界",
+      "test_ids": [
+        "CI-MCH-02"
+      ]
+    },
+    {
+      "expected": "V-LEX-01",
+      "file": "mch_03_unknown_helsinki.json",
+      "purpose": "allowlist外Helsinki",
+      "test_ids": [
+        "CI-MCH-03"
+      ]
+    },
+    {
+      "expected": "V-LEX-01なし",
+      "file": "mch_04_allowlist_kyoto.json",
+      "purpose": "allowlist内Kyoto",
+      "test_ids": [
+        "CI-MCH-04"
+      ]
+    },
+    {
+      "expected": "免除由来違反なし",
+      "file": "mch_05_exemptions.json",
+      "purpose": "数字・記号・句読点・縮約",
+      "test_ids": [
+        "CI-MCH-05"
+      ]
+    },
+    {
+      "expected": "V-LEX-02",
+      "file": "mch_06_high_level_abandon.json",
+      "purpose": "A1例文中のB1 abandon",
+      "test_ids": [
+        "CI-MCH-06"
+      ]
+    },
+    {
+      "expected": "V-TGT-02なし",
+      "file": "mch_07_target_inflected.json",
+      "purpose": "対象語活用形1回",
+      "test_ids": [
+        "CI-MCH-07"
+      ]
+    },
+    {
+      "expected": "V-TGT-02",
+      "file": "mch_07_target_twice.json",
+      "purpose": "対象語2回",
+      "test_ids": [
+        "CI-MCH-07"
+      ]
+    },
+    {
+      "expected": "V-TGT-02",
+      "file": "mch_07_target_zero.json",
+      "purpose": "対象語0回",
+      "test_ids": [
+        "CI-MCH-07"
+      ]
+    },
+    {
+      "expected": "単体由来違反なし",
+      "file": "mch_08_multiword_cd_player.json",
+      "purpose": "複数語見出しCD player",
+      "test_ids": [
+        "CI-MCH-08"
+      ]
+    },
+    {
+      "expected": "V-DIS-01",
+      "file": "mch_10_bad_anchor.json",
+      "purpose": "誤答由来の記録矛盾",
+      "test_ids": [
+        "CI-MCH-10"
+      ]
+    },
+    {
+      "expected": "V-DIS-02",
+      "file": "mch_11_missing_relax_flag.json",
+      "purpose": "異品詞なのに緩和記録なし",
+      "test_ids": [
+        "CI-MCH-11"
+      ]
+    },
+    {
+      "expected": "V-DIS-02なし",
+      "file": "mch_11_relaxed_number.json",
+      "purpose": "noun-number互換品詞緩和",
+      "test_ids": [
+        "CI-MCH-11"
+      ]
+    },
+    {
+      "expected": "V-DIS-02なし",
+      "file": "mch_11_same_pos.json",
+      "purpose": "同レベル同品詞誤答",
+      "test_ids": [
+        "CI-MCH-11"
+      ]
+    },
+    {
+      "expected": "V-SENT-01",
+      "file": "mch_13_context_missing_record.json",
+      "purpose": "先行文脈要求元記録なし",
+      "test_ids": [
+        "CI-MCH-13"
+      ]
+    },
+    {
+      "expected": "V-SENT-01なし",
+      "file": "mch_13_context_recorded.json",
+      "purpose": "先行文脈記録あり",
+      "test_ids": [
+        "CI-MCH-13"
+      ]
+    },
+    {
+      "expected": "V-ORD-02",
+      "file": "mch_14_reorder_same.json",
+      "purpose": "整序提示順が正解順と同一",
+      "test_ids": [
+        "CI-MCH-14"
+      ]
+    },
+    {
+      "expected": "V-COND-01なし",
+      "file": "mch_16_condition_match.json",
+      "purpose": "確定条件一致",
+      "test_ids": [
+        "CI-MCH-16"
+      ]
+    },
+    {
+      "expected": "V-COND-01",
+      "file": "mch_16_over_limit_q07.json",
+      "purpose": "N=3の上限超過ID q07",
+      "test_ids": [
+        "CI-MCH-16"
+      ]
+    },
+    {
+      "expected": "V-COND-01なし",
+      "file": "mch_16_supplement_q04.json",
+      "purpose": "N=3の補充ID q04",
+      "test_ids": [
+        "CI-MCH-16"
+      ]
+    },
+    {
+      "expected": "V-COND-01なし",
+      "file": "mch_16_upper_bound_q20.json",
+      "purpose": "N=20の上限q20",
+      "test_ids": [
+        "CI-MCH-16"
+      ]
+    },
+    {
+      "expected": "V-COND-01/V-TGT-01",
+      "file": "mch_17_expected_a11_grammar.json",
+      "purpose": "候補B2.2・期待A1.1の文法対象",
+      "test_ids": [
+        "CI-MCH-17"
+      ]
+    },
+    {
+      "expected": "V-COND-01/V-LEN-01/V-LEX-02/V-TGT-03",
+      "file": "mch_17_expected_a1_abandon.json",
+      "purpose": "候補B1・期待A1の全件列挙",
+      "test_ids": [
+        "CI-MCH-17"
+      ]
+    },
+    {
+      "expected": "V-COND-01/V-DIS-02",
+      "file": "mch_17_expected_a1_distractors.json",
+      "purpose": "候補A2・期待A1の誤答アンカー",
+      "test_ids": [
+        "CI-MCH-17"
+      ]
+    },
+    {
+      "expected": "スキーマ検証へ進む",
+      "file": "mch_18_integer_4300.json",
+      "purpose": "意図したトップレベル余分フィールドの4300桁整数",
+      "test_ids": [
+        "CI-MCH-18"
+      ]
+    },
+    {
+      "expected": "E-INPUT-03",
+      "file": "mch_18_integer_4301.json",
+      "purpose": "意図したトップレベル余分フィールドの4301桁整数",
+      "test_ids": [
+        "CI-MCH-18"
+      ]
+    },
+    {
+      "expected": "E-INPUT-03",
+      "file": "mch_18_integer_5000.json",
+      "purpose": "意図したトップレベル余分フィールドの5000桁整数",
+      "test_ids": [
+        "CI-MCH-18"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_grammar_cloze.json",
+      "purpose": "正本文書のgrammar_cloze妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_grammar_example_selfcheck.json",
+      "purpose": "正本文書のgrammar_example_selfcheck妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_grammar_mcq.json",
+      "purpose": "正本文書のgrammar_mcq妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_grammar_reorder.json",
+      "purpose": "正本文書のgrammar_reorder妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_grammar_rewrite.json",
+      "purpose": "正本文書のgrammar_rewrite妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_vocab_flashcard_en2ja.json",
+      "purpose": "正本文書のvocab_flashcard_en2ja妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_vocab_flashcard_ja2en.json",
+      "purpose": "正本文書のvocab_flashcard_ja2en妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_vocab_mcq_en2ja.json",
+      "purpose": "正本文書のvocab_mcq_en2ja妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ合格",
+      "file": "official_vocab_mcq_ja2en.json",
+      "purpose": "正本文書のvocab_mcq_ja2en妥当例",
+      "test_ids": [
+        "CI-SCH-02",
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q01_conflict.json",
+      "purpose": "例文使い回しの先行候補",
+      "test_ids": [
+        "RPL-08"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q01_pass.json",
+      "purpose": "リプレイ用q01合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "set_check V-SET-02",
+      "file": "replay_q02_conflict.json",
+      "purpose": "例文使い回しの後続候補",
+      "test_ids": [
+        "RPL-08"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q02_pass.json",
+      "purpose": "リプレイ用q02合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q03_pass.json",
+      "purpose": "リプレイ用q03合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q04_pass.json",
+      "purpose": "リプレイ用q04合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q05_pass.json",
+      "purpose": "リプレイ用q05合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "machine pass",
+      "file": "replay_q06_pass.json",
+      "purpose": "リプレイ用q06合格候補",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-09",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ不通過",
+      "file": "rpl_06_missing_question_id.json",
+      "purpose": "RPL-06で意図した生成候補スキーマ不通過",
+      "test_ids": [
+        "RPL-06"
+      ]
+    },
+    {
+      "expected": "candidateスキーマ不通過",
+      "file": "rpl_06_question_id_type.json",
+      "purpose": "RPL-06で意図した生成候補スキーマ不通過",
+      "test_ids": [
+        "RPL-06"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "sch_04_inconsistent_format.json",
+      "purpose": "意図したformatとbodyの共用体不整合",
+      "test_ids": [
+        "CI-SCH-04"
+      ]
+    },
+    {
+      "expected": "set_check V-SET-01",
+      "file": "set_duplicate_q02.json",
+      "purpose": "同一lex対象の後続候補",
+      "test_ids": [
+        "CI-SET-01"
+      ]
+    },
+    {
+      "expected": "3問目set_check V-SET-03",
+      "file": "set_reuse_q01.json",
+      "purpose": "同一誤答inviteを3問で再利用",
+      "test_ids": [
+        "CI-SET-03"
+      ]
+    },
+    {
+      "expected": "3問目set_check V-SET-03",
+      "file": "set_reuse_q02.json",
+      "purpose": "同一誤答inviteを3問で再利用",
+      "test_ids": [
+        "CI-SET-03"
+      ]
+    },
+    {
+      "expected": "3問目set_check V-SET-03",
+      "file": "set_reuse_q03.json",
+      "purpose": "同一誤答inviteを3問で再利用",
+      "test_ids": [
+        "CI-SET-03"
+      ]
+    }
+  ]
+}

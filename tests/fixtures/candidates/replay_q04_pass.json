@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "We collect old books at school.",
+      "ja": "私たちは学校で古い本を集めます。"
+    },
+    "gloss": "〜を集める",
+    "headword": "collect",
+    "pos": "verb",
+    "target_surface": "collect"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q04",
+  "target": {
+    "display_name": "collect",
+    "ref": "lex:collect:verb",
+    "type": "lexical"
+  }
+}

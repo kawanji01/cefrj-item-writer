@@ -1,5 +1,47 @@
 # CHANGELOG
 
+## 2026-08-20 — M8 テスト・受け入れ・v1.0.0リリース
+
+### 実装
+
+- `tests/unit/`へCI-NRM / CI-MCH / CI-LKP / CI-SCH / CI-SET / CI-HTM / CI-CLI / CI-FIXの第1層テスト、`tests/replay/`へRPL-01〜10の第2層テストを実装し、合計150件を整備した。
+- `tests/fixtures/`、`tests/golden/`、各`index.json`と生成補助を追加した。初回ゴールデンはM8D-06・M8D-07に従い公式9形式候補を実CLI列へ通して採取し、LLMレビュー専用のthese＋関係節ケースとestimateラベルケースもスキーマ・機械検査へ通した。
+- `.github/workflows/ci.yml`を追加し、Python 3.11、製品セットアップ、固定開発依存`pytest==8.4.2`、`pytest tests/unit tests/replay`をマージ条件のCIとして定義した。製品用`requirements.txt`と`scripts/setup.py`は変更していない。
+- 独立レビュアーの`machine_check_disputes[]`を、機械検査`violations[]`のV系違反だけに限定し、W系警告はレビュー判断材料に留めた。警告コードを機械違反コードとして記録しない契約へ明確化した。
+- PLN-05で承認されたM8D-01〜M8D-08を`DECISIONS.md`と関係設計文書へ反映した。`schemas/`は変更していない。
+
+### 手動受け入れ
+
+- プライマリCodex `gpt-5.6-sol`でA-02〜A-14、他方ツールClaude Code 2.1.235 / `claude-opus-5[1m]`でA-15を実施し、いずれもpassした。9形式の完走、独立レビュー、監査整合、オフライン・幅375px表示、印刷CSS、出典、両ツール互換を実物で確認した。
+- 第1回`20260819-160511-*`はA-02で警告をdisputeとして扱うレビュアー契約逸脱が出たため中止した。修正が`agent/`に及んだため、ACC-09に従い第1層・第2層とA-01〜A-15を全て再実施した。第2回の採用セットは`20260819-224024-m8r1`〜`m8r9`、ゴールデンレビューは`r8g1`〜`r8g3`、Claude完走セットは`20260820-000509-4plf`である。
+- A-01はリリース対象内容のクリーンクローンで`python3 scripts/setup.py`を終了コード0まで実行し、続くdoctorが12 pass / 0 failとなることを確認した。詳細は`tests/acceptance/records/v1.0.0.md`に保存した。A-01〜A-15の総合判定はpass。
+
+### M8着手時のM1 DoD再検証（2026-08-19、6/6 pass）
+
+1. 決定性
+   - コマンド: 隔離出力先2件へ`.venv/bin/python scripts/build_normalized.py`を各1回実行し、2組とコミット済み正規化成果物をバイト比較した。
+   - 結果: `lexicon.json`・`grammar.json`・`meta.json`は2回分と正本が全てバイト一致した。SHA-256は順に`11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7`、`6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62`、`fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4`だった。
+2. スキーマ・meta適合
+   - コマンド: 隔離出力の語彙・文法を各正規化スキーマへ、metaをNRM-29の検証処理へ入力した。
+   - 結果: 3成果物が全て適合し、`data_version=wl1.6+gp20200220+norm1.0.2`と件数転記も一致した。
+3. 件数不変条件
+   - コマンド: inline Pythonと`openpyxl`で生成JSONと`data/source/`の原本xlsxをCI-NRM-03へ照合した。
+   - 結果: 語彙7,988件（A1=1,200 / A2=1,443 / B1=2,486 / B2=2,859）、`(headword,pos)`一意7,988件、ALL 7,801行、併記179群、文法501件（親263・枝番238）、target eligible 256件、全枝番の親存在を確認した。未付与親は`[36, 47, 48, 52, 80, 83, 94, 96, 98, 115, 130, 191, 225, 226, 227, 238]`の16件で原本と一致した。
+4. レベル継承・範囲分解
+   - コマンド: grammar全件の親子関係、直接付与`level_raw`、`min` / `max` / `source` / `inherited_from`を検査した。
+   - 結果: `gp:1-1` / `gp:1-2` / `gp:1-3`を含む継承220件、教員版の単一値152件・範囲値104件が全て正しく分解・継承されていた。
+5. doctor完全環境・異常模擬
+   - コマンド: `.venv/bin/python scripts/doctor.py`と、`/tmp/cefrj-m8-doctor.ONGSIw`の隔離コピーで正規化欠落、原本追記、`limits.json`欠落を個別に実行し、原本追記環境では`build_normalized.py`も実行した。
+   - 結果: 完全環境は12 pass / 0 fail。正規化欠落は終了コード1・`E-DATA-03`、原本追記はdoctor/buildとも終了コード1・`E-DATA-02`、設定欠落は終了コード1・`E-DATA-05`だった。
+6. 差分ゼロ
+   - コマンド: `.venv/bin/python scripts/build_normalized.py --diff`。
+   - 結果: lexicon / grammarの`added`・`removed`・`level_changed`は全て0件、`written=[]`、終了コード0だった。
+
+### 最終回帰
+
+- `.venv/bin/python -m pytest tests/unit tests/replay -q`は150件全てpass。`doctor.py`は12 pass / 0 fail、`build_normalized.py --diff`は差分0、9件の採用セットとClaudeセットは`validate.py --set-dir`に合格した。
+- クリーンクローンで`git pull --ff-only`後のdoctorも12 pass / 0 failとなることを確認した。M8の単一コミットへannotated tag `v1.0.0`を付与した。
+
 ## 2026-08-19 — M7 R5〜R8対応・レビュー収束
 
 ### レビュー収束

@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "They had to abandon their car in the heavy snow.",
+      "ja": "彼らは大雪の中で車を乗り捨てなければなりませんでした。"
+    },
+    "gloss": "〜を捨てる、〜を断念する",
+    "headword": "abandon",
+    "pos": "verb",
+    "target_surface": "abandon"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "B1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "abandon",
+    "ref": "lex:abandon:verb",
+    "type": "lexical"
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "format": "grammar_cloze",
+  "generated_at": "2026-08-19T06:37:16Z",
+  "generation": "gen1",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.2"
+  },
+  "question_id": "q01",
+  "schema_version": "1.1.0",
+  "scope": "question",
+  "set_id": "20990101-000000-rpl1",
+  "spacy_model": "en_core_web_sm",
+  "spacy_model_version": "3.8.0",
+  "stats": {
+    "explanation_char_count": 117,
+    "texts": [
+      {
+        "field": "body.sentence_with_blank#filled:answer",
+        "sentence_count": 1,
+        "text": "I am very happy today.",
+        "tokens": [
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "I",
+            "level": "A1",
+            "matched_entry_id": "lex:I:pronoun",
+            "surface": "I",
+            "tag": "PRP",
+            "upos": "PRON"
+          },
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "be",
+            "level": "A1",
+            "matched_entry_id": "lex:be:be-verb",
+            "surface": "am",
+            "tag": "VBP",
+            "upos": "AUX"
+          },
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "very",
+            "level": "A1",
+            "matched_entry_id": "lex:very:adverb",
+            "surface": "very",
+            "tag": "RB",
+            "upos": "ADV"
+          },
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "happy",
+            "level": "A1",
+            "matched_entry_id": "lex:happy:adjective",
+            "surface": "happy",
+            "tag": "JJ",
+            "upos": "ADJ"
+          },
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "today",
+            "level": "A1",
+            "matched_entry_id": "lex:today:noun",
+            "surface": "today",
+            "tag": "NN",
+            "upos": "NOUN"
+          },
+          {
+            "decision": "exempt",
+            "exemption_class": "punct_sym_space",
+            "lemma": ".",
+            "level": null,
+            "matched_entry_id": null,
+            "surface": ".",
+            "tag": ".",
+            "upos": "PUNCT"
+          }
+        ],
+        "word_count": 5
+      },
+      {
+        "field": "body.answer_equivalents[0]",
+        "sentence_count": 1,
+        "text": "I'm",
+        "tokens": [
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "I",
+            "level": "A1",
+            "matched_entry_id": "lex:I:pronoun",
+            "surface": "I",
+            "tag": "PRP",
+            "upos": "PRON"
+          },
+          {
+            "decision": "wordlist_match",
+            "exemption_class": null,
+            "lemma": "be",
+            "level": "A1",
+            "matched_entry_id": "lex:be:be-verb",
+            "surface": "'m",
+            "tag": "VBP",
+            "upos": "AUX"
+          }
+        ],
+        "word_count": 2
+      }
+    ]
+  },
+  "verdict": "pass",
+  "violations": [],
+  "warnings": []
+}

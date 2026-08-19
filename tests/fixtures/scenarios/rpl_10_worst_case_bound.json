@@ -1,0 +1,248 @@
+{
+  "description": "N=3の提案モードで2N対象×3世代で停止する",
+  "expected": {
+    "attempts_total": 18,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.json",
+      "q01.gen2.candidate.json",
+      "q01.gen2.machine.json",
+      "q01.gen2.request.json",
+      "q01.gen2.review.json",
+      "q01.gen3.candidate.json",
+      "q01.gen3.machine.json",
+      "q01.gen3.request.json",
+      "q01.gen3.review.json",
+      "q02.gen1.candidate.json",
+      "q02.gen1.machine.json",
+      "q02.gen1.request.json",
+      "q02.gen1.review.json",
+      "q02.gen2.candidate.json",
+      "q02.gen2.machine.json",
+      "q02.gen2.request.json",
+      "q02.gen2.review.json",
+      "q02.gen3.candidate.json",
+      "q02.gen3.machine.json",
+      "q02.gen3.request.json",
+      "q02.gen3.review.json",
+      "q03.gen1.candidate.json",
+      "q03.gen1.machine.json",
+      "q03.gen1.request.json",
+      "q03.gen1.review.json",
+      "q03.gen2.candidate.json",
+      "q03.gen2.machine.json",
+      "q03.gen2.request.json",
+      "q03.gen2.review.json",
+      "q03.gen3.candidate.json",
+      "q03.gen3.machine.json",
+      "q03.gen3.request.json",
+      "q03.gen3.review.json",
+      "q04.gen1.candidate.json",
+      "q04.gen1.machine.json",
+      "q04.gen1.request.json",
+      "q04.gen1.review.json",
+      "q04.gen2.candidate.json",
+      "q04.gen2.machine.json",
+      "q04.gen2.request.json",
+      "q04.gen2.review.json",
+      "q04.gen3.candidate.json",
+      "q04.gen3.machine.json",
+      "q04.gen3.request.json",
+      "q04.gen3.review.json",
+      "q05.gen1.candidate.json",
+      "q05.gen1.machine.json",
+      "q05.gen1.request.json",
+      "q05.gen1.review.json",
+      "q05.gen2.candidate.json",
+      "q05.gen2.machine.json",
+      "q05.gen2.request.json",
+      "q05.gen2.review.json",
+      "q05.gen3.candidate.json",
+      "q05.gen3.machine.json",
+      "q05.gen3.request.json",
+      "q05.gen3.review.json",
+      "q06.gen1.candidate.json",
+      "q06.gen1.machine.json",
+      "q06.gen1.request.json",
+      "q06.gen1.review.json",
+      "q06.gen2.candidate.json",
+      "q06.gen2.machine.json",
+      "q06.gen2.request.json",
+      "q06.gen2.review.json",
+      "q06.gen3.candidate.json",
+      "q06.gen3.machine.json",
+      "q06.gen3.request.json",
+      "q06.gen3.review.json"
+    ],
+    "outcome": "teacher_consult",
+    "regeneration_payload_checks": [
+      "CHK-03",
+      "V-TGT-03"
+    ],
+    "set_questions": []
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 3,
+    "targets": [
+      "lex:test-1",
+      "lex:test-2",
+      "lex:test-3",
+      "lex:test-4",
+      "lex:test-5",
+      "lex:test-6"
+    ]
+  },
+  "scenario_id": "rpl_10_worst_case_bound",
+  "steps": [
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "fail_q01_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q01",
+      "review": "fail_q01_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q01",
+      "review": "fail_q01_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q02",
+      "review": "fail_q02_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q02",
+      "review": "fail_q02_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q02",
+      "review": "fail_q02_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q03",
+      "review": "fail_q03_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q03",
+      "review": "fail_q03_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q03",
+      "review": "fail_q03_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q04_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q04",
+      "review": "fail_q04_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q04_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q04",
+      "review": "fail_q04_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q04_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q04",
+      "review": "fail_q04_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q05_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q05",
+      "review": "fail_q05_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q05_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q05",
+      "review": "fail_q05_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q05_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q05",
+      "review": "fail_q05_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q06_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q06",
+      "review": "fail_q06_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q06_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q06",
+      "review": "fail_q06_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q06_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q06",
+      "review": "fail_q06_gen3.json",
+      "review_retries": []
+    }
+  ]
+}

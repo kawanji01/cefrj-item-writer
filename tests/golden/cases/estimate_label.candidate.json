@@ -1,0 +1,25 @@
+{
+  "body": {
+    "context_required_by": null,
+    "context_sentence": null,
+    "example": {
+      "en": "The window must have been closed so as not to let the cold air in.",
+      "ja": "冷たい空気を入れないために、その窓は閉められていたに違いありません。"
+    }
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「受動態(助動詞+完了形)」です。①機能: 助動詞+have been+過去分詞は、過去の出来事を受動態で推量します。②この例文での使われ方: must have been closed が窓についての推量を表します。③注意点・よくある誤り: 否定の目的は so as not to+動詞の原形の語順にします。",
+    "type": "detailed"
+  },
+  "format": "grammar_example_selfcheck",
+  "level": {
+    "scale": "cefrj",
+    "value": "B2.2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "受動態(助動詞+完了形)",
+    "ref": "gp:84",
+    "type": "grammar"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "My sister will study abroad next year.",
+      "ja": "姉は来年外国で勉強します。"
+    },
+    "gloss": "外国で、外国へ",
+    "headword": "abroad",
+    "pos": "adverb",
+    "target_surface": "abroad"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q03",
+  "target": {
+    "display_name": "abroad",
+    "ref": "lex:abroad:adverb",
+    "type": "lexical"
+  }
+}

@@ -1,0 +1,532 @@
+{
+  "cases": [
+    {
+      "expected": "fail",
+      "file": "fail_q01_gen1.json",
+      "purpose": "q01 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q01_gen2.json",
+      "purpose": "q01 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q01_gen3.json",
+      "purpose": "q01 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q02_gen1.json",
+      "purpose": "q02 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q02_gen2.json",
+      "purpose": "q02 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q02_gen3.json",
+      "purpose": "q02 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q03_gen1.json",
+      "purpose": "q03 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q03_gen2.json",
+      "purpose": "q03 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q03_gen3.json",
+      "purpose": "q03 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q04_gen1.json",
+      "purpose": "q04 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q04_gen2.json",
+      "purpose": "q04 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q04_gen3.json",
+      "purpose": "q04 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q05_gen1.json",
+      "purpose": "q05 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q05_gen2.json",
+      "purpose": "q05 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q05_gen3.json",
+      "purpose": "q05 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q06_gen1.json",
+      "purpose": "q06 gen1のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q06_gen2.json",
+      "purpose": "q06 gen2のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "fail",
+      "file": "fail_q06_gen3.json",
+      "purpose": "q06 gen3のfailレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "review_result受理失敗",
+      "file": "invalid_json.json",
+      "purpose": "意図したレビュー不正入力",
+      "test_ids": [
+        "RPL-05"
+      ]
+    },
+    {
+      "expected": "review_result受理失敗",
+      "file": "invalid_schema.json",
+      "purpose": "意図したレビュー不正入力",
+      "test_ids": [
+        "RPL-05"
+      ]
+    },
+    {
+      "expected": "review_result受理失敗",
+      "file": "invalid_surrogate.json",
+      "purpose": "意図したレビュー不正入力",
+      "test_ids": [
+        "RPL-05"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q01_gen1.json",
+      "purpose": "q01 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q01_gen2.json",
+      "purpose": "q01 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q01_gen3.json",
+      "purpose": "q01 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q02_gen1.json",
+      "purpose": "q02 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q02_gen2.json",
+      "purpose": "q02 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q02_gen3.json",
+      "purpose": "q02 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q03_gen1.json",
+      "purpose": "q03 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q03_gen2.json",
+      "purpose": "q03 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q03_gen3.json",
+      "purpose": "q03 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q04_gen1.json",
+      "purpose": "q04 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q04_gen2.json",
+      "purpose": "q04 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q04_gen3.json",
+      "purpose": "q04 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q05_gen1.json",
+      "purpose": "q05 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q05_gen2.json",
+      "purpose": "q05 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q05_gen3.json",
+      "purpose": "q05 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q06_gen1.json",
+      "purpose": "q06 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q06_gen2.json",
+      "purpose": "q06 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_q06_gen3.json",
+      "purpose": "q06 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-01",
+        "RPL-02",
+        "RPL-03",
+        "RPL-04",
+        "RPL-07",
+        "RPL-08",
+        "RPL-10"
+      ]
+    }
+  ]
+}

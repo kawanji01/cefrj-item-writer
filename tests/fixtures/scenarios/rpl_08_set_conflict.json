@@ -1,0 +1,72 @@
+{
+  "description": "例文使い回しをset_checkで検出してgen2で解消する",
+  "expected": {
+    "attempts_total": 3,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.json",
+      "q02.gen1.candidate.json",
+      "q02.gen1.machine.json",
+      "q02.gen1.request.json",
+      "q02.gen1.review.json",
+      "q02.gen2.candidate.json",
+      "q02.gen2.machine.json",
+      "q02.gen2.request.json",
+      "q02.gen2.review.json",
+      "set_check.final.json",
+      "set_check.q01.gen1.json",
+      "set_check.q02.gen1.json",
+      "set_check.q02.gen2.json",
+      "slot.q01.outcome.json",
+      "slot.q02.outcome.json"
+    ],
+    "outcome": "completed",
+    "regeneration_payload_checks": [
+      "V-SET-02"
+    ],
+    "set_questions": [
+      "q01",
+      "q02"
+    ]
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 2,
+    "targets": [
+      "lex:accept:verb",
+      "lex:ability:noun"
+    ]
+  },
+  "scenario_id": "rpl_08_set_conflict",
+  "steps": [
+    {
+      "candidate": "replay_q01_conflict.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "pass_q01_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_conflict.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q02",
+      "review": "pass_q02_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q02",
+      "review": "pass_q02_gen2.json",
+      "review_retries": []
+    }
+  ]
+}

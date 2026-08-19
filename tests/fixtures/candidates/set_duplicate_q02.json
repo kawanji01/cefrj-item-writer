@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "We accept the new plan at school.",
+      "ja": "私たちは学校で新しい計画を受け入れます。"
+    },
+    "gloss": "〜を受け入れる",
+    "headword": "accept",
+    "pos": "verb",
+    "target_surface": "accept"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q02",
+  "target": {
+    "display_name": "accept",
+    "ref": "lex:accept:verb",
+    "type": "lexical"
+  }
+}

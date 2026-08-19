@@ -1,0 +1,67 @@
+{
+  "body": {
+    "choices": [
+      {
+        "anchor": {
+          "entry_id": "lex:hundred:number",
+          "headword": "hundred",
+          "level": "A2",
+          "pos": "number"
+        },
+        "gloss": "100",
+        "is_correct": false,
+        "text": "hundred"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:experience:noun",
+          "headword": "experience",
+          "level": "A2",
+          "pos": "noun"
+        },
+        "gloss": "経験",
+        "is_correct": false,
+        "text": "experience"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:ability:noun",
+          "headword": "ability",
+          "level": "A2",
+          "pos": "noun"
+        },
+        "gloss": "能力",
+        "is_correct": true,
+        "text": "ability"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:accident:noun",
+          "headword": "accident",
+          "level": "A2",
+          "pos": "noun"
+        },
+        "gloss": "事故",
+        "is_correct": false,
+        "text": "accident"
+      }
+    ],
+    "pos_pool_relaxed": true,
+    "sentence_complete": "He has the ability to speak three languages.",
+    "sentence_ja": "彼には3つの言語を話す能力があります。",
+    "sentence_with_blank": "He has the ____ to speak three languages.",
+    "stem": "能力",
+    "target_surface": "ability"
+  },
+  "format": "vocab_mcq_ja2en",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "ability",
+    "ref": "lex:ability:noun",
+    "type": "lexical"
+  }
+}

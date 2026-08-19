@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "This CD player is new.",
+      "ja": "このCDプレーヤーは新しいです。"
+    },
+    "gloss": "CDプレーヤー",
+    "headword": "CD player",
+    "pos": "noun",
+    "target_surface": "CD player"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "CD player",
+    "ref": "lex:CD player:noun",
+    "type": "lexical"
+  }
+}

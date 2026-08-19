@@ -148,7 +148,7 @@ CHK-03/04/07に分類されない残余の前提知識を検査する。まず�
 
 ### CHK-18 機械検査レポートの精査（全形式）
 
-最初にmachine reportの全違反・警告・token統計を読む。計測値を再計算・上書きしない。レンマ化、POS、複数語、免除、計測の誤検出を疑う場合はCHKをfailにせず、後述の `machine_check_disputes[]` に全件記録する。疑いがなければpass。
+最初にmachine reportの全違反・警告・token統計を読む。計測値を再計算・上書きしない。`violations[]` のV系違反についてレンマ化、POS、複数語、免除、計測の誤検出を疑う場合はCHKをfailにせず、後述の `machine_check_disputes[]` に全件記録する。`warnings[]` のW系警告は調査の手がかりとして読むだけであり、警告自身を `machine_check_disputes[]` に記録してはならない。疑いがなければpass。
 
 ### CHK-19 トピック整合（トピック指定時の全形式）
 
@@ -170,7 +170,7 @@ CHK-03の `sentence_grammar_inventory[]` は合否にかかわらず全構造を
 
 疑い1件ごとに `machine_check_disputes[]` へ次を記録する。
 
-- machine reportから引用した `machine_violation_code` と `location`
+- machine reportの `violations[]` から引用したV系の `machine_violation_code` と `location`。`warnings[]` のW系コードを記録してはならない
 - `dispute_type`: `lemmatization` / `pos_tagging` / `multiword_match` / `exemption` / `measurement`
 - 日本語の具体的な `claim`
 - 正規化データまたは言語学的事実による `evidence`

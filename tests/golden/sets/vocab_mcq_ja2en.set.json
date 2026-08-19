@@ -1,0 +1,183 @@
+{
+  "attribution": {
+    "grammar_profile": {
+      "citation_en": "The CEFR-J Grammar Profile (20200220). Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.",
+      "citation_ja": "『CEFR-J Grammar Profile』（20200220版） 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）",
+      "retrieved_date": "2026-08-16",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "20200220"
+    },
+    "wordlist": {
+      "citation_en": "The CEFR-J Wordlist Version 1.6. Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.",
+      "citation_ja": "『CEFR-J Wordlist Version 1.6』 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）",
+      "retrieved_date": "2026-08-16",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "1.6"
+    }
+  },
+  "config_snapshot": {
+    "limits": {
+      "distractor_reuse_max": 2,
+      "explanation_char_limits": {
+        "brief": 200,
+        "detailed": 400
+      },
+      "generation_max": 3,
+      "review_timeout_seconds": 300,
+      "schema_version": "1.0.0",
+      "sentence_word_limits": {
+        "A1": 10,
+        "A2": 14,
+        "B1": 20,
+        "B2": 26
+      },
+      "set_question_max": 20
+    },
+    "proper_nouns": [
+      "Africa",
+      "Alice",
+      "America",
+      "Anna",
+      "Asia",
+      "Australia",
+      "Beijing",
+      "Bob",
+      "Brazil",
+      "Britain",
+      "Canada",
+      "China",
+      "Chinese",
+      "Christmas",
+      "David",
+      "Egypt",
+      "Emi",
+      "Emma",
+      "England",
+      "English",
+      "Europe",
+      "France",
+      "French",
+      "German",
+      "Germany",
+      "India",
+      "Italian",
+      "Italy",
+      "Japan",
+      "Japanese",
+      "John",
+      "Kate",
+      "Ken",
+      "Korean",
+      "Kyoto",
+      "Lisa",
+      "London",
+      "Mary",
+      "Mike",
+      "Osaka",
+      "Paris",
+      "Paul",
+      "Rome",
+      "Sarah",
+      "Seoul",
+      "Spain",
+      "Spanish",
+      "Sydney",
+      "Tokyo",
+      "Tom"
+    ]
+  },
+  "created_at": "2026-08-19T12:00:02+09:00",
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "format": "vocab_mcq_ja2en",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "mode": "proposal",
+  "model": "m8-fixture",
+  "preferred_proper_nouns": [],
+  "questions": [
+    {
+      "body": {
+        "choices": [
+          {
+            "anchor": {
+              "entry_id": "lex:advice:noun",
+              "headword": "advice",
+              "level": "A2",
+              "pos": "noun"
+            },
+            "gloss": "助言",
+            "is_correct": false,
+            "text": "advice"
+          },
+          {
+            "anchor": {
+              "entry_id": "lex:experience:noun",
+              "headword": "experience",
+              "level": "A2",
+              "pos": "noun"
+            },
+            "gloss": "経験",
+            "is_correct": false,
+            "text": "experience"
+          },
+          {
+            "anchor": {
+              "entry_id": "lex:ability:noun",
+              "headword": "ability",
+              "level": "A2",
+              "pos": "noun"
+            },
+            "gloss": "能力",
+            "is_correct": true,
+            "text": "ability"
+          },
+          {
+            "anchor": {
+              "entry_id": "lex:accident:noun",
+              "headword": "accident",
+              "level": "A2",
+              "pos": "noun"
+            },
+            "gloss": "事故",
+            "is_correct": false,
+            "text": "accident"
+          }
+        ],
+        "pos_pool_relaxed": false,
+        "sentence_complete": "He has the ability to speak three languages.",
+        "sentence_ja": "彼には3つの言語を話す能力があります。",
+        "sentence_with_blank": "He has the ____ to speak three languages.",
+        "stem": "能力",
+        "target_surface": "ability"
+      },
+      "format": "vocab_mcq_ja2en",
+      "level": {
+        "scale": "cefr",
+        "value": "A2"
+      },
+      "provenance": {
+        "candidate_ref": "review/q01.gen1.candidate.json",
+        "generation": "gen1",
+        "machine_report_ref": "review/q01.gen1.machine.json",
+        "review_ref": "review/q01.gen1.review.json"
+      },
+      "question_id": "q01",
+      "target": {
+        "display_name": "ability",
+        "ref": "lex:ability:noun",
+        "type": "lexical"
+      }
+    }
+  ],
+  "requested_count": 1,
+  "schema_version": "1.0.0",
+  "set_id": "20260819-120002-g002",
+  "source_checksums": {
+    "CEFR-J Grammar Profile full 20200220.xlsx": "f292ef17a60396797c0da2efea95f2ca3de940571164c93e5488c70029eab1c2",
+    "CEFR-J Wordlist Ver1.6.xlsx": "e41033a12f92983012a0a6b201d4f1f860b7ba3de700c2c3b89660ea21a390e1"
+  },
+  "tool": "codex",
+  "topic": null
+}

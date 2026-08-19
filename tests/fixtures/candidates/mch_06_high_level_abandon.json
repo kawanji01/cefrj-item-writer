@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "I abandon this book.",
+      "ja": "私はこの本を捨てます。"
+    },
+    "gloss": "本",
+    "headword": "book",
+    "pos": "noun",
+    "target_surface": "book"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "book",
+    "ref": "lex:book:noun",
+    "type": "lexical"
+  }
+}

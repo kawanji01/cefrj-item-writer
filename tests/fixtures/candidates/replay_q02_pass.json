@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "She has the ability to help us.",
+      "ja": "彼女には私たちを助ける能力があります。"
+    },
+    "gloss": "能力",
+    "headword": "ability",
+    "pos": "noun",
+    "target_surface": "ability"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q02",
+  "target": {
+    "display_name": "ability",
+    "ref": "lex:ability:noun",
+    "type": "lexical"
+  }
+}

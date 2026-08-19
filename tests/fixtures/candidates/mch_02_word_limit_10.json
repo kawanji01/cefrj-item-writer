@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "I have one book for my English class at school.",
+      "ja": "私は学校の英語の授業用に本を1冊持っています。"
+    },
+    "gloss": "本",
+    "headword": "book",
+    "pos": "noun",
+    "target_surface": "book"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "book",
+    "ref": "lex:book:noun",
+    "type": "lexical"
+  }
+}

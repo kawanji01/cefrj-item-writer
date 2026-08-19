@@ -1,0 +1,79 @@
+{
+  "description": "提案モードで3世代fail後にq02を自動補充する",
+  "expected": {
+    "attempts_total": 4,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.json",
+      "q01.gen2.candidate.json",
+      "q01.gen2.machine.json",
+      "q01.gen2.request.json",
+      "q01.gen2.review.json",
+      "q01.gen3.candidate.json",
+      "q01.gen3.machine.json",
+      "q01.gen3.request.json",
+      "q01.gen3.review.json",
+      "q02.gen1.candidate.json",
+      "q02.gen1.machine.json",
+      "q02.gen1.request.json",
+      "q02.gen1.review.json",
+      "set_check.final.json",
+      "set_check.q02.gen1.json",
+      "slot.q01.outcome.json"
+    ],
+    "outcome": "completed",
+    "regeneration_payload_checks": [
+      "CHK-03"
+    ],
+    "set_questions": [
+      "q02"
+    ]
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 1,
+    "targets": [
+      "lex:accept:verb"
+    ]
+  },
+  "scenario_id": "rpl_03_proposal_replacement",
+  "steps": [
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "fail_q01_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q01",
+      "review": "fail_q01_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q01",
+      "review": "fail_q01_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q02",
+      "review": "pass_q02_gen1.json",
+      "review_retries": []
+    }
+  ]
+}

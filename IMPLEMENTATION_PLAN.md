@@ -24,7 +24,7 @@
   4. 承認された決定を `DECISIONS.md` に追記し、影響する設計文書の改訂が必要な場合はその改訂もあわせて行ってから、当該箇所を実装する。
   5. 未定義事項の影響を受けない箇所の作業は、承認待ちの間も継続してよい(MAY)。
 - **PLN-06**: 各マイルストーン完了時に `CHANGELOG.md` へ記載し、コミットしなければならない(MUST)。
-- **PLN-07**: 実装ランタイムはPython 3.11+・spaCy `en_core_web_sm`・Jinja2とし、決定的処理（正規化・機械検査・スキーマ検証・セット横断検査・確定・HTML生成）は全てPythonで実装しなければならない(MUST)。ネットワークアクセスを許可する唯一の例外処理は`python scripts/setup.py`によるセットアップであり、`requirements.txt`に固定されたPython依存パッケージとspaCy `en_core_web_sm`の取得に限る。セットアップ完了後の決定的スクリプトは完全オフラインで動作し、テレメトリを送信してはならない(MUST NOT)（M7D-07）。
+- **PLN-07**: 実装ランタイムはPython 3.11+・spaCy `en_core_web_sm`・Jinja2とし、決定的処理（正規化・機械検査・スキーマ検証・セット横断検査・確定・HTML生成）は全てPythonで実装しなければならない(MUST)。ネットワークアクセスを許可する例外処理は`python scripts/setup.py`による`requirements.txt`の固定製品依存とspaCy `en_core_web_sm`の取得、およびCI・開発環境でテスト開始前に行う`requirements-dev.txt`の固定pytest取得に限る。セットアップ完了後の決定的スクリプトとテスト本体は完全オフラインで動作し、テレメトリを送信してはならない(MUST NOT)（M7D-07、M8D-02）。
 - **PLN-08**: 全CLIは `docs/architecture.md` のCLI契約一覧（引数・stdin/stdout・終了コード）とエラーコード目録に従い、実行前に前提条件を検査し、定義済みエラーコードと日本語対処手順で停止しなければならない(MUST)。
 
 ---

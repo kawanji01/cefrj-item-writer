@@ -1,0 +1,16 @@
+{
+  "distractor_reuse_max": 2,
+  "explanation_char_limits": {
+    "brief": 200,
+    "detailed": 400
+  },
+  "generation_max": 3,
+  "review_timeout_seconds": 300,
+  "sentence_word_limits": {
+    "A1": 10,
+    "A2": 14,
+    "B1": 20,
+    "B2": 26
+  },
+  "set_question_max": 20
+}

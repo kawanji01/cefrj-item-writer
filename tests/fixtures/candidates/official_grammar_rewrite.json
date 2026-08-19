@@ -1,0 +1,28 @@
+{
+  "body": {
+    "answer": "should have been finished",
+    "answer_equivalents": [
+      "should've been finished"
+    ],
+    "instruction": "The report を主語にして、受動態の文に書き換えなさい。",
+    "source_ja": "あなたは金曜日までにその報告書を終えるべきでした。",
+    "source_sentence": "You should have finished the report by Friday.",
+    "target_ja": "その報告書は金曜日までに終えられているべきでした。",
+    "target_sentence_with_blank": "The report ____ by Friday."
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「受動態(助動詞+完了)」です。元の文の目的語 the report を主語にして受動態にします。助動詞 should のあとには動詞の原形が続くため、have + been + 過去分詞 finished の形になり、should have been finished で「終えられているべきだった」という過去のことへの評価を表します。",
+    "type": "brief"
+  },
+  "format": "grammar_rewrite",
+  "level": {
+    "scale": "cefrj",
+    "value": "B2.2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "助動詞+have been+過去分詞（受動態）",
+    "ref": "gp:84",
+    "type": "grammar"
+  }
+}

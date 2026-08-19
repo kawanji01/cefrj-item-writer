@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "I accept your ability.",
+      "ja": "私はあなたの能力を受け入れます。"
+    },
+    "gloss": "〜を受け入れる",
+    "headword": "accept",
+    "pos": "verb",
+    "target_surface": "accept"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "accept",
+    "ref": "lex:accept:verb",
+    "type": "lexical"
+  }
+}

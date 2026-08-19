@@ -1,0 +1,65 @@
+{
+  "body": {
+    "choices": [
+      {
+        "anchor": {
+          "entry_id": "lex:achieve:verb",
+          "headword": "abandon",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を達成する",
+        "is_correct": false,
+        "text": "〜を達成する"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:accept:verb",
+          "headword": "accept",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を受け入れる",
+        "is_correct": true,
+        "text": "〜を受け入れる"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:advise:verb",
+          "headword": "advise",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜に助言する",
+        "is_correct": false,
+        "text": "〜に助言する"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:invite:verb",
+          "headword": "invite",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を招待する",
+        "is_correct": false,
+        "text": "〜を招待する"
+      }
+    ],
+    "pos_pool_relaxed": false,
+    "stem": "She decided to accept the new job.",
+    "stem_ja": "彼女はその新しい仕事を受け入れることに決めました。",
+    "target_surface": "accept"
+  },
+  "format": "vocab_mcq_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "accept",
+    "ref": "lex:accept:verb",
+    "type": "lexical"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "description": "レビューschema受理失敗を3回で中止する",
+  "expected": {
+    "attempts_total": 1,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.invalid1.txt",
+      "q01.gen1.review.invalid2.txt",
+      "q01.gen1.review.invalid3.txt"
+    ],
+    "outcome": "aborted",
+    "regeneration_payload_checks": [],
+    "set_questions": []
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 1,
+    "targets": [
+      "lex:accept:verb"
+    ]
+  },
+  "scenario_id": "rpl_05_review_invalid_schema",
+  "steps": [
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "invalid_schema.json",
+      "review_retries": [
+        "invalid_schema.json",
+        "invalid_schema.json"
+      ]
+    }
+  ]
+}

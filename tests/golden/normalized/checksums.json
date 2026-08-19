@@ -1,0 +1,8 @@
+{
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "files": {
+    "grammar.json": "6a435941ff1105a78b76fae0c141288a783d31148449302621d3b42a8ebbff62",
+    "lexicon.json": "11ac8d1d6b42e5fbd37baa1005b55d7904f42f2753e0720018bbc9edb977c3c7",
+    "meta.json": "fd8c51b2f664f5eaef04c73936927fcd9cb1eb1c2bae56b65df9ad53ec0f0fd4"
+  }
+}

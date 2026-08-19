@@ -1,0 +1,53 @@
+{
+  "description": "候補受理を同一世代で1回再指示してから世代消費する",
+  "expected": {
+    "attempts_total": 2,
+    "audit_files": [
+      "q01.gen1.candidate.invalid1.txt",
+      "q01.gen1.candidate.invalid2.txt",
+      "q01.gen2.candidate.json",
+      "q01.gen2.machine.json",
+      "q01.gen2.request.json",
+      "q01.gen2.review.json",
+      "set_check.final.json",
+      "set_check.q01.gen2.json",
+      "slot.q01.outcome.json"
+    ],
+    "outcome": "completed",
+    "regeneration_payload_checks": [],
+    "set_questions": [
+      "q01"
+    ]
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A2",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 1,
+    "targets": [
+      "lex:accept:verb"
+    ]
+  },
+  "scenario_id": "rpl_06_candidate_invalid",
+  "steps": [
+    {
+      "candidate": "rpl_06_missing_question_id.json",
+      "candidate_retries": [
+        "rpl_06_question_id_type.json"
+      ],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "pass_q01_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q01_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q01",
+      "review": "pass_q01_gen2.json",
+      "review_retries": []
+    }
+  ]
+}

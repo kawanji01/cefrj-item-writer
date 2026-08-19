@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "I can't buy 2 books.",
+      "ja": "私は本を2冊買えません。"
+    },
+    "gloss": "本",
+    "headword": "book",
+    "pos": "noun",
+    "target_surface": "books"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "book",
+    "ref": "lex:book:noun",
+    "type": "lexical"
+  }
+}

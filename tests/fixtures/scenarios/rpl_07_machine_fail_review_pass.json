@@ -1,0 +1,36 @@
+{
+  "description": "machine failをreview passが上書きしない",
+  "expected": {
+    "attempts_total": 1,
+    "audit_files": [
+      "q01.gen1.candidate.json",
+      "q01.gen1.machine.json",
+      "q01.gen1.request.json",
+      "q01.gen1.review.json"
+    ],
+    "outcome": "teacher_consult",
+    "regeneration_payload_checks": [],
+    "set_questions": []
+  },
+  "request": {
+    "format": "vocab_flashcard_en2ja",
+    "level": "A1",
+    "level_scale": "cefr",
+    "mode": "proposal",
+    "question_count": 1,
+    "targets": [
+      "lex:book:noun"
+    ]
+  },
+  "scenario_id": "rpl_07_machine_fail_review_pass",
+  "steps": [
+    {
+      "candidate": "mch_06_high_level_abandon.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q01",
+      "review": "pass_q01_gen1.json",
+      "review_retries": []
+    }
+  ]
+}

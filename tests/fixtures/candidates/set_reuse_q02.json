@@ -1,0 +1,65 @@
+{
+  "body": {
+    "choices": [
+      {
+        "anchor": {
+          "entry_id": "lex:achieve:verb",
+          "headword": "achieve",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を達成する",
+        "is_correct": false,
+        "text": "〜を達成する"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:accept:verb",
+          "headword": "accept",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を受け入れる",
+        "is_correct": false,
+        "text": "〜を受け入れる"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:advise:verb",
+          "headword": "advise",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜に助言する",
+        "is_correct": true,
+        "text": "〜に助言する"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:invite:verb",
+          "headword": "invite",
+          "level": "A2",
+          "pos": "verb"
+        },
+        "gloss": "〜を招待する",
+        "is_correct": false,
+        "text": "〜を招待する"
+      }
+    ],
+    "pos_pool_relaxed": false,
+    "stem": "She decided to advise the new student.",
+    "stem_ja": "彼女は新しい生徒に助言することに決めました。",
+    "target_surface": "advise"
+  },
+  "format": "vocab_mcq_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q02",
+  "target": {
+    "display_name": "advise",
+    "ref": "lex:advise:verb",
+    "type": "lexical"
+  }
+}

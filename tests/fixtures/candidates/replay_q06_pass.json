@@ -1,0 +1,23 @@
+{
+  "body": {
+    "example": {
+      "en": "Can I borrow your pen today?",
+      "ja": "今日あなたのペンを借りてもよいですか。"
+    },
+    "gloss": "〜を借りる",
+    "headword": "borrow",
+    "pos": "verb",
+    "target_surface": "borrow"
+  },
+  "format": "vocab_flashcard_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A2"
+  },
+  "question_id": "q06",
+  "target": {
+    "display_name": "borrow",
+    "ref": "lex:borrow:verb",
+    "type": "lexical"
+  }
+}

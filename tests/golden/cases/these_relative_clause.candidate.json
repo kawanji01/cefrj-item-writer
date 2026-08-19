@@ -1,0 +1,65 @@
+{
+  "body": {
+    "choices": [
+      {
+        "anchor": {
+          "entry_id": "lex:he:pronoun",
+          "headword": "he",
+          "level": "A1",
+          "pos": "pronoun"
+        },
+        "gloss": "彼は",
+        "is_correct": false,
+        "text": "彼は"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:these:pronoun",
+          "headword": "these",
+          "level": "A1",
+          "pos": "pronoun"
+        },
+        "gloss": "これらは",
+        "is_correct": true,
+        "text": "これらは"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:she:pronoun",
+          "headword": "she",
+          "level": "A1",
+          "pos": "pronoun"
+        },
+        "gloss": "彼女は",
+        "is_correct": false,
+        "text": "彼女は"
+      },
+      {
+        "anchor": {
+          "entry_id": "lex:they:pronoun",
+          "headword": "they",
+          "level": "A1",
+          "pos": "pronoun"
+        },
+        "gloss": "彼らは",
+        "is_correct": false,
+        "text": "彼らは"
+      }
+    ],
+    "pos_pool_relaxed": false,
+    "stem": "These are the books that I bought yesterday.",
+    "stem_ja": "これらは私が昨日買った本です。",
+    "target_surface": "These"
+  },
+  "format": "vocab_mcq_en2ja",
+  "level": {
+    "scale": "cefr",
+    "value": "A1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "these",
+    "ref": "lex:these:pronoun",
+    "type": "lexical"
+  }
+}

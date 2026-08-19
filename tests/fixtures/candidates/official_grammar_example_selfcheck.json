@@ -1,0 +1,25 @@
+{
+  "body": {
+    "context_required_by": null,
+    "context_sentence": null,
+    "example": {
+      "en": "They left early so as to avoid the heavy traffic.",
+      "ja": "彼らはひどい渋滞を避けるために早く出発しました。"
+    }
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「so as to」です。①機能: so as to+動詞の原形は「〜するために」という目的を表す、to不定詞のややあらたまった言い方です。in order to とほぼ同じ意味で、書き言葉やフォーマルな場面でよく使われます。②この例文での使われ方: so as to avoid the heavy traffic が「ひどい渋滞を避けるために」という目的を表し、主節 They left early（彼らは早く出発しました）の行動の目的を説明しています。③注意点・よくある誤り: 否定の目的を表すときは so as not to+動詞の原形の語順になり、not の位置を to の前に置く点に注意してください。また、in order to は文頭にも置けますが、so as to を文頭に置く使い方は通常しません。",
+    "type": "detailed"
+  },
+  "format": "grammar_example_selfcheck",
+  "level": {
+    "scale": "cefrj",
+    "value": "B2.2"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "so as to+動詞の原形",
+    "ref": "gp:97",
+    "type": "grammar"
+  }
+}

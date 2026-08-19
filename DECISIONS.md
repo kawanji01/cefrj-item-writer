@@ -148,7 +148,7 @@
 - **主な影響先文書**: `docs/json-output-spec.md`（正本仕様の正）、`schemas/set.schema.json` ほか全スキーマ。
 
 ### D-17 HTML成果物（Q17）
-- **決定**: 単一自己完結HTML（1セット=1ファイル、CSS/JS全インライン、外部リソース・CDN・Webフォント・画像URLゼロ、オフライン動作、スマホ対応）。画面=形式別インタラクティブUI（4択=選択即時正誤、フラッシュカード=めくり+「覚えた/まだ」自己採点+サマリー、穴埋め=入力後正解表示、整序=トークンをタップ順選択（ドラッグ禁止）、書き換え・例文=正解と解説の開閉）。印刷CSS=問題ワークシート+改ページ後に解答・解説（フラッシュカードは印刷ではリスト形式に退化）。採点状態の永続化なし（localStorageはv2）。フッターにCEFR-J出典を常時表示。
+- **決定**: 単一自己完結HTML（1セット=1ファイル、CSS/JS全インライン、外部リソース・CDN・Webフォント・画像URLゼロ、オフライン動作、スマホ対応）。画面=形式別インタラクティブUI（4択=選択即時正誤、フラッシュカード=めくり+「覚えた/まだ」自己採点+サマリー、穴埋め=入力後正解表示、整序=トークンをタップ順選択（ドラッグ禁止）、書き換え=正解と解説の開閉、例文=正解訳・詳細解説の開示と自己採点）。印刷CSS=問題ワークシート+改ページ後に解答・解説（フラッシュカードは印刷ではリスト形式に退化）。採点状態の永続化なし（localStorageはv2）。フッターにCEFR-J出典を常時表示。
 - **理由**: 生徒の利用環境（オフライン・スマホ・印刷）を選ばない単一ファイル配布が最終成果物の要件であり、外部依存ゼロが決定性とオフライン動作を保証するため。
 - **主な影響先文書**: `docs/html-output-spec.md`（UI・印刷仕様の正）、`docs/requirements.md`（v2: localStorage）。
 
@@ -1144,3 +1144,49 @@
 - **決定**: Codexのレビュー1実行は、`.codex/run_reviewer.py`が起動する新規`codex exec`サブプロセスとする。オーケストレータは実行直前に現在の設定ファイルとセッション設定スナップショットの一致を確認し、ラッパーはその現在の`data/config/limits.json`から`review_timeout_seconds`を読み、サブプロセス全体の壁時計期限として適用する。ラッパーは固定request監査パス1件だけを受理し、専用`CODEX_HOME`、M7D-09の全コンテキスト無効化引数、`--ephemeral`、`--sandbox read-only`、モデル無指定、COR-07の3行stdin、導出した`codex-last`作業ファイルを使う固定argvをシェル不使用で構築する。期限超過時は子のプロセスグループを停止して終了コード124とし、INF-01/INF-07のインフラ障害として同一requestを最大3実行する既存規則へ返す。成功時は最終メッセージの生テキストだけをstdoutへ渡す。ラッパーは1実行と停止だけを担当し、再実行・監査保存・中止判定を持たない。作問側は固定ラッパー呼出しだけを親サンドボックス外で個別承認し、追加引数・環境変数代入・リダイレクト・パイプ・複合コマンドへ承認を広げない。
 - **理由**: Codex CLI 0.147.0の`codex exec`にはサブプロセス全体へ任意秒数の壁時計期限を指定する機能がなく、直接起動では停止しない子をINF-07へ変換できない。Python標準ライブラリの専用ラッパーで固定argvとプロセスグループを監視すれば、CDX-03の専用ホーム・入力分離・read-only・モデル無指定・個別承認境界を維持し、macOS/Linux/WSL2へ追加依存なしで同じ期限を強制できる。
 - **影響先**: D-15、AD-28、`docs/architecture.md` C6、`docs/requirements.md` NFR-01a、`docs/subagent-review-spec.md` 1.3節/INF-01/INF-07、`docs/cross-agent-compatibility.md` COR-02/COR-06/CDX-01/CDX-03〜CDX-10/SUP-02、`agent/author-core.md` 第7.2節、`.codex/run_reviewer.py`、`AGENTS.md`、`docs/setup-codex.md`、`IMPLEMENTATION_PLAN.md` M7成果物2/DoD 2、M7 R7再確認。
+
+---
+
+## 11. M8実装に伴う承認決定（M8D-01〜M8D-08）
+
+2026-08-19、PLN-05に基づきM8着手時に発見した次の8件について、作問者が推奨案を承認した。
+
+### M8D-01 決定的CIの実行基盤
+- **決定**: マージ条件となる決定的CIはGitHub Actionsの`.github/workflows/ci.yml`へ置き、Python 3.11の単一ジョブで`pytest tests/unit tests/replay`を実行する。CIはテスト開始前に製品依存、spaCy `en_core_web_sm` 3.8.0、開発依存を固定版で導入し、テスト実行中は外部ネットワークを使用しない。
+- **理由**: リモートがGitHubである一方、M8成果物のCI基盤・設定パス・Python版が未定義だった。対応下限のPython 3.11を直接検証する単一ジョブが、必須マージ条件を満たす最小構成である。
+- **影響先**: `docs/architecture.md` リポジトリ構成、`docs/testing-and-acceptance.md` TST-09、`.github/workflows/ci.yml`、M8 DoD。
+
+### M8D-02 pytestの開発専用固定依存
+- **決定**: 教師向け製品ランタイムの`requirements.txt`と`scripts/setup.py`は変更せず、開発・CI専用の`requirements-dev.txt`へ`pytest==8.4.2`を固定する。M8検証とCIでは、製品セットアップ後・テスト開始前に`.venv/bin/python -m pip install -r requirements-dev.txt`で導入する。この開発依存取得をセットアップ時ネットワーク許可の限定例外へ追加し、テスト本体と決定的CLIの完全オフライン要件は維持する。
+- **理由**: M8 DoDはpytest実行を必須とするが、製品ランタイムの固定依存4件にはpytestがなく、現環境にも未導入だった。開発依存を分離すれば教師の通常セットアップ契約を変えずにテスト実行環境を再現できる。
+- **影響先**: `IMPLEMENTATION_PLAN.md` PLN-07、`docs/requirements.md` NFR-04、`docs/architecture.md` リポジトリ構成・OPS-07、`docs/testing-and-acceptance.md` TST-10、`requirements-dev.txt`、`.github/workflows/ci.yml`。
+
+### M8D-03 初回リリースタグ
+- **決定**: M8 DoDを全て満たした初回リリースにはannotated tag `v1.0.0`を付与し、タグ注釈にM8自動テストと手動受け入れの完了を記録する。受け入れ記録は`tests/acceptance/records/v1.0.0.md`とする。
+- **理由**: タグ付きリリースは必須だが、タグ名とタグ種別が未定義だった。v1完成と9スキーマ初版の意味を一致させ、受け入れ完了をタグオブジェクトへ残す最小の初回版である。
+- **影響先**: `docs/architecture.md` VER-09・OPS-03、`tests/acceptance/records/v1.0.0.md`、`CHANGELOG.md`、M8 DoD。
+
+### M8D-04 CI-CLI-01の適用可能性マトリクス
+- **決定**: CI-CLI-01は全8 CLIで少なくとも1つの入力不正を検証する。必須引数を持つ7 CLIは必須引数欠落、引数を持たない`doctor.py`は未知オプションで検証する。存在しないパスはパス入力を持つ`build_normalized.py`・`machine_check.py`・`set_check.py`・`finalize_set.py`・`build_html.py`・`validate.py`の6本、不正JSON stdinはstdin JSON経路を持つ`machine_check.py`・`finalize_set.py`・`validate.py`の3本に適用する。
+- **理由**: 従来のCI-CLI-01は3種を全8 CLIへ一律要求していたが、`doctor.py`は引数・ファイル入力・stdinを持たず、`lookup.py`もファイル入力・stdinを持たないため実行不能だった。全CLIの入力境界を維持しつつ、存在する契約だけを検査する最小の適用表である。
+- **影響先**: `docs/testing-and-acceptance.md` CI-CLI-01、M8第1層テスト。
+
+### M8D-05 candidate同一世代再試行のシナリオ表現
+- **決定**: `tests/fixtures/scenarios/*.json`の各`steps[]`要素へ必須の`candidate_retries`配列を追加する。初回`candidate`が受理失敗した後、同一`question_id`・同一`gen`で返す候補フィクスチャを順番に格納し、再試行不要時は空配列とする。候補受理成功後のレビューは従来の`review`・`review_retries`を使用する。
+- **理由**: RPL-06は同一世代内1回の候補再指示を必須とする一方、従来様式にはレビュー再試行だけがあり候補再試行を表現できなかった。レビュー側と対称な配列にすれば、到達しないレビューを持つ重複stepを導入せず時系列を一意に表せる。
+- **影響先**: `docs/testing-and-acceptance.md` 3.2節、`tests/fixtures/scenarios/`、リプレイハーネス、RPL-06。
+
+### M8D-06 初回ゴールデンsetのブートストラップ
+- **決定**: GLD-03の初回作成に限り、M2/M5/M6でスキーマ・機械検査・確定・HTMLを検証済みの`docs/question-generation-spec.md`公式9形式candidateを採取し、現行の実`machine_check.py`・`set_check.py`・`finalize_set.py`・`validate.py`へ通した確定出力を`tests/golden/sets/`へ保存する。第3層A-01〜A-15完了後、実LLMセットとの比較でゴールデン自体の誤りを発見した場合だけGLD-01のケース6・GLD-02に従って同一M8コミット内で更新する。
+- **理由**: GLD-03は受け入れ済み実セットからの初回採取を要求する一方、ACC-02はゴールデンを使うpytest全通過を手動受け入れの前提とし、初回だけ循環していた。先行マイルストーンで検証済みの公式候補を現行実CLIへ再投入すれば、検査器や確定器を迂回せず循環だけを解消できる。
+- **影響先**: `docs/testing-and-acceptance.md` GLD-03、`tests/generate_assets.py`、9形式ゴールデンset/HTML、CI-SCH-02、CI-HTM-01〜06。
+
+### M8D-07 公式例の語彙4択誤答アンカー補正
+- **決定**: M8D-06の初回ゴールデン生成では、`docs/question-generation-spec.md` 0.2節のフィクスチャ補正规則に従い、現行正規化データで同レベル・同品詞となるよう、`vocab_mcq_en2ja`の誤答`borrow`を`achieve`（`〜を達成する`）、`collect`を`advise`（`〜に助言する`）へ、`vocab_mcq_ja2en`の誤答`culture`を`experience`（`経験`）へ置換する。補正は`tests/`の生成資産だけへ適用し、`docs/`・`schemas/`の原本例は変更しない。補正後の9形式をM8D-06の実CLI列へ通す。
+- **理由**: 公式例は候補スキーマには適合するが、現行原本では`borrow`・`collect`・`culture`のレベルが例中のA2ではなくA1であり、実`machine_check.py`が`V-DIS-01`でfailした。failを無視した確定や原本例の無断変更をせず、0.2節が要求するフィクスチャ側補正を具体値まで固定して再現可能にするため。
+- **影響先**: `docs/testing-and-acceptance.md` GLD-03、`tests/generate_assets.py`、語彙4択2形式のcandidate fixture・golden set/HTML。
+
+### M8D-08 例文問題の詳細解説表示
+- **決定**: `grammar_example_selfcheck`は、S-02「答えを見る」で正解訳と詳細解説を同時に開示し、詳細解説は`.explanation-full`の常時表示ブロックとする。解説単独の開閉UIは設けない。A-06の手順は「正解訳・詳細解説の開示と自己採点」を操作して確認する。
+- **理由**: `docs/testing-and-acceptance.md` A-06の「解説の開閉」が、形式⑨について二重の開閉を明示的に禁止する`docs/html-output-spec.md` UI-26と矛盾していた。形式固有の詳細なUI-23〜26、現行実装、M6受け入れ実績を維持し、A-06の手順だけを同じ状態遷移へ整合させるため。
+- **影響先**: D-17、`docs/testing-and-acceptance.md` A-06、M8手動受け入れ記録。

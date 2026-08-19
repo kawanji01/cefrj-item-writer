@@ -1,0 +1,234 @@
+{
+  "candidate": {
+    "body": {
+      "answer": "I am",
+      "answer_equivalents": [
+        "I'm"
+      ],
+      "context_required_by": null,
+      "context_sentence": null,
+      "cue": null,
+      "example_ja": "私は今日とてもうれしいです。",
+      "sentence_with_blank": "____ very happy today."
+    },
+    "explanation": {
+      "text": "この問題の文法項目は「人称代名詞主格(I)+be: I am」です。日本語訳の主語「私」に合わせて人称代名詞の主格 I を使い、主語 I に対応するbe動詞の現在形 am を続けます。I am は短縮形 I'm と書くこともできます。",
+      "type": "brief"
+    },
+    "format": "grammar_cloze",
+    "level": {
+      "scale": "cefrj",
+      "value": "A1.2"
+    },
+    "question_id": "q01",
+    "target": {
+      "display_name": "I am の文",
+      "ref": "gp:1",
+      "type": "grammar"
+    }
+  },
+  "constraints_snapshot": {
+    "limits": {
+      "explanation_char_limit": 200,
+      "sentence_word_limit": 10
+    },
+    "proper_nouns": [
+      "Africa",
+      "Alice",
+      "America",
+      "Anna",
+      "Asia",
+      "Australia",
+      "Beijing",
+      "Bob",
+      "Brazil",
+      "Britain",
+      "Canada",
+      "China",
+      "Chinese",
+      "Christmas",
+      "David",
+      "Egypt",
+      "Emi",
+      "Emma",
+      "England",
+      "English",
+      "Europe",
+      "France",
+      "French",
+      "German",
+      "Germany",
+      "India",
+      "Italian",
+      "Italy",
+      "Japan",
+      "Japanese",
+      "John",
+      "Kate",
+      "Ken",
+      "Korean",
+      "Kyoto",
+      "Lisa",
+      "London",
+      "Mary",
+      "Mike",
+      "Osaka",
+      "Paris",
+      "Paul",
+      "Rome",
+      "Sarah",
+      "Seoul",
+      "Spain",
+      "Spanish",
+      "Sydney",
+      "Tokyo",
+      "Tom"
+    ],
+    "topic": null
+  },
+  "format": "grammar_cloze",
+  "generation": "gen1",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.2"
+  },
+  "level_limits": {
+    "grammar_intro_level_max": "A1.2",
+    "vocabulary_level_max": "A1"
+  },
+  "machine_report": {
+    "data_version": "wl1.6+gp20200220+norm1.0.2",
+    "format": "grammar_cloze",
+    "generated_at": "2026-08-19T06:37:16Z",
+    "generation": "gen1",
+    "level": {
+      "scale": "cefrj",
+      "value": "A1.2"
+    },
+    "question_id": "q01",
+    "schema_version": "1.1.0",
+    "scope": "question",
+    "set_id": "20990101-000000-rpl1",
+    "spacy_model": "en_core_web_sm",
+    "spacy_model_version": "3.8.0",
+    "stats": {
+      "explanation_char_count": 117,
+      "texts": [
+        {
+          "field": "body.sentence_with_blank#filled:answer",
+          "sentence_count": 1,
+          "text": "I am very happy today.",
+          "tokens": [
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "I",
+              "level": "A1",
+              "matched_entry_id": "lex:I:pronoun",
+              "surface": "I",
+              "tag": "PRP",
+              "upos": "PRON"
+            },
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "be",
+              "level": "A1",
+              "matched_entry_id": "lex:be:be-verb",
+              "surface": "am",
+              "tag": "VBP",
+              "upos": "AUX"
+            },
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "very",
+              "level": "A1",
+              "matched_entry_id": "lex:very:adverb",
+              "surface": "very",
+              "tag": "RB",
+              "upos": "ADV"
+            },
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "happy",
+              "level": "A1",
+              "matched_entry_id": "lex:happy:adjective",
+              "surface": "happy",
+              "tag": "JJ",
+              "upos": "ADJ"
+            },
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "today",
+              "level": "A1",
+              "matched_entry_id": "lex:today:noun",
+              "surface": "today",
+              "tag": "NN",
+              "upos": "NOUN"
+            },
+            {
+              "decision": "exempt",
+              "exemption_class": "punct_sym_space",
+              "lemma": ".",
+              "level": null,
+              "matched_entry_id": null,
+              "surface": ".",
+              "tag": ".",
+              "upos": "PUNCT"
+            }
+          ],
+          "word_count": 5
+        },
+        {
+          "field": "body.answer_equivalents[0]",
+          "sentence_count": 1,
+          "text": "I'm",
+          "tokens": [
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "I",
+              "level": "A1",
+              "matched_entry_id": "lex:I:pronoun",
+              "surface": "I",
+              "tag": "PRP",
+              "upos": "PRON"
+            },
+            {
+              "decision": "wordlist_match",
+              "exemption_class": null,
+              "lemma": "be",
+              "level": "A1",
+              "matched_entry_id": "lex:be:be-verb",
+              "surface": "'m",
+              "tag": "VBP",
+              "upos": "AUX"
+            }
+          ],
+          "word_count": 2
+        }
+      ]
+    },
+    "verdict": "pass",
+    "violations": [],
+    "warnings": []
+  },
+  "question_id": "q01",
+  "readable_resources": [
+    "data/normalized/lexicon.json",
+    "data/normalized/grammar.json",
+    "data/normalized/meta.json",
+    "data/config/limits.json",
+    "data/config/proper_nouns.json",
+    "docs/cefrj-validation-spec.md",
+    "docs/subagent-review-spec.md",
+    "agent/reviewer-core.md"
+  ],
+  "schema_version": "1.0.0",
+  "set_id": "20990101-000000-rpl1",
+  "target_ref": "gp:1",
+  "unexpected_m8_field": true
+}

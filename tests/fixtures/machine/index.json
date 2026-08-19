@@ -1,0 +1,13 @@
+{
+  "cases": [
+    {
+      "expected": "machine_reportスキーマ合格",
+      "file": "valid_question.json",
+      "purpose": "妥当なquestion scopeレポート",
+      "test_ids": [
+        "CI-MCH-12",
+        "CI-SCH-02"
+      ]
+    }
+  ]
+}

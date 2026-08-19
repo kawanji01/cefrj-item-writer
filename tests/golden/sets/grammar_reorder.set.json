@@ -1,0 +1,151 @@
+{
+  "attribution": {
+    "grammar_profile": {
+      "citation_en": "The CEFR-J Grammar Profile (20200220). Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.",
+      "citation_ja": "『CEFR-J Grammar Profile』（20200220版） 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）",
+      "retrieved_date": "2026-08-16",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "20200220"
+    },
+    "wordlist": {
+      "citation_en": "The CEFR-J Wordlist Version 1.6. Compiled by Yukio Tono, Tokyo University of Foreign Studies. Retrieved from https://www.cefr-j.org/download.html on 2026-08-16.",
+      "citation_ja": "『CEFR-J Wordlist Version 1.6』 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）",
+      "retrieved_date": "2026-08-16",
+      "url": "https://www.cefr-j.org/download.html",
+      "version_label": "1.6"
+    }
+  },
+  "config_snapshot": {
+    "limits": {
+      "distractor_reuse_max": 2,
+      "explanation_char_limits": {
+        "brief": 200,
+        "detailed": 400
+      },
+      "generation_max": 3,
+      "review_timeout_seconds": 300,
+      "schema_version": "1.0.0",
+      "sentence_word_limits": {
+        "A1": 10,
+        "A2": 14,
+        "B1": 20,
+        "B2": 26
+      },
+      "set_question_max": 20
+    },
+    "proper_nouns": [
+      "Africa",
+      "Alice",
+      "America",
+      "Anna",
+      "Asia",
+      "Australia",
+      "Beijing",
+      "Bob",
+      "Brazil",
+      "Britain",
+      "Canada",
+      "China",
+      "Chinese",
+      "Christmas",
+      "David",
+      "Egypt",
+      "Emi",
+      "Emma",
+      "England",
+      "English",
+      "Europe",
+      "France",
+      "French",
+      "German",
+      "Germany",
+      "India",
+      "Italian",
+      "Italy",
+      "Japan",
+      "Japanese",
+      "John",
+      "Kate",
+      "Ken",
+      "Korean",
+      "Kyoto",
+      "Lisa",
+      "London",
+      "Mary",
+      "Mike",
+      "Osaka",
+      "Paris",
+      "Paul",
+      "Rome",
+      "Sarah",
+      "Seoul",
+      "Spain",
+      "Spanish",
+      "Sydney",
+      "Tokyo",
+      "Tom"
+    ]
+  },
+  "created_at": "2026-08-19T12:00:07+09:00",
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "format": "grammar_reorder",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.1"
+  },
+  "mode": "proposal",
+  "model": "m8-fixture",
+  "preferred_proper_nouns": [],
+  "questions": [
+    {
+      "body": {
+        "answer_sentence": "Look at that big tree.",
+        "answer_tokens": [
+          "look",
+          "at",
+          "that",
+          "big",
+          "tree"
+        ],
+        "example_ja": "あの大きな木を見なさい。",
+        "tokens_shuffled": [
+          "tree",
+          "look",
+          "big",
+          "at",
+          "that"
+        ]
+      },
+      "explanation": {
+        "text": "この問題の文法項目は「肯定命令文(一般動詞)」です。命令文は主語を置かず、動詞の原形 Look で文を始めます。look at で「〜を見る」という意味のまとまりを作り、見る対象の that big tree を後ろに続けます。形容詞 big は名詞 tree の前に置きます。",
+        "type": "brief"
+      },
+      "format": "grammar_reorder",
+      "level": {
+        "scale": "cefrj",
+        "value": "A1.1"
+      },
+      "provenance": {
+        "candidate_ref": "review/q01.gen1.candidate.json",
+        "generation": "gen1",
+        "machine_report_ref": "review/q01.gen1.machine.json",
+        "review_ref": "review/q01.gen1.review.json"
+      },
+      "question_id": "q01",
+      "target": {
+        "display_name": "命令文（〜しなさい）",
+        "ref": "gp:117",
+        "type": "grammar"
+      }
+    }
+  ],
+  "requested_count": 1,
+  "schema_version": "1.0.0",
+  "set_id": "20260819-120007-g007",
+  "source_checksums": {
+    "CEFR-J Grammar Profile full 20200220.xlsx": "f292ef17a60396797c0da2efea95f2ca3de940571164c93e5488c70029eab1c2",
+    "CEFR-J Wordlist Ver1.6.xlsx": "e41033a12f92983012a0a6b201d4f1f860b7ba3de700c2c3b89660ea21a390e1"
+  },
+  "tool": "codex",
+  "topic": null
+}

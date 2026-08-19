@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CEFR-J 文法例文問題（自己採点） B2.2（20260819-120009-g009）</title>
+<style>
+:root {
+  --color-bg: #ffffff;
+  --color-text: #1f2328;
+  --color-muted: #57606a;
+  --color-accent: #0a58ca;
+  --color-correct: #0f5132;
+  --color-correct-bg: #d1e7dd;
+  --color-wrong: #842029;
+  --color-wrong-bg: #f8d7da;
+  --color-border: #d0d7de;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Hiragino Sans", "Noto Sans CJK JP", "Yu Gothic", Meiryo, sans-serif;
+  font-size: 16px;
+}
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+.site-header,
+#screen-ui,
+#worksheet,
+#answer-key,
+#attribution,
+.noscript-note {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  padding-inline: 16px;
+}
+.site-header {
+  padding-block: 24px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+h1,
+h2,
+h3,
+p {
+  margin-block-start: 0;
+}
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.3;
+}
+h2 {
+  font-size: 1.3rem;
+}
+h3 {
+  font-size: 1.1rem;
+}
+.set-meta,
+.deck-progress,
+.score {
+  color: var(--color-muted);
+}
+#screen-ui {
+  padding-block: 24px 40px;
+}
+.instruction {
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+.question,
+.card,
+.deck-summary {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.stem,
+.stem-sentence,
+.sentence,
+.context-sentence,
+.source-line,
+.instruction-line,
+.ja-hint {
+  font-size: 1.125rem;
+}
+.target {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+}
+.pos,
+.label {
+  font-weight: 700;
+}
+.blank {
+  display: inline-block;
+  min-width: 7ch;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.choices,
+.unknown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.choices li + li {
+  margin-top: 8px;
+}
+button,
+input,
+summary {
+  min-height: 44px;
+  font: inherit;
+}
+button {
+  min-width: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+button:not(:disabled):hover {
+  border-color: var(--color-accent);
+}
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.choice {
+  width: 100%;
+  text-align: start;
+}
+.choice-label {
+  display: inline-block;
+  min-width: 2em;
+  font-weight: 700;
+}
+.is-correct {
+  background: var(--color-correct-bg);
+  color: var(--color-correct);
+  font-weight: 700;
+}
+.is-wrong {
+  background: var(--color-wrong-bg);
+  color: var(--color-wrong);
+  font-weight: 700;
+}
+.choice.is-correct:disabled,
+.choice.is-wrong:disabled {
+  opacity: 1;
+}
+.feedback {
+  min-height: 1.65em;
+  font-weight: 700;
+  margin-top: 12px;
+}
+.translation-line,
+.answer-line,
+.user-answer-line,
+.explanation,
+.explanation-full {
+  margin-top: 12px;
+}
+.explanation summary {
+  padding-block: 8px;
+  color: var(--color-accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+.cloze-slot input {
+  width: min(100%, 15em);
+  min-height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 8px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-size: 16px;
+}
+.cue {
+  white-space: nowrap;
+}
+.card-front,
+.card-back {
+  min-height: 120px;
+}
+.card-actions,
+.selfcheck-actions,
+.reorder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.token-bank,
+.answer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.answer-row {
+  border-style: dashed;
+}
+.token.is-used {
+  text-decoration: line-through;
+}
+.score {
+  font-weight: 700;
+  margin-top: 20px;
+}
+#attribution {
+  padding-block: 24px 40px;
+  border-top: 1px solid var(--color-border);
+}
+.print-only {
+  display: none;
+}
+[hidden] {
+  display: none !important;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.print-question,
+.print-answer {
+  break-inside: avoid;
+  page-break-inside: avoid;
+  margin-bottom: 18px;
+}
+.print-line {
+  border-bottom: 1px solid var(--color-text);
+  min-height: 2em;
+  margin-bottom: 8px;
+}
+.print-choices {
+  margin-left: 1em;
+}
+@page {
+  size: A4;
+  margin: 15mm;
+}
+@media print {
+  #screen-ui,
+  noscript,
+  .screen-only {
+    display: none !important;
+  }
+  #worksheet,
+  #answer-key,
+  .print-only {
+    display: block;
+  }
+  .site-header,
+  #worksheet,
+  #answer-key,
+  #attribution {
+    max-width: none;
+    padding-inline: 0;
+  }
+  #answer-key {
+    break-before: page;
+    page-break-before: always;
+  }
+  .target {
+    font-weight: 700;
+    text-decoration: underline;
+  }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <h1>文法例文問題（自己採点）（B2.2）</h1>
+  <p class="set-meta">セットID: 20260819-120009-g009 ／ 問題数: 1問 ／ 作成日: 2026-08-19T12:00:09+09:00</p>
+</header>
+<noscript><p class="noscript-note">この教材の対話機能を使うにはJavaScriptを有効にしてください。印刷用の紙面はJavaScriptなしで利用できます。</p></noscript>
+<main id="screen-ui" class="screen-only">
+  <p class="instruction">英文の意味を思い浮かべてから、答えを見て自己採点しましょう。</p>
+  <section class="question" id="q01" data-format="grammar_example_selfcheck">
+    <h2>問1</h2>
+    <p class="sentence" lang="en">They left early so as to avoid the heavy traffic.</p>
+    <button type="button" class="reveal">答えを見る</button>
+    <div class="answer-area" hidden>
+      <p class="translation"><span class="label">日本語訳: </span>彼らはひどい渋滞を避けるために早く出発しました。</p>
+      <div class="explanation-full"><h3>解説</h3><p>この問題の文法項目は「so as to」です。①機能: so as to+動詞の原形は「〜するために」という目的を表す、to不定詞のややあらたまった言い方です。in order to とほぼ同じ意味で、書き言葉やフォーマルな場面でよく使われます。②この例文での使われ方: so as to avoid the heavy traffic が「ひどい渋滞を避けるために」という目的を表し、主節 They left early（彼らは早く出発しました）の行動の目的を説明しています。③注意点・よくある誤り: 否定の目的を表すときは so as not to+動詞の原形の語順になり、not の位置を to の前に置く点に注意してください。また、in order to は文頭にも置けますが、so as to を文頭に置く使い方は通常しません。</p></div>
+      <div class="selfcheck-actions">
+        <button type="button" class="mark-ok">できた</button>
+        <button type="button" class="mark-ng">できなかった</button>
+      </div>
+    </div>
+    <p class="feedback" role="status"></p>
+  </section>
+  <p class="score" role="status">できた: 0 / 1</p>
+</main>
+<section id="worksheet" class="print-only">
+  <h2>問題</h2>
+  <p>文法例文問題（自己採点）（B2.2）</p>
+  <p>英文の意味を思い浮かべてから、答えを見て自己採点しましょう。</p>
+  <p>名前：____________________</p>
+  <section class="print-question">
+    <h3>問1</h3>
+    <p lang="en">They left early so as to avoid the heavy traffic.</p>
+    <p class="print-line"></p>
+    <p class="print-line"></p>
+  </section>
+</section>
+<section id="answer-key" class="print-only">
+  <h2>解答・解説</h2>
+  <section class="print-answer">
+    <h3>問1</h3>
+    <p><span class="label">日本語訳: </span>彼らはひどい渋滞を避けるために早く出発しました。</p>
+    <p>この問題の文法項目は「so as to」です。①機能: so as to+動詞の原形は「〜するために」という目的を表す、to不定詞のややあらたまった言い方です。in order to とほぼ同じ意味で、書き言葉やフォーマルな場面でよく使われます。②この例文での使われ方: so as to avoid the heavy traffic が「ひどい渋滞を避けるために」という目的を表し、主節 They left early（彼らは早く出発しました）の行動の目的を説明しています。③注意点・よくある誤り: 否定の目的を表すときは so as not to+動詞の原形の語順になり、not の位置を to の前に置く点に注意してください。また、in order to は文頭にも置けますが、so as to を文頭に置く使い方は通常しません。</p>
+  </section>
+</section>
+<footer id="attribution">
+  <h2>出典</h2>
+  <p>『CEFR-J Wordlist Version 1.6』 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）</p>
+  <p>『CEFR-J Grammar Profile』（20200220版） 東京外国語大学投野由紀夫研究室.（URL: https://www.cefr-j.org/download.html より2026年8月ダウンロード）</p>
+  <p>本教材は上記CEFR-J資料に基づいて生成されたものです。内容の教育利用にあたっては指導者が最終確認を行ってください。</p>
+</footer>
+<script>
+(() => {
+  "use strict";
+
+  const screen = document.getElementById("screen-ui");
+  if (!screen) {
+    return;
+  }
+
+  const normalizeAnswer = (value) => value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+
+  const updateCorrectScore = () => {
+    const score = screen.querySelector(":scope > .score");
+    if (!score) {
+      return;
+    }
+    const questions = Array.from(screen.querySelectorAll(":scope > .question"));
+    const correct = questions.filter((question) => question.dataset.correct === "true").length;
+    score.textContent = `正解数: ${correct} / ${questions.length}`;
+  };
+
+  screen.querySelectorAll(".question[data-answer-index]").forEach((question) => {
+    const answerIndex = JSON.parse(question.dataset.answerIndex);
+    const choices = Array.from(question.querySelectorAll(".choice"));
+    choices.forEach((choice) => {
+      choice.addEventListener("click", () => {
+        if (question.dataset.judged === "true") {
+          return;
+        }
+        const selectedIndex = Number(choice.dataset.index);
+        const correct = selectedIndex === answerIndex;
+        question.dataset.judged = "true";
+        question.dataset.correct = String(correct);
+        choices.forEach((item) => {
+          item.disabled = true;
+        });
+        const correctChoice = choices[answerIndex];
+        correctChoice.classList.add("is-correct");
+        const correctLabel = document.createElement("span");
+        correctLabel.className = "judgement-label";
+        correctLabel.lang = "ja";
+        correctLabel.textContent = "（正解）";
+        correctChoice.append(correctLabel);
+        if (!correct) {
+          choice.classList.add("is-wrong");
+          const selectedLabel = document.createElement("span");
+          selectedLabel.className = "judgement-label";
+          selectedLabel.lang = "ja";
+          selectedLabel.textContent = "（あなたの選択）";
+          choice.append(selectedLabel);
+        }
+        question.querySelector(".feedback").textContent = correct ? "正解です" : "不正解です";
+        const translation = question.querySelector(".translation-line");
+        if (translation) {
+          translation.hidden = false;
+        }
+        const explanation = question.querySelector(".explanation");
+        if (explanation) {
+          explanation.hidden = false;
+          explanation.open = true;
+        }
+        updateCorrectScore();
+      });
+    });
+  });
+
+  screen.querySelectorAll(".deck").forEach((deck) => {
+    const cards = Array.from(deck.querySelectorAll(".card"));
+    const progress = deck.querySelector(".deck-progress");
+    const summary = deck.querySelector(".deck-summary");
+    const summaryScore = summary.querySelector(".score");
+    const unknownHeading = summary.querySelector(".unknown-heading");
+    const unknownList = summary.querySelector(".unknown-list");
+    let current = 0;
+    let known = 0;
+    let unknown = [];
+
+    const reveal = (card) => {
+      if (card.dataset.state !== "front") {
+        return;
+      }
+      card.dataset.state = "back";
+      card.querySelector(".card-back").hidden = false;
+      card.querySelector(".flip").hidden = true;
+      card.querySelector(".mark-known").hidden = false;
+      card.querySelector(".mark-unknown").hidden = false;
+    };
+
+    const finishCard = (card, remembered) => {
+      if (card.dataset.state !== "back") {
+        return;
+      }
+      if (remembered) {
+        known += 1;
+      } else {
+        unknown.push(card.querySelector(".card-front").textContent.trim());
+      }
+      card.hidden = true;
+      current += 1;
+      if (current < cards.length) {
+        cards[current].hidden = false;
+        progress.textContent = `${current + 1} / ${cards.length}`;
+        return;
+      }
+      progress.hidden = true;
+      summary.hidden = false;
+      summaryScore.textContent = `覚えた: ${known} / ${cards.length}`;
+      unknownList.replaceChildren();
+      unknown.forEach((text) => {
+        const item = document.createElement("li");
+        if (deck.dataset.format === "vocab_flashcard_en2ja") {
+          item.lang = "en";
+        }
+        item.textContent = text;
+        unknownList.append(item);
+      });
+      const noUnknown = unknown.length === 0;
+      unknownHeading.hidden = noUnknown;
+      unknownList.hidden = noUnknown;
+    };
+
+    cards.forEach((card) => {
+      card.querySelector(".flip").addEventListener("click", () => reveal(card));
+      card.querySelector(".mark-known").addEventListener("click", () => finishCard(card, true));
+      card.querySelector(".mark-unknown").addEventListener("click", () => finishCard(card, false));
+    });
+
+    summary.querySelector(".restart").addEventListener("click", () => {
+      current = 0;
+      known = 0;
+      unknown = [];
+      summary.hidden = true;
+      progress.hidden = false;
+      progress.textContent = `1 / ${cards.length}`;
+      cards.forEach((card, index) => {
+        card.dataset.state = "front";
+        card.hidden = index !== 0;
+        card.querySelector(".card-back").hidden = true;
+        card.querySelector(".flip").hidden = false;
+        card.querySelector(".flip").disabled = false;
+        card.querySelector(".mark-known").hidden = true;
+        card.querySelector(".mark-known").disabled = false;
+        card.querySelector(".mark-unknown").hidden = true;
+        card.querySelector(".mark-unknown").disabled = false;
+      });
+    });
+  });
+
+  screen.querySelectorAll('.question[data-accepted]').forEach((question) => {
+    const accepted = JSON.parse(question.dataset.accepted).map(normalizeAnswer);
+    const input = question.querySelector("input");
+    const check = question.querySelector(".check");
+    const judge = () => {
+      if (check.disabled || question.dataset.judged === "true") {
+        return;
+      }
+      const rawAnswer = input.value;
+      const correct = accepted.includes(normalizeAnswer(rawAnswer));
+      question.dataset.judged = "true";
+      question.dataset.correct = String(correct);
+      input.disabled = true;
+      check.disabled = true;
+      question.querySelector(".feedback").textContent = correct ? "正解です" : "不正解です";
+      if (!correct) {
+        question.querySelector(".user-answer").textContent = rawAnswer;
+        question.querySelector(".user-answer-line").hidden = false;
+      }
+      question.querySelector(".answer-line").hidden = false;
+      const explanation = question.querySelector(".explanation");
+      explanation.hidden = false;
+      explanation.open = true;
+      updateCorrectScore();
+    };
+    input.addEventListener("input", () => {
+      check.disabled = normalizeAnswer(input.value) === "";
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !check.disabled) {
+        event.preventDefault();
+        judge();
+      }
+    });
+    check.addEventListener("click", judge);
+  });
+
+  screen.querySelectorAll('.question[data-format="grammar_reorder"]').forEach((question) => {
+    const expected = JSON.parse(question.dataset.answerTokens);
+    const answerRow = question.querySelector(".answer-row");
+    const bank = question.querySelector(".token-bank");
+    const bankTokens = Array.from(bank.querySelectorAll(".token"));
+    const reset = question.querySelector(".reset");
+    const check = question.querySelector(".check");
+
+    const updateCheck = () => {
+      check.disabled = answerRow.querySelectorAll(".answer-token").length !== bankTokens.length;
+    };
+
+    const removeAnswerToken = (answerToken) => {
+      if (question.dataset.judged === "true") {
+        return;
+      }
+      const tokenText = answerToken.dataset.token;
+      const bankToken = bankTokens.find(
+        (candidate) => candidate.dataset.token === tokenText && candidate.classList.contains("is-used")
+      );
+      if (bankToken) {
+        bankToken.disabled = false;
+        bankToken.classList.remove("is-used");
+      }
+      answerToken.remove();
+      updateCheck();
+    };
+
+    bankTokens.forEach((bankToken) => {
+      bankToken.addEventListener("click", () => {
+        if (question.dataset.judged === "true") {
+          return;
+        }
+        bankToken.disabled = true;
+        bankToken.classList.add("is-used");
+        const answerToken = document.createElement("button");
+        answerToken.type = "button";
+        answerToken.className = "token answer-token";
+        answerToken.lang = "en";
+        answerToken.dataset.token = bankToken.dataset.token;
+        answerToken.textContent = bankToken.dataset.token;
+        answerToken.addEventListener("click", () => removeAnswerToken(answerToken));
+        answerRow.append(answerToken);
+        updateCheck();
+      });
+    });
+
+    reset.addEventListener("click", () => {
+      if (question.dataset.judged === "true") {
+        return;
+      }
+      answerRow.replaceChildren();
+      bankTokens.forEach((token) => {
+        token.disabled = false;
+        token.classList.remove("is-used");
+      });
+      updateCheck();
+    });
+
+    check.addEventListener("click", () => {
+      if (check.disabled || question.dataset.judged === "true") {
+        return;
+      }
+      const actual = Array.from(answerRow.querySelectorAll(".answer-token"), (token) => token.dataset.token);
+      const correct = actual.length === expected.length && actual.every((token, index) => token === expected[index]);
+      question.dataset.judged = "true";
+      question.dataset.correct = String(correct);
+      bankTokens.forEach((token) => {
+        token.disabled = true;
+      });
+      answerRow.querySelectorAll(".answer-token").forEach((token) => {
+        token.disabled = true;
+      });
+      reset.disabled = true;
+      check.disabled = true;
+      question.querySelector(".feedback").textContent = correct ? "正解です" : "不正解です";
+      if (!correct) {
+        question.querySelector(".user-answer").textContent = actual.join(" ");
+        question.querySelector(".user-answer-line").hidden = false;
+      }
+      question.querySelector(".answer-line").hidden = false;
+      const explanation = question.querySelector(".explanation");
+      explanation.hidden = false;
+      explanation.open = true;
+      updateCorrectScore();
+    });
+  });
+
+  const selfcheckQuestions = Array.from(
+    screen.querySelectorAll('.question[data-format="grammar_example_selfcheck"]')
+  );
+  const updateSelfcheckScore = () => {
+    const score = screen.querySelector(":scope > .score");
+    const completed = selfcheckQuestions.filter((question) => question.dataset.result === "ok").length;
+    score.textContent = `できた: ${completed} / ${selfcheckQuestions.length}`;
+  };
+  selfcheckQuestions.forEach((question) => {
+    const reveal = question.querySelector(".reveal");
+    const answerArea = question.querySelector(".answer-area");
+    const markOk = question.querySelector(".mark-ok");
+    const markNg = question.querySelector(".mark-ng");
+    reveal.addEventListener("click", () => {
+      if (question.dataset.state) {
+        return;
+      }
+      question.dataset.state = "revealed";
+      answerArea.hidden = false;
+      reveal.disabled = true;
+    });
+    const finish = (result, text) => {
+      if (question.dataset.state !== "revealed") {
+        return;
+      }
+      question.dataset.state = "done";
+      question.dataset.result = result;
+      question.querySelector(".feedback").textContent = text;
+      markOk.disabled = true;
+      markNg.disabled = true;
+      updateSelfcheckScore();
+    };
+    markOk.addEventListener("click", () => finish("ok", "できた"));
+    markNg.addEventListener("click", () => finish("ng", "できなかった"));
+  });
+})();
+</script>
+</body>
+</html>

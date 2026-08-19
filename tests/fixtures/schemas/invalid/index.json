@@ -1,0 +1,260 @@
+{
+  "cases": [
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "candidate/additional.json",
+      "purpose": "意図したcandidateのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "candidate/entry_id_pattern.json",
+      "purpose": "意図した語彙・文法エントリID書式不正",
+      "test_ids": [
+        "CI-SCH-05"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "candidate/missing.json",
+      "purpose": "意図したcandidateのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "candidate/question_id_q21.json",
+      "purpose": "意図したquestion_id範囲外",
+      "test_ids": [
+        "CI-SCH-05"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "candidate/type.json",
+      "purpose": "意図したcandidateのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_limits/additional.json",
+      "purpose": "意図したconfig_limitsのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_limits/missing.json",
+      "purpose": "意図したconfig_limitsのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_limits/type.json",
+      "purpose": "意図したconfig_limitsのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_proper_nouns/additional.json",
+      "purpose": "意図したconfig_proper_nounsのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_proper_nouns/missing.json",
+      "purpose": "意図したconfig_proper_nounsのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "config_proper_nouns/type.json",
+      "purpose": "意図したconfig_proper_nounsのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "machine_report/additional.json",
+      "purpose": "意図したmachine_reportのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "machine_report/missing.json",
+      "purpose": "意図したmachine_reportのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "machine_report/type.json",
+      "purpose": "意図したmachine_reportのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_grammar/additional.json",
+      "purpose": "意図したnormalized_grammarのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_grammar/missing.json",
+      "purpose": "意図したnormalized_grammarのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_grammar/type.json",
+      "purpose": "意図したnormalized_grammarのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_lexicon/additional.json",
+      "purpose": "意図したnormalized_lexiconのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_lexicon/missing.json",
+      "purpose": "意図したnormalized_lexiconのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "normalized_lexicon/type.json",
+      "purpose": "意図したnormalized_lexiconのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_request/additional.json",
+      "purpose": "意図したreview_requestのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_request/missing.json",
+      "purpose": "意図したreview_requestのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_request/type.json",
+      "purpose": "意図したreview_requestのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_result/additional.json",
+      "purpose": "意図したreview_resultのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_result/generation_gen4.json",
+      "purpose": "意図した世代gen4範囲外",
+      "test_ids": [
+        "CI-SCH-05"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_result/missing.json",
+      "purpose": "意図したreview_resultのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "review_result/type.json",
+      "purpose": "意図したreview_resultのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "set/additional.json",
+      "purpose": "意図したsetのadditional不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "set/missing.json",
+      "purpose": "意図したsetのmissing不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-02",
+      "file": "set/schema_major_mismatch.json",
+      "purpose": "build_htmlで意図したset schema_versionメジャー不一致",
+      "test_ids": [
+        "CI-HTM-05"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "set/set_id_pattern.json",
+      "purpose": "意図したset_id書式不正",
+      "test_ids": [
+        "CI-SCH-05"
+      ]
+    },
+    {
+      "expected": "E-CONTRACT-01",
+      "file": "set/type.json",
+      "purpose": "意図したsetのtype不当例",
+      "test_ids": [
+        "CI-SCH-03"
+      ]
+    }
+  ]
+}

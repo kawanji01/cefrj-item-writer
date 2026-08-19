@@ -16,7 +16,7 @@
 - **ARC-02** 挙動規則（対話手順・生成制約・検証規則・エラー文言）は、共通コア指示書（`agent/author-core.md`・`agent/reviewer-core.md`）と決定的スクリプト（`scripts/` 配下のPython CLI）に集約しなければならない(MUST)。ツール別アダプタ（Claude Code / Codex）は配線のみとし、挙動規則を書いてはならない(MUST NOT)。配線の詳細は `docs/cross-agent-compatibility.md` を正とする。
 - **ARC-03** 決定的に実行できる処理（正規化・機械検査・セット横断検査・スキーマ検証・セット確定・HTML生成・照会・診断）は、すべてPython 3.11+のCLIとして実装しなければならない(MUST)。LLMに委ねてよいのは、対話・問題文生成・機械化不能な適合性判断（独立レビュー）のみである。
 - **ARC-04** 機械検査の違反は覆せない自動不合格としなければならない(MUST)。独立LLMレビューは追加の不合格判定のみ行うことができ、機械検査の違反を上書きしてはならない(MUST NOT)。検査項目の分担の正は `docs/cefrj-validation-spec.md` の検証マトリクス。
-- **ARC-05** セットアップ完了後の決定的スクリプトは完全オフラインで動作しなければならず(MUST)、ネットワークアクセスをしてはならない(MUST NOT)。唯一の例外処理は`python scripts/setup.py`によるセットアップであり、`requirements.txt`の固定版依存パッケージ取得とspaCyモデル（en_core_web_sm）取得に限りネットワークアクセスしてもよい(MAY)。テレメトリを実装してはならない(MUST NOT)。
+- **ARC-05** セットアップ完了後の決定的スクリプトとテスト本体は完全オフラインで動作しなければならず(MUST)、ネットワークアクセスをしてはならない(MUST NOT)。例外処理は`python scripts/setup.py`による`requirements.txt`の固定版依存パッケージとspaCyモデル（en_core_web_sm）の取得、およびCI・開発環境でテスト開始前に行う`requirements-dev.txt`の固定pytest取得に限りネットワークアクセスしてもよい(MAY)。テレメトリを実装してはならない(MUST NOT)。
 - **ARC-06** 全CLIは実行前に前提条件検査を行い、不成立時は本書第6節の定義済みエラーコードと日本語対処手順を出力して停止しなければならない(MUST)。
 - **ARC-07** `set.json` はセット完成時（確定予定の全問題（`final_question_ids`、`docs/json-output-spec.md` FIN-01。減数時は要求数未満でもよい）の合格世代が揃い、セット横断検査に合格し、スキーマ検証を通過した時）のみ書き込まなければならない(MUST)。中断したセットは `output/<set_id>/review/` の監査ファイルのみが残り、`set.json` が存在しないことで未完成と判別できる。処理再開機能は実装してはならない(MUST NOT)（v2課題。`docs/requirements.md` のスコープ外リスト参照）。
 
@@ -88,11 +88,13 @@ cefr_j_agents/
 ├── scripts/                  # 本書第5節のCLI 8本
 ├── templates/                # index.html.j2（自己完結HTML用Jinja2テンプレート）
 ├── tests/                    # pytest + フィクスチャ（docs/testing-and-acceptance.md）
+├── .github/workflows/ci.yml  # Python 3.11の決定的pytest CI（M8D-01）
 ├── output/<set_id>/          # set.json / index.html / review/（実行時生成。コミットしない）
 ├── .claude/                  # Claude Codeアダプタ（docs/cross-agent-compatibility.md）
 ├── CLAUDE.md                 # Claude Codeアダプタ（配線のみ）
 ├── AGENTS.md                 # Codexアダプタ（配線のみ）
 ├── NOTICE                    # 出典・ライセンス・再配布注意（docs/requirements.md・DECISIONS.md D-22）
+├── requirements-dev.txt      # CI・開発専用の固定版pytest依存（M8D-02）
 └── CHANGELOG.md              # 変更記録
 ```
 
@@ -275,12 +277,13 @@ cefr_j_agents/
 - **VER-06** 正規化データの多版並存をしてはならない(MUST NOT)。`data/normalized/` は常に単一版とし、過去版はgit履歴で参照する。
 - **VER-07** 設定ファイル（`limits.json`・`proper_nouns.json`）の変更は通常コミットと `CHANGELOG.md` への記載を伴わなければならない(MUST)。
 - **VER-08** リリースはgitタグで行い、リリースごとに手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施しなければならない(MUST)。
+- **VER-09** M8完了時の初回リリースはannotated tag `v1.0.0`とし、タグ注釈に第1層・第2層の全通過とA-01〜A-15の全合格を記録しなければならない(MUST)。受け入れ記録のパスは`tests/acceptance/records/v1.0.0.md`とする。
 
 ## 8. 運用手順
 
 - **OPS-01 原本更新手順**: 次の順で実施しなければならない(MUST)。①新版xlsxを `data/source/` に配置し、新版の`version_label`・入手URL・ダウンロード日を `data/source/sources.json` に更新する（ファイル名が変わる場合は本書 E-DATA-01 の固定名定義と `docs/cefrj-validation-spec.md` 正規化仕様の改訂を先行させる）→ ②`python scripts/build_normalized.py --diff` を実行し、書き込みなしで新旧差分レポートを確認 → ③差分を承認したら `python scripts/build_normalized.py --accept-source-change` で本ビルドし `data/normalized/` を更新 → ④`data_version`（VER-04）が更新されたことを `meta.json` で確認 → ⑤`CHANGELOG.md` に原本版・差分要約を記載 → ⑥コミット。差分確認前に本ビルド結果をコミットしてはならない(MUST NOT)。
 - **OPS-02 固有名詞allowlist追加手順**: ①教師が追加候補語を提示 → ②選定基準（学習者への馴染み・文化的中立。基準の正は `docs/cefrj-validation-spec.md` の免除規則）に照らして判断 → ③`data/config/proper_nouns.json` を編集 → ④`python scripts/validate.py --schema config_proper_nouns --file data/config/proper_nouns.json` で検証 → ⑤コミットと `CHANGELOG.md` 記載。総語数は50〜100語の範囲を維持すべきである(SHOULD)。
-- **OPS-03 リリース手順**: ①`CHANGELOG.md` 整理 → ②決定的pytest CI 全通過 → ③手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施し全項目合格 → ④gitタグ付与 → ⑤タグをpush。③に不合格項目がある状態でタグを付与してはならない(MUST NOT)。
+- **OPS-03 リリース手順**: ①`CHANGELOG.md` 整理 → ②決定的pytest CI 全通過 → ③手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施し全項目合格 → ④M8初回はVER-09のannotated tag `v1.0.0`を付与 → ⑤タグをpush。③に不合格項目がある状態でタグを付与してはならない(MUST NOT)。
 - **OPS-04 教師の更新手順**: `git pull` → `python scripts/doctor.py` の2手順とする(MUST)。doctor が fail を返した場合は表示された remedy に従う。
 - **OPS-05 フィクスチャ更新手順**: 更新のトリガーは次の3つに限る(MUST): ①スキーマの版上げ、②正規化パイプライン変更（data_version 更新）、③検証仕様の規則変更。トリガー発生時、リリース前にフィクスチャを再記録しなければならない(MUST)。フィクスチャの様式・再記録の具体的手順・ゴールデンのチェックサム固定の正は `docs/testing-and-acceptance.md`。
 - **OPS-06 NOTICE内容要件**: リポジトリ直下の `NOTICE`（実装物。`docs/requirements.md` FR-41）は次の5項を必ず含まなければならない(MUST)。
@@ -289,7 +292,7 @@ cefr_j_agents/
   3. 利用条件: Wordlistについて確認できる、適切な引用を伴う研究・教育・商用利用、および別語彙表作成の条件と、Grammar Profileについて確認できる引用・免責およびCEFR-J公式利用案内の条件を原本ごとに分離する。Grammar Profileの商用利用・改変・派生データ作成・再配布を引用だけで許容されると記載してはならず(MUST NOT)、事前に権利者の明示的な許諾とその範囲を確認する必要を記載しなければならない(MUST)（M7D-08）。
   4. 再配布注意: Grammar Profileまたはその派生データを含む`data/source/`・`data/normalized/`は、権利者から再配布を明示的に許諾された範囲を確認できるまで第三者へ提供・公開してはならず(MUST NOT)、許諾後も出典明示と許諾条件への準拠が必要である旨。
   5. 免責: 原本READMEに内容の誤りの可能性が明記されている旨、および生成問題の教育利用の最終確認は教師の責任である旨。
-- **OPS-07 セットアップスクリプト**: `python scripts/setup.py` はリポジトリ直下の `.venv` を作成し、`requirements.txt` の完全固定版（spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）をパッケージインデックスから取得・導入した後、en_core_web_sm 3.8.0を取得しなければならない(MUST)。依存導入とモデル取得はセットアップ処理であり、決定的CLIのオフライン要件の対象外とする。セットアップ完了後の決定的CLIからネットワークへアクセスしてはならない(MUST NOT)。
+- **OPS-07 セットアップスクリプト**: `python scripts/setup.py` はリポジトリ直下の `.venv` を作成し、`requirements.txt` の完全固定版（spaCy 3.8.15 / openpyxl 3.1.5 / jsonschema 4.26.0 / Jinja2 3.1.6）をパッケージインデックスから取得・導入した後、en_core_web_sm 3.8.0を取得しなければならない(MUST)。CI・開発環境ではこの製品セットアップ後、テスト開始前に限り`.venv/bin/python -m pip install -r requirements-dev.txt`で固定版pytestを取得・導入する（M8D-02）。これらの固定依存導入とモデル取得はセットアップ処理であり、決定的CLIおよびテスト本体のオフライン要件の対象外とする。セットアップ完了後の決定的CLIとテスト本体からネットワークへアクセスしてはならない(MUST NOT)。
 
 ## 9. スコープ外
 

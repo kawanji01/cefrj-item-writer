@@ -36,6 +36,8 @@
 - **TST-06**: LLMの出力内容そのもの（生成された英文の質・レビュー判定の言語表現）は第1層・第2層の検証対象にしてはならない(MUST NOT)。LLM出力の同一性は互換性保証の範囲外である（`docs/cross-agent-compatibility.md` の互換性保証範囲参照）。
 - **TST-07**: 本文書に現れる所要時間は参考目標であり、合否条件にしてはならない(MUST NOT)。合否は正しさのみで判定する。
 - **TST-08**: テストIDは本文書の目録が正であり、実装のテスト関数名・docstringに対応するテストIDを記載しなければならない(MUST)。1テストIDを複数テスト関数に分割してもよい(MAY)が、その場合すべての関数に同一IDを記載する。
+- **TST-09**: マージ条件となるCIは`.github/workflows/ci.yml`のGitHub Actionsとし、Python 3.11の単一ジョブで`pytest tests/unit tests/replay`を実行しなければならない(MUST)。
+- **TST-10**: pytestは開発専用`requirements-dev.txt`に`pytest==8.4.2`として固定しなければならない(MUST)。CI・開発環境は製品セットアップ後、テスト開始前に同ファイルからpytestを導入する。テストプロセス開始後の外部ネットワーク禁止はTST-03のとおりとする。
 
 ---
 
@@ -141,7 +143,7 @@
 
 | テストID | 検査対象 | 入力 | 合否条件 |
 |---|---|---|---|
-| CI-CLI-01 | 入力不正時の停止 | 全8 CLI に対し (a)必須引数欠落 (b)存在しないファイルパス (c)JSONとして不正なstdin（stdinを取るCLIのみ） | 各CLIが `docs/architecture.md` の目録に定義された E-INPUT / E-CONTRACT 系コードと日本語対処手順を出力し、定義済み終了コードで停止すること |
+| CI-CLI-01 | 入力不正時の停止 | 全8 CLIで最低1件。(a)必須引数を持つ7 CLIは必須引数欠落、`doctor.py`は未知オプション (b)パス入力を持つ6 CLI（`build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py`）は存在しないパス (c)stdin JSON経路を持つ3 CLI（`machine_check.py` / `finalize_set.py` / `validate.py`）はJSONとして不正なstdin | 各CLIが `docs/architecture.md` の目録に定義された E-INPUT / E-CONTRACT 系コードと日本語対処手順を出力し、定義済み終了コードで停止すること |
 | CI-CLI-02 | 互換一致（機械検査） | `tests/fixtures/candidates/compat/` の互換用候補フィクスチャ一式 | `machine_check.py` の出力が `tests/golden/machine/` のゴールデンとCI-R-02の意味でバイト一致すること（ホストツール・OSに依存しない） |
 | CI-CLI-03 | doctor診断 | (a)完全な環境 (b)`data/normalized/` 欠落 (c)チェックサム不一致 (d)`data/config/limits.json` 欠落 を模擬した一時環境 | (a)は終了コード0、(b)(c)(d)はそれぞれ目録に定義された E-ENV / E-DATA 系コードで停止すること |
 | CI-CLI-04 | 中断セットの残置状態 | `finalize_set.py` 未実行のセット作業ディレクトリフィクスチャ | `output/<set_id>/` に `set.json` が存在せず監査のみが残ること、および `validate.py --set-dir output/<set_id>` が終了コード0・stderrなしで `status=incomplete`、`set_json_path=null`、`validation=null` を返すこと |
@@ -166,7 +168,7 @@
 | `scenario_id` | string | 上記書式のID |
 | `description` | string | シナリオの目的（日本語） |
 | `request` | object | セット条件: `format`（形式コード）・`level_scale`・`level`・`mode`（`explicit` / `proposal`）・`question_count`（1〜20）・`targets`（明示モード時の対象IDリスト。提案モード時は候補プールのIDリスト） |
-| `steps` | array | 時系列の応答定義。各要素: `question_id`・`gen`（`gen1|gen2|gen3`）・`candidate`（`tests/fixtures/candidates/` からの相対パス。生成候補スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`review`（`tests/fixtures/reviews/` からの相対パス。レビュー出力スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`review_retries`（同一世代でのレビュー再実行用フィクスチャの配列。不要なら空配列） |
+| `steps` | array | 時系列の応答定義。各要素: `question_id`・`gen`（`gen1|gen2|gen3`）・`candidate`（`tests/fixtures/candidates/` からの相対パス。生成候補スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`candidate_retries`（同一世代での候補再指示用フィクスチャの配列。不要なら空配列）・`review`（`tests/fixtures/reviews/` からの相対パス。レビュー出力スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`review_retries`（同一世代でのレビュー再実行用フィクスチャの配列。不要なら空配列） |
 | `expected` | object | 期待結果: `outcome`（`completed` / `aborted` / `teacher_consult`）・`set_questions`（`set.json` に収録されるべき `question_id` の配列。`outcome` が `completed` 以外なら空配列）・`audit_files`（存在すべき監査ファイル名の完全列挙）・`attempts_total`（試行された問題×世代の総数）・`regeneration_payload_checks`（再指示ペイロードに含まれるべき `violations[].code` の列挙。再生成がないシナリオは空配列） |
 
 ### 3.3 シナリオ一覧
@@ -241,7 +243,7 @@ tests/
   4. ゴールデン・チェックサムを置換する
   5. `pytest tests/unit tests/replay` の全通過を確認する
   6. ゴールデン更新と原因となった変更を同一コミットでコミットする
-- **GLD-03**: ゴールデンset.json（`tests/golden/sets/`）の初回作成は、受け入れ済みの実セットから採取し、FIX-07・スキーマ合格を確認して保存する。以後の更新はGLD-01・GLD-02に従う。
+- **GLD-03**: ゴールデンset.json（`tests/golden/sets/`）の初回作成は、受け入れ済みの実セットから採取し、FIX-07・スキーマ合格を確認して保存する。M8の初回ブートストラップに限り、M2/M5/M6で検証済みの`docs/question-generation-spec.md`公式9形式candidateを、同文書0.2節およびM8D-07の3誤答補正をフィクスチャ側だけへ適用したうえで、現行の実`machine_check.py`・`set_check.py`・`finalize_set.py`・`validate.py`へ通して確定した出力を採取してよい(MAY)。A-01〜A-15完了後に実LLMセットとの比較で誤りを発見した場合はGLD-01のケース6・GLD-02で同一M8コミット内に更新する。以後の更新はGLD-01・GLD-02に従う。
 - **GLD-04**: 本節の更新手順が本文書の正であり、`docs/architecture.md` の運用手順「フィクスチャ更新」は本節を参照する。
 
 ### 4.4 ゴールデンケース候補（受け入れ用）
@@ -303,7 +305,7 @@ tests/
 #### A-06 例文問題の完走
 
 - **前提**: A-01合格。
-- **手順**: `grammar_example_selfcheck`・レベルB2.1・提案モード・2問を完走し、`index.html` で解説の開閉と自己採点を操作する。
+- **手順**: `grammar_example_selfcheck`・レベルB2.1・提案モード・2問を完走し、`index.html` で正解訳・詳細解説の開示と自己採点を操作する。
 - **合否条件**: 完走・`validate.py` 合格。各問の詳細解説が400字以内で「①項目の機能→②この例文での使われ方→③注意点・よくある誤り」の順に構成され、教員版の文法項目名を明記し、です・ます調・中高標準文法用語のみで書かれている。訳想起→正解表示→自己採点のUIが動作する。
 
 #### A-07 ゴールデンケース: A1 these＋関係節の不合格

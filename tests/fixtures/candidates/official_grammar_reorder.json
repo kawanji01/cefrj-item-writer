@@ -1,0 +1,28 @@
+{
+  "body": {
+    "answer_sentence": "Look at that big tree.",
+    "example_ja": "あの大きな木を見なさい。",
+    "tokens_shuffled": [
+      "tree",
+      "look",
+      "big",
+      "at",
+      "that"
+    ]
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「肯定命令文(一般動詞)」です。命令文は主語を置かず、動詞の原形 Look で文を始めます。look at で「〜を見る」という意味のまとまりを作り、見る対象の that big tree を後ろに続けます。形容詞 big は名詞 tree の前に置きます。",
+    "type": "brief"
+  },
+  "format": "grammar_reorder",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.1"
+  },
+  "question_id": "q01",
+  "target": {
+    "display_name": "命令文（〜しなさい）",
+    "ref": "gp:117",
+    "type": "grammar"
+  }
+}

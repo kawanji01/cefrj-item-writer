@@ -1,0 +1,28 @@
+{
+  "body": {
+    "answer": "I am",
+    "answer_equivalents": [
+      "I'm"
+    ],
+    "context_required_by": null,
+    "context_sentence": null,
+    "cue": null,
+    "example_ja": "私は今日とてもうれしいです。",
+    "sentence_with_blank": "____ very happy today."
+  },
+  "explanation": {
+    "text": "この問題の文法項目は「人称代名詞主格(I)+be: I am」です。日本語訳の主語「私」に合わせて人称代名詞の主格 I を使い、主語 I に対応するbe動詞の現在形 am を続けます。I am は短縮形 I'm と書くこともできます。",
+    "type": "brief"
+  },
+  "format": "grammar_cloze",
+  "level": {
+    "scale": "cefrj",
+    "value": "A1.2"
+  },
+  "question_id": "q07",
+  "target": {
+    "display_name": "I am の文",
+    "ref": "gp:1",
+    "type": "grammar"
+  }
+}
