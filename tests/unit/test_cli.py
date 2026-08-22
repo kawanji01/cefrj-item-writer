@@ -11,6 +11,9 @@ from tests.support import (
     FIXTURES,
     GOLDEN,
     ROOT,
+    canonical_bytes,
+    finalize_metadata,
+    load_json,
     output_set,
     run_cli,
     stderr_json,
@@ -30,11 +33,12 @@ from tests.support import (
         (("scripts/build_html.py",), "E-INPUT-01"),
         (("scripts/validate.py",), "E-INPUT-01"),
         (("scripts/doctor.py", "--unknown-m8-option"), "E-INPUT-01"),
+        (("scripts/flow_control.py",), "E-INPUT-01"),
     ],
-    ids=("build", "machine", "lookup", "set", "finalize", "html", "validate", "doctor"),
+    ids=("build", "machine", "lookup", "set", "finalize", "html", "validate", "doctor", "flow"),
 )
 def test_ci_cli_01_argument_errors(arguments: tuple[str, ...], expected_code: str) -> None:
-    """CI-CLI-01: 全8 CLIが引数不正を定義済みコードと日本語対処で停止する。"""
+    """CI-R-01/CI-CLI-01: 固定9 CLIをプロセス起動し引数不正の停止契約を検査する。"""
 
     completed = run_cli(*arguments)
     assert completed.returncode == 1
@@ -58,13 +62,26 @@ def test_ci_cli_01_argument_errors(arguments: tuple[str, ...], expected_code: st
         ("scripts/finalize_set.py", "--set-dir", "output/20990101-030303-none"),
         ("scripts/build_html.py", "--set", "tests/fixtures/does-not-exist.json"),
         ("scripts/validate.py", "--schema", "candidate", "--file", "tests/fixtures/does-not-exist.json"),
+        (
+            "scripts/flow_control.py", "candidate", "--set-dir",
+            "output/20990101-030303-none", "--file", "tests/fixtures/does-not-exist.json",
+        ),
     ],
-    ids=("build", "machine", "set", "finalize", "html", "validate"),
+    ids=("build", "machine", "set", "finalize", "html", "validate", "flow"),
 )
 def test_ci_cli_01_missing_paths(arguments: tuple[str, ...]) -> None:
-    """CI-CLI-01: パス入力6 CLIが存在しないパスを定義済みエラーで拒否する。"""
+    """CI-CLI-01: パス入力7 CLIが存在しないパスを定義済みエラーで拒否する。"""
 
-    completed = run_cli(*arguments, stdin=b"{}\n" if arguments[0].endswith("finalize_set.py") else None)
+    stdin = None
+    if arguments[0].endswith("finalize_set.py"):
+        set_dir = ROOT / arguments[2]
+        candidate = load_json(
+            FIXTURES / "candidates" / "replay_q01_pass.json"
+        )
+        stdin = canonical_bytes(
+            finalize_metadata(set_dir, candidate, ["q01"], 1)
+        )
+    completed = run_cli(*arguments, stdin=stdin)
     assert completed.returncode == 1
     error = stderr_json(completed)
     assert error["error_code"].startswith(("E-INPUT", "E-CONTRACT", "E-DATA"))
@@ -82,11 +99,15 @@ def test_ci_cli_01_missing_paths(arguments: tuple[str, ...]) -> None:
         ),
         ("scripts/finalize_set.py", "--set-dir", "output/20990101-030303-none"),
         ("scripts/validate.py", "--schema", "candidate", "--file", "-"),
+        (
+            "scripts/flow_control.py", "init", "--set-dir",
+            "output/20990101-030305-cli1", "--file", "-",
+        ),
     ],
-    ids=("machine", "finalize", "validate"),
+    ids=("machine", "finalize", "validate", "flow"),
 )
 def test_ci_cli_01_invalid_json_stdin(arguments: tuple[str, ...]) -> None:
-    """CI-CLI-01: stdin JSON経路3 CLIがパース不能JSONを拒否する。"""
+    """CI-CLI-01: stdin JSON経路4 CLIがパース不能JSONを拒否する。"""
 
     completed = run_cli(*arguments, stdin=b"{\n")
     assert completed.returncode == 1

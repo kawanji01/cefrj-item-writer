@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import GOLDEN, ROOT, load_json, run_cli, stderr_json
+from tests.support import GOLDEN, OFFICIAL_FORMATS, ROOT, load_json, run_cli, stderr_json
 
 
-FORMATS = tuple(path.name.removesuffix(".set.json") for path in sorted((GOLDEN / "sets").glob("*.set.json")))
+FORMATS = OFFICIAL_FORMATS
 
 
 class HtmlFacts(HTMLParser):

@@ -1,13 +1,13 @@
 {
   "body": {
     "example": {
-      "en": "We collect old books at school.",
-      "ja": "私たちは学校で古い本を集めます。"
+      "en": "I will invite my friend to dinner.",
+      "ja": "私は友達を夕食に招待します。"
     },
-    "gloss": "〜を集める",
-    "headword": "collect",
+    "gloss": "〜を招待する",
+    "headword": "invite",
     "pos": "verb",
-    "target_surface": "collect"
+    "target_surface": "invite"
   },
   "format": "vocab_flashcard_en2ja",
   "level": {
@@ -16,8 +16,8 @@
   },
   "question_id": "q04",
   "target": {
-    "display_name": "collect",
-    "ref": "lex:collect:verb",
+    "display_name": "invite",
+    "ref": "lex:invite:verb",
     "type": "lexical"
   }
 }

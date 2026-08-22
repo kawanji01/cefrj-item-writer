@@ -1,7 +1,7 @@
 {
-  "description": "提案モードで3世代fail後にq02を自動補充する",
+  "description": "N=3でq01の3世代fail後に補充q04を未処理q02より先に処理する",
   "expected": {
-    "attempts_total": 4,
+    "attempts_total": 6,
     "audit_files": [
       "q01.gen1.candidate.json",
       "q01.gen1.machine.json",
@@ -19,16 +19,30 @@
       "q02.gen1.machine.json",
       "q02.gen1.request.json",
       "q02.gen1.review.json",
+      "q03.gen1.candidate.json",
+      "q03.gen1.machine.json",
+      "q03.gen1.request.json",
+      "q03.gen1.review.json",
+      "q04.gen1.candidate.json",
+      "q04.gen1.machine.json",
+      "q04.gen1.request.json",
+      "q04.gen1.review.json",
       "set_check.final.json",
       "set_check.q02.gen1.json",
-      "slot.q01.outcome.json"
+      "set_check.q03.gen1.json",
+      "set_check.q04.gen1.json",
+      "slot.q01.outcome.json",
+      "slot.q02.outcome.json",
+      "slot.q03.outcome.json"
     ],
     "outcome": "completed",
     "regeneration_payload_checks": [
       "CHK-03"
     ],
     "set_questions": [
-      "q02"
+      "q02",
+      "q03",
+      "q04"
     ]
   },
   "request": {
@@ -36,9 +50,12 @@
     "level": "A2",
     "level_scale": "cefr",
     "mode": "proposal",
-    "question_count": 1,
+    "question_count": 3,
     "targets": [
-      "lex:accept:verb"
+      "lex:accept:verb",
+      "lex:ability:noun",
+      "lex:abroad:adverb",
+      "lex:invite:verb"
     ]
   },
   "scenario_id": "rpl_03_proposal_replacement",
@@ -68,12 +85,29 @@
       "review_retries": []
     },
     {
+      "candidate": "replay_q04_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q04",
+      "review": "pass_q04_gen1.json",
+      "review_retries": []
+    },
+    {
       "candidate": "replay_q02_pass.json",
       "candidate_retries": [],
       "gen": "gen1",
       "question_id": "q02",
       "review": "pass_q02_gen1.json",
       "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q03",
+      "review": "pass_q03_gen1.json",
+      "review_retries": []
     }
-  ]
+  ],
+  "teacher_decisions": []
 }

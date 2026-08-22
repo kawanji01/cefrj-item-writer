@@ -45,9 +45,9 @@
 
 ### 2.1 実行契約
 
-- **CI-R-01**: 第1層テストは `machine_check.py` / `build_normalized.py` / `validate.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `doctor.py` / `lookup.py` を、実装内部関数の直接呼び出しではなくCLI契約（`docs/architecture.md` のCLI契約一覧）どおりのプロセス起動で検証するテストを、各CLIにつき少なくとも1件含まなければならない(MUST)。それ以外のテストは内部関数を直接呼び出してもよい(MAY)。
+- **CI-R-01**: 第1層テストは `machine_check.py` / `build_normalized.py` / `validate.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `doctor.py` / `lookup.py` / `flow_control.py` を、実装内部関数の直接呼び出しではなくCLI契約（`docs/architecture.md` のCLI契約一覧）どおりのプロセス起動で検証するテストを、各CLIにつき少なくとも1件含まなければならない(MUST)。それ以外のテストは内部関数を直接呼び出してもよい(MAY)。
 - **CI-R-02**: 「バイト一致」と記載した合否条件は、出力ファイルまたはstdoutのバイト列の完全一致を意味する。ただし `machine_check.py` の出力比較に限り、`machine_report.schema.json` が実行日時として定義するフィールドを除去した後のバイト一致とする（除去対象フィールド名の正は `schemas/machine_report.schema.json` の日本語description）。
-- **CI-R-03**: テストが使う入力は第4節のフィクスチャ・ゴールデンに限らなければならない(MUST)。テストコード内へのJSON直書きは、スキーマ不当例（CI-SCH-03）の必須欠落・型不正の生成に限り許可する(MAY)。
+- **CI-R-03**: テストが使う入力は第4節のフィクスチャ・ゴールデン、または検査対象の製品実装が生成した直前段出力に限らなければならない(MUST)。テストコード内へのJSON直書きは、スキーマ不当例（CI-SCH-03）の必須欠落・型不正の生成に限り許可する(MAY)。review_request・AUD-11・FIN-01をテストヘルパーが再構築してはならず(MUST NOT)、`flow_control.py`の構築関数または正準fixtureを使う。この限定とテストコード内JSON不在を検査するメタテストの関数名・docstringにCI-R-03を記載する。
 
 ### 2.2 テスト対象一覧: 正規化（CI-NRM群）
 
@@ -143,7 +143,7 @@
 
 | テストID | 検査対象 | 入力 | 合否条件 |
 |---|---|---|---|
-| CI-CLI-01 | 入力不正時の停止 | 全8 CLIで最低1件。(a)必須引数を持つ7 CLIは必須引数欠落、`doctor.py`は未知オプション (b)パス入力を持つ6 CLI（`build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py`）は存在しないパス (c)stdin JSON経路を持つ3 CLI（`machine_check.py` / `finalize_set.py` / `validate.py`）はJSONとして不正なstdin | 各CLIが `docs/architecture.md` の目録に定義された E-INPUT / E-CONTRACT 系コードと日本語対処手順を出力し、定義済み終了コードで停止すること |
+| CI-CLI-01 | 入力不正時の停止 | 全9 CLIで最低1件。(a)必須引数を持つ8 CLIは必須引数欠落、`doctor.py`は未知オプション (b)パス入力を持つ7 CLI（`build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `flow_control.py`）は存在しないパス (c)stdin JSON経路を持つ4 CLI（`machine_check.py` / `finalize_set.py` / `validate.py` / `flow_control.py`）はJSONとして不正なstdin | 各CLIが `docs/architecture.md` の目録に定義された E-INPUT / E-CONTRACT 系コードと日本語対処手順を出力し、定義済み終了コードで停止すること |
 | CI-CLI-02 | 互換一致（機械検査） | `tests/fixtures/candidates/compat/` の互換用候補フィクスチャ一式 | `machine_check.py` の出力が `tests/golden/machine/` のゴールデンとCI-R-02の意味でバイト一致すること（ホストツール・OSに依存しない） |
 | CI-CLI-03 | doctor診断 | (a)完全な環境 (b)`data/normalized/` 欠落 (c)チェックサム不一致 (d)`data/config/limits.json` 欠落 を模擬した一時環境 | (a)は終了コード0、(b)(c)(d)はそれぞれ目録に定義された E-ENV / E-DATA 系コードで停止すること |
 | CI-CLI-04 | 中断セットの残置状態 | `finalize_set.py` 未実行のセット作業ディレクトリフィクスチャ | `output/<set_id>/` に `set.json` が存在せず監査のみが残ること、および `validate.py --set-dir output/<set_id>` が終了コード0・stderrなしで `status=incomplete`、`set_json_path=null`、`validation=null` を返すこと |
@@ -154,8 +154,8 @@
 
 ### 3.1 リプレイの仕組み
 
-- **RPL-R-01**: リプレイハーネス（実装物、`tests/replay/` 配下）は、LLM呼び出し境界の2点、すなわち (1)候補生成 (2)独立レビュー実行 のみをシナリオ定義のフィクスチャ返却で置換しなければならない(MUST)。
-- **RPL-R-02**: それ以外の処理（機械検査・スキーマ検証・`set_check.py`・`finalize_set.py`・監査ファイル出力・世代管理）は実装コードをそのまま実行しなければならない(MUST)。制御ロジックのモック化をしてはならない(MUST NOT)。
+- **RPL-R-01**: リプレイハーネス（実装物、`tests/replay/` 配下）は、LLM呼び出し境界の2点、すなわち (1)候補生成 (2)独立レビュー実行 のみをシナリオ定義のfixture provider返却で置換しなければならない(MUST)。providerは`flow_control.py`が要求したquestion_id・generationだけに対応するfixtureを返し、シナリオ`steps`を自ら時系列実行してはならない(MUST NOT)。
+- **RPL-R-02**: それ以外の処理（機械検査・スキーマ検証・`set_check.py`・`finalize_set.py`・監査ファイル出力・世代管理・補充所属・教師照会・確定メタデータ）は製品の`flow_control.py`をそのまま実行しなければならない(MUST)。`teacher_consult`後の教師判断は`teacher_decisions`の明示イベントを提示済みslot・choicesと照合した後、製品`decide` CLIへ外部入力として渡す。これをfixture provider境界へ加えたり、制御ロジックをモック化・テスト側再実装したりしてはならない(MUST NOT)（M8D-12）。
 - **RPL-R-03**: ハーネスは、再生成時に生成側へ渡された再指示ペイロード（前世代レビューの `violations[]` を含む構造化指摘）を記録し、テストから検証可能にしなければならない(MUST)。受け渡し内容の正は `docs/subagent-review-spec.md` の再生成ループ仕様。
 - **RPL-R-04**: リプレイの出力先はテスト一時ディレクトリとし、`output/` を汚してはならない(MUST NOT)。
 
@@ -169,6 +169,7 @@
 | `description` | string | シナリオの目的（日本語） |
 | `request` | object | セット条件: `format`（形式コード）・`level_scale`・`level`・`mode`（`explicit` / `proposal`）・`question_count`（1〜20）・`targets`（明示モード時の対象IDリスト。提案モード時は候補プールのIDリスト） |
 | `steps` | array | 時系列の応答定義。各要素: `question_id`・`gen`（`gen1|gen2|gen3`）・`candidate`（`tests/fixtures/candidates/` からの相対パス。生成候補スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`candidate_retries`（同一世代での候補再指示用フィクスチャの配列。不要なら空配列）・`review`（`tests/fixtures/reviews/` からの相対パス。レビュー出力スキーマ不通過を模擬する場合は不正JSONフィクスチャを指す）・`review_retries`（同一世代でのレビュー再実行用フィクスチャの配列。不要なら空配列） |
+| `teacher_decisions` | array | `teacher_consult`への外部入力イベントを発生順に定義する。各要素は`slot_question_id`・`decision`（`alternative` / `reduce` / `abort`）・`target_ref`の3フィールドだけを持つ。`alternative`時だけ`target_ref`を非空文字列、それ以外はnullとする。判断不要なら空配列。ハーネスは提示済みslot・choicesとの一致確認後に製品`decide` CLIへ渡し、未消費イベントを許可しない(MUST NOT) |
 | `expected` | object | 期待結果: `outcome`（`completed` / `aborted` / `teacher_consult`）・`set_questions`（`set.json` に収録されるべき `question_id` の配列。`outcome` が `completed` 以外なら空配列）・`audit_files`（存在すべき監査ファイル名の完全列挙）・`attempts_total`（試行された問題×世代の総数）・`regeneration_payload_checks`（再指示ペイロードに含まれるべき `violations[].code` の列挙。再生成がないシナリオは空配列） |
 
 ### 3.3 シナリオ一覧
@@ -186,7 +187,7 @@
 | RPL-07 | 機械検査fail＋レビューpass | 最終判定が `fail` のままであること（機械検査違反はレビューで覆せない） |
 | RPL-08 | セット横断違反（例文使い回し） | `set_check.py` が違反を報告し、違反が残る限り `finalize_set.py` が `set.json` を作成しないこと。違反検出後の後続処理が `docs/subagent-review-spec.md` の再生成ループ仕様の定義どおり進むこと |
 | RPL-09 | 監査と正本の参照整合 | RPL-01の完成セットで、`set.json` から `review/` への相対参照が全て実在ファイルに解決し、監査ファイルが欠けても `set.json` 単体で全問題を解釈できる（監査への参照以外に監査依存フィールドがない）こと |
-| RPL-10 | 最悪コスト境界 | `question_count`=n の提案モードで全問全世代不合格のとき、試行対象IDは`q01`〜`q{min(2n,20)}`、生成試行総数は`min(2n,20)×3世代`を上限として停止し、それを超える生成・レビューが発生しないこと（`docs/requirements.md` の非機能要件参照） |
+| RPL-10 | 最悪コスト境界 | `question_count`=n の提案モードで全問全世代不合格のとき、補充枯渇後の教師照会へM8D-12の`reduce`イベントを入力して未処理初期スロットを続行し、試行対象IDが`q01`〜`q{min(2n,20)}`、生成試行総数が`min(2n,20)×3世代`へ到達して停止すること。scenarioへ上限外の次stepを含めてもfixture providerへ生成・レビュー要求が発生せず、監査も作成されないこと（`docs/requirements.md` の非機能要件参照） |
 
 ---
 
@@ -223,7 +224,7 @@ tests/
 - **FIX-03**: ゴールデン（`tests/golden/sets/`・`html/`・`machine/`・`cases/`）は生成器・検査器の出力バイト列そのままを保存しなければならない(MUST)。FIX-02の再整形をしてはならない(MUST NOT)。
 - **FIX-04**: `tests/golden/normalized/checksums.json` の様式は `{"data_version": "<正規化データのdata_version>", "files": {"lexicon.json": "<sha256>", "grammar.json": "<sha256>", "meta.json": "<sha256>"}}` としなければならない(MUST)。
 - **FIX-05**: `tests/fixtures/candidates/`・`reviews/`・`machine/`・`schemas/invalid/` の各ディレクトリ直下に `index.json` を置き、`{"cases": [{"file": "<ファイル名>", "purpose": "<日本語の目的>", "expected": "<期待結果の要約（違反コード・判定値）>", "test_ids": ["CI-MCH-01"]}]}` の形式で全ファイルを登録しなければならない(MUST)。`index.json` 未登録のフィクスチャファイルが存在しないことをCIで検査する（このメタ検査のテストIDは CI-FIX-01 とする）。
-- **FIX-06**: 候補・レビューのフィクスチャは対応するスキーマ（`candidate.schema.json` / `review_result.schema.json`）に合格しなければならない(MUST)。例外はスキーマ不通過を意図するフィクスチャ（RPL-05・RPL-06・CI-SCH-03用）のみであり、これらは `index.json` の `purpose` に不通過意図を明記する。
+- **FIX-06**: 候補・レビューのフィクスチャは対応するスキーマ（`candidate.schema.json` / `review_result.schema.json`）に合格しなければならない(MUST)。例外はスキーマ不通過を意図するフィクスチャ（RPL-05・RPL-06・CI-SCH-03・CI-MCH-18・CI-SCH-04用）のみであり、これらは `index.json` の `purpose` に不通過意図を明記しなければならない(MUST)。CIメタ検査は、許可されたテストIDと固定フィクスチャ名の組だけを除外し、`purpose` の自由記述だけを根拠に除外してはならない(MUST NOT)。例外として除外した各フィクスチャが実際にJSON解析または対応スキーマ検証へ不合格となることを検査しなければならない(MUST)。
 - **FIX-07**: フィクスチャ・ゴールデンには実在の個人名・メールアドレス・所属を含めてはならない(MUST NOT)。人名が必要な場合は `data/config/proper_nouns.json` 収録語から選ぶ。
 - **FIX-08**: 実LLMの出力を記録してフィクスチャ化する場合の手順: ①受け入れ実施または開発中の実行で得た候補/レビューJSONを採取する ②FIX-02の正規書式に変換する ③FIX-07を確認する ④`index.json` に登録する ⑤対応するスキーマ合格をCIで確認する。この5手順を全て行わなければならない(MUST)。
 
@@ -267,7 +268,7 @@ tests/
 
 ### 5.2 実施記録
 
-- **ACC-07**: 実施結果は `tests/acceptance/records/<リリースタグ>.md` に記録しなければならない(MUST)。記録必須項目: リリースタグ / 実施日 / 実施者 / プライマリツール名とモデル名 / A-15で用いた他方ツール名とモデル名 / 各項目（A-01〜A-15）の pass・fail と特記事項 / 生成された `set_id` の一覧 / 総合判定。
+- **ACC-07**: 実施結果は `tests/acceptance/records/<リリースタグ>.md` に記録しなければならない(MUST)。記録必須項目: リリースタグ / 実施日 / 実施者 / プライマリツール名とモデル名 / A-15で用いた他方ツール名とモデル名 / 各項目（A-01〜A-15）の pass・fail と特記事項 / 生成された `set_id` の一覧 / 総合判定。M8D-11により公開済み`v1.0.0`を修正版`v1.0.1`が置換する場合、再実施結果は`tests/acceptance/records/v1.0.1.md`へ記録し、`v1.0.0`記録を変更して合格へ読み替えてはならない(MUST NOT)。
 - **ACC-08**: 1項目でもfailの場合、リリースを中止しなければならない(MUST)。再実施の範囲は第6節に従う。
 
 ### 5.3 チェックリスト（全15項目）
@@ -374,7 +375,7 @@ A-01: 2分 / A-02〜A-06: 各3分 / A-07: 3分 / A-08: 2分 / A-09・A-10: 計2�
   1. 修正が `agent/` 配下（コア指示書）または `docs/` 配下の文書に及んだ場合: 第1層・第2層の全実行に加え、A-01〜A-15の全項目を再実施する。
   2. 修正が `scripts/`・HTMLテンプレート・`schemas/`・`data/config/` のみの場合: 第1層・第2層の全実行に加え、failした項目と、その項目の「前提」欄が参照する項目のみを再実施する。
 - **ACC-10**: failの内容が機械検査の誤検出（レンマ化誤りを含む）に起因すると疑われる場合でも、当該リリースは中止しなければならない(MUST)。誤検出疑いは `docs/subagent-review-spec.md` の機械検査誤検出疑い報告様式で記録し、機械検査側の修正後にGLD-02とACC-09を適用する。
-- **ACC-11**: 再実施の結果は同一リリースタグ予定の記録ファイルに追記し、実施回数が分かる形で残さなければならない(MUST)。
+- **ACC-11**: 再実施の結果は同一リリースタグ予定の記録ファイルに追記し、実施回数が分かる形で残さなければならない(MUST)。ただしM8D-11で公開済み`v1.0.0`を移動せず`v1.0.1`を発行する場合は、`v1.0.0`記録を保持し、修正版の全再実施を新しい`v1.0.1`記録へ記載する。
 
 ---
 

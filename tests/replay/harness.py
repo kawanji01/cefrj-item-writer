@@ -2,27 +2,21 @@
 
 from __future__ import annotations
 
-import base64
-import json
+import sys
+from collections import defaultdict, deque
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
-from tests.support import (
-    FIXTURES,
-    ROOT,
-    canonical_bytes,
-    finalize_metadata,
-    load_json,
-    machine_for_path,
-    output_set,
-    review_request,
-    run_cli,
-    stderr_json,
-    stdout_json,
-    write_json,
-)
+from tests.support import FIXTURES, ROOT, load_json, run_cli, stdout_json, write_json
+
+
+SCRIPTS = ROOT / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from flow_control import build_session_input  # noqa: E402
 
 
 SET_ID = "20990101-000000-rpl1"
@@ -32,284 +26,170 @@ SET_ID = "20990101-000000-rpl1"
 class ReplayResult:
     attempts_total: int
     audit_files: list[str]
+    consultation: dict[str, Any] | None
     generation_verdicts: list[dict[str, Any]]
     outcome: str
+    provider_requests: list[tuple[str, str, str]]
     regeneration_payloads: list[dict[str, Any]]
     set_document: dict[str, Any] | None
     set_questions: list[str]
+    teacher_decisions: list[dict[str, Any]]
 
 
-def validation_failure(raw: bytes, diagnostic: str) -> dict[str, Any]:
-    return {
-        "audit_format": "aud09-v2",
-        "diagnostic": diagnostic,
-        "kind": "validation_failure",
-        "raw_output_base64": base64.b64encode(raw).decode("ascii"),
-    }
+class FixtureProvider:
+    """RPL-R-01の2境界だけをシナリオfixtureへ差し替える。"""
+
+    def __init__(self, scenario: dict[str, Any]) -> None:
+        self.candidates: dict[tuple[str, str], deque[str]] = defaultdict(deque)
+        self.reviews: dict[tuple[str, str], deque[str]] = defaultdict(deque)
+        self.requests: list[tuple[str, str, str]] = []
+        for step in scenario["steps"]:
+            key = (step["question_id"], step["gen"])
+            self.candidates[key].extend([step["candidate"], *step["candidate_retries"]])
+            self.reviews[key].extend([step["review"], *step["review_retries"]])
+
+    def candidate(self, action: dict[str, Any]) -> Path:
+        key = (action["question_id"], action["generation"])
+        if not self.candidates[key]:
+            raise AssertionError(f"candidate fixtureが不足しています: {key}")
+        self.requests.append(("candidate", *key))
+        return FIXTURES / "candidates" / self.candidates[key].popleft()
+
+    def review(self, action: dict[str, Any]) -> Path:
+        key = (action["question_id"], action["generation"])
+        if not self.reviews[key]:
+            raise AssertionError(f"review fixtureが不足しています: {key}")
+        self.requests.append(("review", *key))
+        return FIXTURES / "reviews" / self.reviews[key].popleft()
 
 
-def surrogate_failure() -> dict[str, Any]:
-    return {
-        "audit_format": "aud09-v2",
-        "kind": "utf8_encode_failure",
-        "position": "JSON string value U+D800",
-        "reason": "孤立サロゲートをstrict UTF-8へ符号化できません",
-    }
+def make_temporary_repo(tmp_path: Path) -> Path:
+    """実output/と分離したRPL-R-04専用リポジトリを作る。"""
+
+    repo = tmp_path / "replay-repo"
+    repo.mkdir()
+    (repo / "output").mkdir()
+    for name in ("agent", "data", "schemas", "scripts", "templates"):
+        (repo / name).symlink_to(ROOT / name, target_is_directory=True)
+    return repo
 
 
-def validate_fixture(schema: str, path: Path):
-    return run_cli(
-        "scripts/validate.py",
-        "--schema",
-        schema,
-        "--file",
-        str(path.relative_to(ROOT)),
+def flow_cli(repo: Path, *arguments: str) -> dict[str, Any]:
+    completed = run_cli(
+        "scripts/flow_control.py",
+        *arguments,
+        cwd=repo,
     )
-
-
-def save_invalid(path: Path, source: Path, diagnostic: str) -> None:
-    if source.name == "invalid_surrogate.json":
-        write_json(path, surrogate_failure())
-    else:
-        write_json(path, validation_failure(source.read_bytes(), diagnostic))
-
-
-def owner_for_question(
-    qid: str,
-    question_count: int,
-    owner_by_question: dict[str, str],
-    accepted_slots: dict[str, str],
-    slot_attempts: dict[str, list[str]],
-) -> str:
-    if qid in owner_by_question:
-        return owner_by_question[qid]
-    number = int(qid[1:])
-    if number <= question_count:
-        owner = qid
-    else:
-        unresolved = [
-            f"q{slot:02d}"
-            for slot in range(1, question_count + 1)
-            if f"q{slot:02d}" not in accepted_slots
-            and len(slot_attempts[f"q{slot:02d}"]) == 1
-        ]
-        if not unresolved:
-            unresolved = [
-                f"q{slot:02d}"
-                for slot in range(1, question_count + 1)
-                if f"q{slot:02d}" not in accepted_slots
-            ]
-        owner = unresolved[0]
-    owner_by_question[qid] = owner
-    if qid not in slot_attempts[owner]:
-        slot_attempts[owner].append(qid)
-    return owner
+    if completed.returncode != 0:
+        raise AssertionError(completed.stderr.decode("utf-8", errors="backslashreplace"))
+    return stdout_json(completed)
 
 
 @contextmanager
-def replay_scenario(path: Path) -> Iterator[tuple[ReplayResult, Path]]:
+def replay_scenario(
+    path: Path, tmp_path: Path
+) -> Iterator[tuple[ReplayResult, Path]]:
     scenario = load_json(path)
-    request = scenario["request"]
-    question_count = request["question_count"]
-    with output_set(SET_ID) as set_dir:
-        review_dir = set_dir / "review"
-        review_dir.mkdir()
-        accepted_slots: dict[str, str] = {}
-        slot_attempts = {f"q{number:02d}": [] for number in range(1, question_count + 1)}
-        owner_by_question: dict[str, str] = {}
-        regeneration_payloads: list[dict[str, Any]] = []
-        generation_verdicts: list[dict[str, Any]] = []
-        aborted = False
-        attempts_total = 0
-
-        for step_index, step in enumerate(scenario["steps"]):
-            attempts_total += 1
-            qid = step["question_id"]
-            generation = step["gen"]
-            owner = owner_for_question(
-                qid,
-                question_count,
-                owner_by_question,
-                accepted_slots,
-                slot_attempts,
-            )
-            candidate_sources = [step["candidate"], *step["candidate_retries"]]
-            candidate: dict[str, Any] | None = None
-            candidate_path: Path | None = None
-            for invalid_index, relative in enumerate(candidate_sources, start=1):
-                source = FIXTURES / "candidates" / relative
-                validated = validate_fixture("candidate", source)
-                if validated.returncode == 0:
-                    candidate = load_json(source)
-                    if candidate.get("question_id") != qid:
-                        raise AssertionError(f"scenarioのquestion_idとcandidateが不一致です: {path.name}")
-                    candidate_path = review_dir / f"{qid}.{generation}.candidate.json"
-                    candidate_path.write_bytes(source.read_bytes())
-                    break
-                save_invalid(
-                    review_dir / f"{qid}.{generation}.candidate.invalid{invalid_index}.txt",
-                    source,
-                    validated.stderr.decode("utf-8"),
-                )
-            if candidate is None or candidate_path is None:
-                generation_verdicts.append(
-                    {"generation": generation, "question_id": qid, "verdict": "fail", "reason": "candidate_invalid"}
-                )
-                continue
-
-            machine_completed = machine_for_path(
-                candidate_path,
-                SET_ID,
-                generation,
-                expected_format=request["format"],
-                expected_level=request["level"],
-                requested_count=question_count,
-            )
-            if machine_completed.returncode != 0:
-                raise AssertionError(machine_completed.stderr.decode("utf-8"))
-            machine = stdout_json(machine_completed)
-            write_json(review_dir / f"{qid}.{generation}.machine.json", machine)
-            envelope = review_request(candidate, machine, SET_ID, generation)
-            validated_request = run_cli(
-                "scripts/validate.py",
-                "--schema",
-                "review_request",
+    repo = make_temporary_repo(tmp_path)
+    set_dir = repo / "output" / SET_ID
+    provider = FixtureProvider(scenario)
+    teacher_decisions = deque(scenario["teacher_decisions"])
+    consumed_teacher_decisions: list[dict[str, Any]] = []
+    session = build_session_input(
+        scenario["request"],
+        SET_ID,
+        created_at="2099-01-01T00:00:00+09:00",
+        model="m8-test",
+        tool="codex",
+    )
+    session_path = repo / "session.json"
+    write_json(session_path, session)
+    action = flow_cli(
+        repo,
+        "init",
+        "--set-dir",
+        f"output/{SET_ID}",
+        "--file",
+        str(session_path),
+    )
+    for _event in range(200):
+        if action["action"] == "generate_candidate":
+            action = flow_cli(
+                repo,
+                "candidate",
+                "--set-dir",
+                f"output/{SET_ID}",
                 "--file",
-                "-",
-                stdin=canonical_bytes(envelope),
+                str(provider.candidate(action)),
             )
-            if validated_request.returncode != 0:
-                raise AssertionError(validated_request.stderr.decode("utf-8"))
-            write_json(review_dir / f"{qid}.{generation}.request.json", envelope)
-
-            review_sources = [step["review"], *step["review_retries"]]
-            review: dict[str, Any] | None = None
-            for invalid_index, relative in enumerate(review_sources, start=1):
-                source = FIXTURES / "reviews" / relative
-                validated = validate_fixture("review_result", source)
-                if validated.returncode == 0:
-                    review = load_json(source)
-                    if (
-                        review["set_id"] != SET_ID
-                        or review["question_id"] != qid
-                        or review["generation"] != generation
-                    ):
-                        raise AssertionError(f"scenarioのreview識別子が不一致です: {path.name}")
-                    (review_dir / f"{qid}.{generation}.review.json").write_bytes(source.read_bytes())
-                    break
-                save_invalid(
-                    review_dir / f"{qid}.{generation}.review.invalid{invalid_index}.txt",
-                    source,
-                    validated.stderr.decode("utf-8"),
-                )
-            if review is None:
-                aborted = True
-                generation_verdicts.append(
-                    {"generation": generation, "question_id": qid, "verdict": "aborted", "reason": "review_invalid"}
-                )
-                break
-
-            if machine["verdict"] == "fail" or review["verdict"] == "fail":
-                combined = [*machine["violations"], *review["violations"]]
-                generation_verdicts.append(
-                    {"generation": generation, "question_id": qid, "verdict": "fail", "reason": "machine_or_review", "violations": combined}
-                )
-                if any(
-                    later["question_id"] == qid
-                    for later in scenario["steps"][step_index + 1 :]
-                ):
-                    regeneration_payloads.append(
-                        {"generation": generation, "question_id": qid, "violations": combined}
-                    )
-                continue
-
-            set_completed = run_cli(
-                "scripts/set_check.py",
+            continue
+        if action["action"] == "run_review":
+            action = flow_cli(
+                repo,
+                "review",
                 "--set-dir",
-                str(set_dir.relative_to(ROOT)),
-                "--target",
-                qid,
+                f"output/{SET_ID}",
+                "--file",
+                str(provider.review(action)),
             )
-            if set_completed.returncode != 0:
-                raise AssertionError(set_completed.stderr.decode("utf-8"))
-            set_report = stdout_json(set_completed)
-            write_json(review_dir / f"set_check.{qid}.{generation}.json", set_report)
-            if set_report["verdict"] == "fail":
-                generation_verdicts.append(
-                    {"generation": generation, "question_id": qid, "verdict": "fail", "reason": "set_check", "violations": set_report["violations"]}
+            continue
+        if action["action"] == "teacher_consult" and teacher_decisions:
+            event = teacher_decisions.popleft()
+            if set(event) != {"decision", "slot_question_id", "target_ref"}:
+                raise AssertionError(f"教師判断イベントのフィールドが不正です: {event}")
+            consultation = action["consultation"]
+            if event["slot_question_id"] != consultation["slot_question_id"]:
+                raise AssertionError(
+                    "教師判断イベントのslotが提示中の照会と一致しません: "
+                    f"event={event['slot_question_id']}, "
+                    f"consultation={consultation['slot_question_id']}"
                 )
-                if any(
-                    later["question_id"] == qid
-                    for later in scenario["steps"][step_index + 1 :]
-                ):
-                    regeneration_payloads.append(
-                        {"generation": generation, "question_id": qid, "violations": set_report["violations"]}
-                    )
-                continue
-
-            accepted_slots[owner] = qid
-            generation_verdicts.append(
-                {"generation": generation, "question_id": qid, "verdict": "pass", "reason": "accepted"}
-            )
-            write_json(
-                review_dir / f"slot.{owner}.outcome.json",
-                {
-                    "accepted_question_id": qid,
-                    "attempted_question_ids": slot_attempts[owner],
-                    "set_id": SET_ID,
-                    "slot_question_id": owner,
-                    "status": "accepted",
-                    "teacher_decision": None,
-                },
-            )
-
-        set_document = None
-        if not aborted and len(accepted_slots) == question_count:
-            final = run_cli(
-                "scripts/set_check.py", "--set-dir", str(set_dir.relative_to(ROOT))
-            )
-            if final.returncode != 0:
-                raise AssertionError(final.stderr.decode("utf-8"))
-            final_report = stdout_json(final)
-            write_json(review_dir / "set_check.final.json", final_report)
-            final_ids = sorted(accepted_slots.values(), key=lambda value: int(value[1:]))
-            first_candidate = load_json(
-                next(review_dir.glob(f"{final_ids[0]}.gen*.candidate.json"))
-            )
-            metadata = finalize_metadata(set_dir, first_candidate, final_ids, question_count)
-            finalized = run_cli(
-                "scripts/finalize_set.py",
+            if event["decision"] not in consultation["choices"]:
+                raise AssertionError(
+                    f"教師判断イベントが提示済みchoicesにありません: {event['decision']}"
+                )
+            decision_arguments = [
+                "decide",
                 "--set-dir",
-                str(set_dir.relative_to(ROOT)),
-                stdin=canonical_bytes(metadata),
-            )
-            if finalized.returncode != 0:
-                raise AssertionError(finalized.stderr.decode("utf-8"))
-            validated = run_cli(
-                "scripts/validate.py", "--set-dir", str(set_dir.relative_to(ROOT))
-            )
-            if validated.returncode != 0:
-                raise AssertionError(validated.stderr.decode("utf-8"))
-            set_document = load_json(set_dir / "set.json")
-            outcome = "completed"
-        elif aborted:
-            outcome = "aborted"
-        else:
-            outcome = "teacher_consult"
+                f"output/{SET_ID}",
+                "--decision",
+                event["decision"],
+            ]
+            if event["decision"] == "alternative":
+                if not isinstance(event["target_ref"], str) or not event["target_ref"]:
+                    raise AssertionError("alternative教師判断には非空target_refが必要です")
+                decision_arguments.extend(["--target-ref", event["target_ref"]])
+            elif event["target_ref"] is not None:
+                raise AssertionError("reduce/abort教師判断のtarget_refはnullでなければなりません")
+            action = flow_cli(repo, *decision_arguments)
+            consumed_teacher_decisions.append(event)
+            continue
+        break
+    else:
+        raise AssertionError(f"フローが200イベント以内に停止しません: {path.name}")
 
-        audit_files = sorted(path.name for path in review_dir.iterdir())
-        set_questions = (
+    if action["action"] not in {"completed", "aborted", "teacher_consult"}:
+        raise AssertionError(f"未知の終端actionです: {action['action']}")
+    if teacher_decisions:
+        raise AssertionError(
+            f"未消費の教師判断イベントがあります: {list(teacher_decisions)}"
+        )
+    set_document = load_json(set_dir / "set.json") if (set_dir / "set.json").is_file() else None
+    review_dir = set_dir / "review"
+    result = ReplayResult(
+        attempts_total=action["attempts_total"],
+        audit_files=sorted(item.name for item in review_dir.iterdir()),
+        consultation=action.get("consultation"),
+        generation_verdicts=action["generation_verdicts"],
+        outcome=action["outcome"],
+        provider_requests=provider.requests,
+        regeneration_payloads=action["regeneration_payloads"],
+        set_document=set_document,
+        set_questions=(
             [question["question_id"] for question in set_document["questions"]]
             if set_document is not None
             else []
-        )
-        result = ReplayResult(
-            attempts_total=attempts_total,
-            audit_files=audit_files,
-            generation_verdicts=generation_verdicts,
-            outcome=outcome,
-            regeneration_payloads=regeneration_payloads,
-            set_document=set_document,
-            set_questions=set_questions,
-        )
-        yield result, set_dir
+        ),
+        teacher_decisions=consumed_teacher_decisions,
+    )
+    yield result, set_dir

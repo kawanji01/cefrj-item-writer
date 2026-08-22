@@ -1,0 +1,3 @@
+- R18-01: positional/keyword-only default・関数return・class属性へsensitive callable identityを伝播し、process/sink default、return factory、class属性の5反例を自己負回帰化した (tests/unit/test_fixtures.py)
+- R18-02: 巨大整数candidate生成時のカンマ位置をFIX-02正準形へ修正して3 fixtureを再生成し、整数tokenのplaceholder置換により整数上限非依存の完全バイト一致検査へ変更した (tests/generate_assets.py, tests/unit/test_fixtures.py, tests/fixtures/candidates/mch_18_integer_4300.json, tests/fixtures/candidates/mch_18_integer_4301.json, tests/fixtures/candidates/mch_18_integer_5000.json)
+- R18-03: 承認済みM8D-14としてFIX-06へCI-MCH-18/CI-SCH-04例外を追記し、候補・レビューの除外を固定fixture名と完全一致test_idsの許可リストへ限定して全例外のJSON解析失敗または実スキーマ不合格を検査した (DECISIONS.md, docs/testing-and-acceptance.md, tests/unit/test_fixtures.py)

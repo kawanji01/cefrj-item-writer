@@ -1147,9 +1147,9 @@
 
 ---
 
-## 11. M8実装に伴う承認決定（M8D-01〜M8D-08）
+## 11. M8実装に伴う承認決定（M8D-01〜M8D-14）
 
-2026-08-19、PLN-05に基づきM8着手時に発見した次の8件について、作問者が推奨案を承認した。
+2026-08-19〜22、PLN-05に基づきM8着手時およびM8レビュー対応で発見した次の14件について、作問者が推奨案を承認した。
 
 ### M8D-01 決定的CIの実行基盤
 - **決定**: マージ条件となる決定的CIはGitHub Actionsの`.github/workflows/ci.yml`へ置き、Python 3.11の単一ジョブで`pytest tests/unit tests/replay`を実行する。CIはテスト開始前に製品依存、spaCy `en_core_web_sm` 3.8.0、開発依存を固定版で導入し、テスト実行中は外部ネットワークを使用しない。
@@ -1190,3 +1190,33 @@
 - **決定**: `grammar_example_selfcheck`は、S-02「答えを見る」で正解訳と詳細解説を同時に開示し、詳細解説は`.explanation-full`の常時表示ブロックとする。解説単独の開閉UIは設けない。A-06の手順は「正解訳・詳細解説の開示と自己採点」を操作して確認する。
 - **理由**: `docs/testing-and-acceptance.md` A-06の「解説の開閉」が、形式⑨について二重の開閉を明示的に禁止する`docs/html-output-spec.md` UI-26と矛盾していた。形式固有の詳細なUI-23〜26、現行実装、M6受け入れ実績を維持し、A-06の手順だけを同じ状態遷移へ整合させるため。
 - **影響先**: D-17、`docs/testing-and-acceptance.md` A-06、M8手動受け入れ記録。
+
+### M8D-09 決定的フロー制御CLIとリプレイprovider境界
+- **決定**: `scripts/flow_control.py`を第9の決定的CLIとして追加し、S80以降の世代管理、candidate/review_result受理検証、機械検査・set_check・finalize呼出し、review_request・スロット終端監査・FIN-01入力の構築、機械/レビュー合否集計、提案モード補充、明示モード教師照会、試行対象2N上限を一元管理する。ホストLLMはCLIのevent actionに従い、candidate生成と独立レビュー実行の2境界だけを担当する。`.staging/flow-state.json`はCLI専用の一時状態で、完成・中止時に削除し、教師照会中だけ保持する。第2層リプレイはpytest一時リポジトリ内で同じCLIを実行し、2境界だけをfixture providerへ置換する。
+- **理由**: 当初のリプレイハーネスは世代停止、補充所属、教師照会、監査文書をテスト側で再実装しており、fixtureに列挙した試行数を数えるだけで製品フローのRG-03/RG-12〜16/RG-19違反を検出できなかった。製品とリプレイが同じ決定的状態遷移を使えば、上限外fixtureが存在しても消費しないこと、明示モードで自動補充しないこと、全世代理由を照会へ残すことを実装経路で検証できる。
+- **影響先**: `docs/architecture.md` ARC-02/03・C1/C12・CLI契約、`docs/subagent-review-spec.md` 再生成ループ、`docs/testing-and-acceptance.md` RPL-R-01〜04・CI-R-03、`agent/author-core.md`、`scripts/flow_control.py`、`.claude/`配線、`tests/replay/`、M8 DoD 1。
+
+### M8D-10 レビュアー生バイト列のshell-free受け渡し
+- **決定**: Claude CodeとCodexの既存固定レビュアーラッパーをshell-free bridgeへ拡張する。ラッパーは新規独立レビュアーを1回だけ起動した後、終了コード0かつ非空出力なら生stdoutを、非0・期限超過・空出力なら実終了コードと生stderrを、シェル文字列・ヒアドキュメント・一時rawファイルへ展開せず、固定argvの`flow_control.py review`子プロセスへ`subprocess`のバイト入力で直接渡す。ラッパーstdout/stderr/終了コードは同CLIの結果とし、再実行・中止・世代消費の判定はC12だけが行う。空出力かつレビュアー終了コード0は`process_failure`の実終了コード0として記録する。Claude Codeの`REV02`/`ERR02`ヒアドキュメント許可は撤去する。
+- **理由**: 非信頼のreviewer stdout/stderrにヒアドキュメント終端行が含まれると、権限ガードが末尾終端までを本文と見てもシェルは先行終端でstdinを閉じ、後続行をコマンドとして実行できた。固定argvとバイトstdinなら、NUL・制御文字・シェルメタ文字・終端語を含む任意バイトを解釈せずC12へ届け、AUD-09へ完全保存できる。
+- **影響先**: `docs/cross-agent-compatibility.md` COR-08/CCW-09〜12/CDX-03/07/08、`docs/architecture.md` CLI-33、`agent/author-core.md`、`.claude/run_reviewer.py`、`.codex/run_reviewer.py`、`.claude/settings.json`、`.claude/hooks/guard_flow_control.py`、両ツールのセットアップ手順、M8 R3回帰確認。
+
+### M8D-11 早期作成されたv1.0.0タグの修復
+- **決定**: 最終受け入れ前に作成された`v1.0.0`は、最終修正とA-01〜A-15再実施後に公開状態で扱いを分岐する。`git ls-remote --tags origin refs/tags/v1.0.0`でリモートに存在しない未公開ローカルタグなら、既存タグを削除して最終確定コミットへannotated tag `v1.0.0`を作り直し、同じ`tests/acceptance/records/v1.0.0.md`へ再実施記録を追記する。リモートに存在する公開済みタグなら移動・削除せず、修正版`v1.0.1`用の新しい受け入れ記録へA-01〜A-15を記録し、合格後の最終確定コミットへannotated tag `v1.0.1`を作成して、`v1.0.0`を置換する修正版であることをCHANGELOGとタグ注釈に記す。
+- **理由**: 未公開タグでは不合格時点のリリースを残さず初回版の意味を回復できる一方、公開済みタグを移動すると取得済み履歴と署名・監査参照を破壊する。公開状態を読取り専用で確認して分岐すれば、タグ不変性と「受け入れ後にリリース対象へタグ」の順序を両立できる。
+- **影響先**: `docs/architecture.md` VER-09/OPS-03、`docs/testing-and-acceptance.md` ACC-07/ACC-11、`tests/acceptance/records/`、`CHANGELOG.md`、Gitタグ、M8 DoD 3/4。
+
+### M8D-12 リプレイシナリオの教師判断イベント
+- **決定**: `tests/fixtures/scenarios/*.json`へ必須の`teacher_decisions`配列を追加する。各要素は`slot_question_id`、`decision`（`alternative`/`reduce`/`abort`）、`target_ref`の3フィールドだけを持ち、`alternative`時だけ`target_ref`を非空文字列、それ以外はnullとする。リプレイハーネスは`teacher_consult` action時だけ配列順に1件を消費し、actionが提示したslot・choicesと完全一致することを確認してから、製品`flow_control.py decide`へ外部入力として渡す。教師判断を候補生成・独立レビューに続く第3のfixture provider境界として扱わず、全イベントの消費を検査する。RPL-10はq01とq02の照会へ`reduce`を各1件入力し、q01・q04〜q06・q02・q03の6対象を各3世代、合計18生成まで進め、q07のstepを未消費のまま停止する。
+- **理由**: RPL-10の2N対象上限を実行経路で検査するには、補充枯渇後の教師照会で現在スロットを減数し、未処理初期スロットへ進む必要がある一方、従来シナリオはLLM応答2境界しか表現できなかった。教師判断を独立した明示イベントとして製品CLIへ渡せば、ハーネスへ判断ロジックを再実装せず、シナリオ単体で入力時系列を再現できる。
+- **影響先**: `docs/testing-and-acceptance.md` RPL-R-01/02・3.2節・RPL-10、`tests/fixtures/scenarios/`、`tests/replay/harness.py`、`tests/replay/test_replay.py`、M8 R3回帰確認。
+
+### M8D-13 レビュアー起動前preflight境界
+- **決定**: `flow_control.py review-preflight --set-dir output/<set_id> --request output/<set_id>/review/<question_id>.<gen>.request.json`を両固定レビュアーラッパー内部専用のC12サブコマンドとして正式化する。ホストは直接呼び出さない。C12は子レビュアー起動前に現在設定全体、セッション設定snapshot、直前`run_review` action、request監査の通常ファイル性、strict UTF-8・標準JSON・`review_request`スキーマ、現在stateから再構築したJS-01正準バイト列との完全一致を一括検査する。成功stdoutは`request_path`と`review_timeout_seconds`の2フィールドだけとする。設定不当は`E-DATA-05`、snapshot不一致は`E-DATA-08`、action・内容不一致は`E-CONTRACT-01`、直前actionが指すrequest監査の欠落・通常ファイル不成立は`E-CONTRACT-03`とし、いずれも監査を保持してflow-stateを削除する。ラッパーはpreflight終了0の場合だけ子を起動し、非0ではC12のstdout/stderr/終了コードを非改変で返す。
+- **理由**: CCW-09/CDX-03が要求する検証済み設定と封筒を、アダプタへ検証ロジックを複製せず子起動前に確定する必要がある。既存`status`の出力契約変更や両ラッパーからの内部関数importより、C12の固定CLI境界へ集約する方が、CLI-05、状態寿命、両ツール互換を一意に保てる。
+- **影響先**: `docs/architecture.md` CLI一覧・CLI-33a・CLI-35、`docs/cross-agent-compatibility.md` COR-08a・CCW-09/10・CDX-03、`scripts/flow_control.py`、`.claude/run_reviewer.py`、`.codex/run_reviewer.py`、M8第1層・第2層テスト、M8 R13再確認。
+
+### M8D-14 候補・レビューのスキーマ不通過fixture例外目録
+- **決定**: FIX-06の例外対象へ、既存のRPL-05・RPL-06・CI-SCH-03に加えてCI-MCH-18とCI-SCH-04を追加する。候補・レビューのCIメタ検査は、規範上例外となる固定fixture名と完全一致する`test_ids`の組だけを許可し、`purpose`の自由記述を根拠に除外しない。許可リストの各fixtureが実際にJSON解析または対応スキーマ検証へ不合格となることも検査する。
+- **理由**: CI-MCH-18の桁数境界fixtureはトップレベル余分フィールドを、CI-SCH-04の不整合fixtureは`format`と`body`の判別共用体不整合を意図的に持つため、対応する候補スキーマへ本質的に不合格となる。一方、従来の`purpose`部分文字列による除外は任意の不当fixtureを検査対象外にでき、FIX-06の例外範囲も実fixtureと一致していなかった。
+- **影響先**: `docs/testing-and-acceptance.md` FIX-06、`tests/unit/test_fixtures.py` CI-FIX-01、候補・レビューfixture index、M8 DoD、M8 R18再確認。

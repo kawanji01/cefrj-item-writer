@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex独立レビュアーを壁時計期限付きで1回だけ実行する。"""
+"""Codex独立レビュアーを1回実行し、結果をC12へ安全に渡す。"""
 
 from __future__ import annotations
 
@@ -26,12 +26,12 @@ LAUNCH_ERROR_EXIT_CODE = 70
 TERMINATION_GRACE_SECONDS = 1.0
 
 
-class ReviewerTimeoutError(TimeoutError):
-    """レビュアーのプロセスグループを期限超過で停止した。"""
+class ReviewerOutputError(RuntimeError):
+    """Codexの最終メッセージ作業ファイルが受理できない。"""
 
-    def __init__(self, pid: int) -> None:
-        super().__init__(f"reviewer process {pid} timed out")
-        self.pid = pid
+
+class ReviewerLaunchError(RuntimeError):
+    """request確定後のレビュアー起動準備に失敗した。"""
 
 
 @dataclass(frozen=True)
@@ -54,27 +54,10 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _require_regular_path(path: Path, repo_root: Path) -> None:
-    relative = path.relative_to(repo_root)
-    current = repo_root
-    for part in relative.parts:
-        current = current / part
-        try:
-            mode = current.lstat().st_mode
-        except OSError as exc:
-            fail(f"レビュアー入力パスを確認できません: {exc}")
-        if current != path and (not stat.S_ISDIR(mode) or current.is_symlink()):
-            fail(f"レビュアー入力の親が実ディレクトリではありません: {current}")
-    if not stat.S_ISREG(path.lstat().st_mode) or path.is_symlink():
-        fail("レビュアー入力は通常ファイルでなければなりません")
-
-
 def checked_request_path(raw_path: str, repo_root: Path) -> Path:
     if REQUEST_PATH_RE.fullmatch(raw_path) is None:
         fail("入力封筒パスが固定監査名に一致しません")
-    path = repo_root / raw_path
-    _require_regular_path(path, repo_root)
-    return path
+    return repo_root / raw_path
 
 
 def checked_reviewer_home() -> Path:
@@ -82,27 +65,57 @@ def checked_reviewer_home() -> Path:
     try:
         mode = reviewer_home.lstat().st_mode
     except OSError as exc:
-        fail(
-            f"独立レビュアー専用CODEX_HOMEを確認できません: {exc}",
-            LAUNCH_ERROR_EXIT_CODE,
-        )
+        raise ReviewerLaunchError(
+            f"独立レビュアー専用CODEX_HOMEを確認できません: {exc}"
+        ) from exc
     if not stat.S_ISDIR(mode) or reviewer_home.is_symlink():
-        fail(
-            "独立レビュアー専用CODEX_HOMEは実ディレクトリでなければなりません",
-            LAUNCH_ERROR_EXIT_CODE,
+        raise ReviewerLaunchError(
+            "独立レビュアー専用CODEX_HOMEは実ディレクトリでなければなりません"
         )
     return reviewer_home
 
 
-def load_timeout_seconds(repo_root: Path) -> int:
-    limits_path = repo_root / "data/config/limits.json"
+def run_review_preflight(
+    repo_root: Path, request_path: Path
+) -> subprocess.CompletedProcess[bytes]:
+    """C12に設定・snapshot・直前requestと適用timeoutを一括確定させる。"""
+
+    relative_request = request_path.relative_to(repo_root).as_posix()
+    set_dir = request_path.parents[1].relative_to(repo_root).as_posix()
+    return subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "flow_control.py"),
+            "review-preflight",
+            "--set-dir",
+            set_dir,
+            "--request",
+            relative_request,
+        ],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def preflight_timeout_seconds(
+    completed: subprocess.CompletedProcess[bytes], request_path: str
+) -> int:
     try:
-        limits = json.loads(limits_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        fail(f"review_timeout_secondsを読み取れません: {exc}")
-    value = limits.get("review_timeout_seconds") if isinstance(limits, dict) else None
+        result = json.loads(completed.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ReviewerLaunchError(f"review preflight結果を読み取れません: {exc}") from exc
+    if not isinstance(result, dict) or set(result) != {
+        "request_path",
+        "review_timeout_seconds",
+    }:
+        raise ReviewerLaunchError("review preflight結果の固定フィールドが不正です")
+    if result["request_path"] != request_path:
+        raise ReviewerLaunchError("review preflight結果のrequest_pathが一致しません")
+    value = result["review_timeout_seconds"]
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        fail("review_timeout_secondsは1以上の整数でなければなりません")
+        raise ReviewerLaunchError("review preflight結果のtimeoutが不正です")
     return value
 
 
@@ -119,7 +132,7 @@ def build_prompt(request_path: str) -> bytes:
 def derived_last_message_path(request_path: Path) -> Path:
     suffix = ".request.json"
     if not request_path.name.endswith(suffix):
-        fail("入力封筒名からCodex作業ファイル名を導出できません")
+        raise ReviewerLaunchError("入力封筒名からCodex作業ファイル名を導出できません")
     stem = request_path.name[: -len(suffix)]
     return request_path.with_name(f"{stem}.codex-last.txt")
 
@@ -160,13 +173,22 @@ def _remove_work_file(path: Path) -> None:
     except FileNotFoundError:
         return
     except OSError as exc:
-        fail(f"Codex作業ファイルを確認できません: {exc}", LAUNCH_ERROR_EXIT_CODE)
+        raise ReviewerOutputError(f"Codex作業ファイルを確認できません: {exc}") from exc
     if stat.S_ISDIR(mode):
-        fail("Codex作業ファイル位置にディレクトリが存在します", LAUNCH_ERROR_EXIT_CODE)
+        raise ReviewerOutputError("Codex作業ファイル位置にディレクトリが存在します")
     try:
         path.unlink()
     except OSError as exc:
-        fail(f"Codex作業ファイルを削除できません: {exc}", LAUNCH_ERROR_EXIT_CODE)
+        raise ReviewerOutputError(f"Codex作業ファイルを削除できません: {exc}") from exc
+
+
+def _discard_work_file(path: Path) -> None:
+    """子終了後の作業ファイル後始末はC12への実結果送信を先取りしない。"""
+
+    try:
+        _remove_work_file(path)
+    except ReviewerOutputError:
+        pass
 
 
 def _read_last_message(path: Path) -> bytes:
@@ -174,11 +196,11 @@ def _read_last_message(path: Path) -> bytes:
     try:
         descriptor = os.open(path, flags)
     except OSError as exc:
-        fail(f"Codex最終メッセージを開けません: {exc}", LAUNCH_ERROR_EXIT_CODE)
+        raise ReviewerOutputError(f"Codex最終メッセージを開けません: {exc}") from exc
     try:
         mode = os.fstat(descriptor).st_mode
         if not stat.S_ISREG(mode):
-            fail("Codex最終メッセージは通常ファイルではありません", LAUNCH_ERROR_EXIT_CODE)
+            raise ReviewerOutputError("Codex最終メッセージは通常ファイルではありません")
         with os.fdopen(descriptor, "rb", closefd=True) as stream:
             descriptor = -1
             payload = stream.read()
@@ -186,7 +208,7 @@ def _read_last_message(path: Path) -> bytes:
         if descriptor >= 0:
             os.close(descriptor)
     if not payload:
-        fail("独立レビュアーの最終メッセージが空です", LAUNCH_ERROR_EXIT_CODE)
+        raise ReviewerOutputError("独立レビュアーの最終メッセージが空です")
     return payload
 
 
@@ -211,6 +233,35 @@ def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
         process.wait()
 
 
+def _merge_timeout_stderr(
+    partial: bytes | str | None, drained: bytes
+) -> bytes:
+    partial_bytes = (
+        partial.encode("utf-8") if isinstance(partial, str) else partial or b""
+    )
+    if not partial_bytes:
+        return drained
+    if not drained:
+        return partial_bytes
+    limit = min(len(partial_bytes), len(drained))
+    pattern = drained[:limit]
+    prefix_lengths = [0] * limit
+    matched = 0
+    for index in range(1, limit):
+        while matched and pattern[index] != pattern[matched]:
+            matched = prefix_lengths[matched - 1]
+        if pattern[index] == pattern[matched]:
+            matched += 1
+        prefix_lengths[index] = matched
+    matched = 0
+    for value in partial_bytes[-limit:]:
+        while matched and value != pattern[matched]:
+            matched = prefix_lengths[matched - 1]
+        if value == pattern[matched]:
+            matched += 1
+    return partial_bytes + drained[matched:]
+
+
 def run_with_timeout(
     command: Sequence[str],
     prompt: bytes,
@@ -229,28 +280,71 @@ def run_with_timeout(
     )
     try:
         stdout, stderr = process.communicate(input=prompt, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         _stop_process_group(process)
-        raise ReviewerTimeoutError(process.pid) from None
+        _discarded_stdout, drained_stderr = process.communicate()
+        stderr = _merge_timeout_stderr(exc.stderr, drained_stderr)
+        return ReviewerProcessResult(TIMEOUT_EXIT_CODE, b"", stderr)
     return ReviewerProcessResult(process.returncode, stdout, stderr)
+
+
+def submit_to_flow_control(
+    repo_root: Path,
+    request_path: Path,
+    result: ReviewerProcessResult,
+) -> subprocess.CompletedProcess[bytes]:
+    """非信頼のreviewer bytesをシェルを介さずC12へ1回渡す。"""
+
+    set_dir = request_path.parents[1].relative_to(repo_root).as_posix()
+    command = [
+        sys.executable,
+        str(repo_root / "scripts" / "flow_control.py"),
+        "review",
+        "--set-dir",
+        set_dir,
+    ]
+    if result.returncode == 0 and result.stdout:
+        command.extend(["--file", "-"])
+        payload = result.stdout
+    else:
+        command.extend(["--process-failure", str(result.returncode)])
+        payload = result.stderr
+    return subprocess.run(
+        command,
+        cwd=repo_root,
+        input=payload,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def relay(completed: subprocess.CompletedProcess[bytes]) -> int:
+    if completed.stdout:
+        sys.stdout.buffer.write(completed.stdout)
+    if completed.stderr:
+        sys.stderr.buffer.write(completed.stderr)
+    return completed.returncode
 
 
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
     request_path = checked_request_path(args.request, repo_root)
-    timeout_seconds = load_timeout_seconds(repo_root)
-    reviewer_home = checked_reviewer_home()
-    codex_path = shutil.which("codex")
-    if codex_path is None:
-        fail("codexコマンドがPATH上にありません", LAUNCH_ERROR_EXIT_CODE)
-
-    last_message_path = derived_last_message_path(request_path)
-    _remove_work_file(last_message_path)
-    child_env = os.environ.copy()
-    child_env["CODEX_HOME"] = str(reviewer_home)
-
+    last_message_path: Path | None = None
     try:
+        preflight = run_review_preflight(repo_root, request_path)
+        if preflight.returncode != 0:
+            raise SystemExit(relay(preflight))
+        timeout_seconds = preflight_timeout_seconds(preflight, args.request)
+        reviewer_home = checked_reviewer_home()
+        codex_path = shutil.which("codex")
+        if codex_path is None:
+            raise ReviewerLaunchError("codexコマンドがPATH上にありません")
+        last_message_path = derived_last_message_path(request_path)
+        _remove_work_file(last_message_path)
+        child_env = os.environ.copy()
+        child_env["CODEX_HOME"] = str(reviewer_home)
         result = run_with_timeout(
             build_command(codex_path, repo_root, last_message_path),
             build_prompt(args.request),
@@ -258,24 +352,29 @@ def main() -> None:
             repo_root,
             child_env,
         )
-    except ReviewerTimeoutError:
-        _remove_work_file(last_message_path)
-        fail(
-            f"独立レビュアーが{timeout_seconds}秒の壁時計期限を超過したため停止しました",
-            TIMEOUT_EXIT_CODE,
+    except (OSError, ReviewerLaunchError, ReviewerOutputError) as exc:
+        if last_message_path is not None:
+            _discard_work_file(last_message_path)
+        result = ReviewerProcessResult(
+            LAUNCH_ERROR_EXIT_CODE,
+            b"",
+            f"独立レビュアーを起動できません: {exc}\n".encode("utf-8"),
         )
-    except OSError as exc:
-        _remove_work_file(last_message_path)
-        fail(f"独立レビュアーを起動できません: {exc}", LAUNCH_ERROR_EXIT_CODE)
 
     if result.returncode != 0:
-        _remove_work_file(last_message_path)
-        if result.stderr:
-            sys.stderr.buffer.write(result.stderr)
-        raise SystemExit(result.returncode if result.returncode > 0 else LAUNCH_ERROR_EXIT_CODE)
+        if last_message_path is not None:
+            _discard_work_file(last_message_path)
+    else:
+        assert last_message_path is not None
+        try:
+            payload = _read_last_message(last_message_path)
+        except ReviewerOutputError:
+            result = ReviewerProcessResult(result.returncode, b"", result.stderr)
+        else:
+            result = ReviewerProcessResult(0, payload, result.stderr)
+        _discard_work_file(last_message_path)
 
-    payload = _read_last_message(last_message_path)
-    sys.stdout.buffer.write(payload)
+    raise SystemExit(relay(submit_to_flow_control(repo_root, request_path, result)))
 
 
 if __name__ == "__main__":

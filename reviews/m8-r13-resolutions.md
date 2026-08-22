@@ -1,0 +1,2 @@
+- R13-01: 承認済みM8D-13としてラッパー内部専用review-preflightの固定argv・検査順・正常出力・エラー・state寿命を正文化し、C12へ通常ファイル性と正準request再構築照合を集約してhelp・必須引数・欠落・直前action不一致・改変・正常系を回帰化した (`DECISIONS.md`, `docs/architecture.md`, `docs/cross-agent-compatibility.md`, `scripts/flow_control.py`, `.claude/run_reviewer.py`, `.codex/run_reviewer.py`, `tests/unit/test_flow_control.py`)
+- R13-02: CI-R-03を製品関数・JSON書込みsinkへ到達する値のファイル・関数限定allowlist由来を追跡するfail-closed検査へ改め、文字列・bytesの静的payload、未知decoder/helper、許可名の局所偽装、偽stdout、書込み迂回を拒否する自己負回帰を追加した (`tests/unit/test_fixtures.py`)

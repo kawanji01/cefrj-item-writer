@@ -1,0 +1,8 @@
+{
+  "detail": {
+    "path": "schemas/review_result.schema.json"
+  },
+  "error_code": "E-ENV-04",
+  "message": "E-ENV-04 スキーマファイルを読み取れません",
+  "remedy": "git statusで欠落ファイルを確認してください。"
+}

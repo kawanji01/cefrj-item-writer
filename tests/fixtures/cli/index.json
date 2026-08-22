@@ -1,0 +1,124 @@
+{
+  "cases": [
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "audit_process_failure_empty.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cleanup_warning.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_contract_01.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_contract_03.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_contract_04.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_data_08.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_env_04.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "cli05_e_input_03.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "finalize_success.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "invalid_cli05_code_type.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "invalid_cli05_missing.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "invalid_cli05_unknown_code.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "machine_dispute_measurement.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "machine_dispute_pos_tagging.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    },
+    {
+      "expected": "契約JSONの厳密な受理または拒否",
+      "file": "validate_set_success.json",
+      "purpose": "子CLI境界の正準・不当JSON fixture",
+      "test_ids": [
+        "CI-R-03"
+      ]
+    }
+  ]
+}

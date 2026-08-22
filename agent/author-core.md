@@ -597,7 +597,46 @@ bodyは `source_sentence`、`instruction`、`target_sentence_with_blank`、`answ
 
 bodyは `example.en`、`example.ja`、`context_sentence`、`context_required_by` を持つ。解説はdetailedで3部構成にする。適用規則はGEN-05〜GEN-11、GEN-19、GEN-21〜GEN-23、GEN-25。
 
-## 6. candidate・機械検査の配線と監査保存
+## 6. 決定的フロー制御CLIとのイベント配線
+
+S80以降の世代管理、candidate/review_result受理検証、機械検査、review_request構築、合否集計、set_check、補充・代替ID、スロット終端監査、教師照会データ、FIN-01、finalizeは `scripts/flow_control.py` だけに実行させる。ホストLLMはこれらを会話内で再実装・上書きしてはならない。ホストが担当する境界は、同CLIのactionに応じたcandidate生成と独立レビュー起動の2点だけである。
+
+S70で条件が確定したら、S00の設定スナップショットと確定条件からCLI-32のinit入力を作り、次を1回だけ実行する。`targets`は明示モードでは初期N対象、提案モードではlookup返却順の初期N対象と補充プールを合わせた最大`min(2N,20)`件とする。
+
+```text
+python scripts/flow_control.py init --set-dir output/<set_id> --file -
+```
+
+以後はstdoutの `action` だけで分岐する。
+
+- `generate_candidate`: `question_id`、`generation`、`target_ref`、`regeneration`を第4・5節へ適用してcandidate生出力を生成する。生出力を `candidate_output_number` に対応する `output/<set_id>/.staging/<question_id>.<generation>.candidate.raw<1|2>.json` へ排他的に保存し、次を実行する。受理・invalid監査・raw削除・機械検査・request構築・次世代判定はCLI出力に従う。
+
+```text
+python scripts/flow_control.py candidate --set-dir output/<set_id> \
+  --file output/<set_id>/.staging/<question_id>.<generation>.candidate.raw<1|2>.json
+```
+
+- `run_review`: `request_path`を一切変更せず、第7節の当該ホスト用固定ラッパーを1回実行する。ラッパーが返したstdoutのactionまたはstderrのCLIエラーだけを処理し、actionが再び`run_review`の場合だけ同じrequestでラッパーを再実行する。レビュアーの生stdout/stderrをホストからC12へ再送しない。
+
+- `teacher_consult`: `consultation.generations`、確定数/要求数、試行対象総数/上限、`choices`を非改変でDLG-81/DLG-82へ展開する。教師回答を原本照合した後、提示済みの選択肢だけを `decide --decision alternative|reduce|abort` へ渡す。`alternative`だけは照合済み`--target-ref`を付ける。
+- `completed`: `set.json`完成として `build_html.py` を実行しS90へ進む。`warning_code`がある場合は`message`・`remedy`・`detail.temp_path`を非改変でIF-51aへ展開し、finalizeを再実行しない。
+- `aborted`: `set.json`を作成せずS99へ進む。`error`がある場合はそのCLI-05完全形を非改変でIF-52へ展開し、教師選択による中止と区別する。
+
+CLI終了コード1ではstderrのCLI-05エラーを非改変で提示して中止し、終了コード2は内部バグとして停止する。`.staging/flow-state.json`はCLI専用であり、ホストが読取り・編集・削除してはならない。
+
+## 7. 独立レビューのホスト境界
+
+`run_review` actionを受けたときだけ、生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用固定ラッパーを実行する。Claude Codeでは `python .claude/run_reviewer.py --request <request_path>`、Codexでは `python .codex/run_reviewer.py --request <request_path>` を使う。ラッパーはレビュアーの生stdout/stderrと実終了コードをシェル不使用で`flow_control.py review`へ渡し、同CLIのactionまたはCLIエラーを返す。ホスト自身で生出力をシェルコマンドへ展開したり、スキーマ判定・再実行回数・世代消費を決めたりしない。
+
+## 8. 教師照会と完了
+
+教師照会の表示文言は `docs/interaction-flow.md`、選択肢と代替対象の原本照合は同文書に従う。構造化された不成立理由、世代別監査参照、確定数、試行数は `flow_control.py` の出力を正とする。完了後のFMT-90と中止時のIF-52だけをホストが表示し、監査内容や確定集合を会話内で再集計しない。
+
+## 11. flow_control.py内部契約（ホストによる再実装禁止）
+
+以下の旧来の詳細手順は `scripts/flow_control.py` が満たす内部要件として残す。各項の「実行する」「保存する」「構築する」の主語は同CLIであり、ホストLLMやテストハーネスが個別に実行してはならない。
+
+### 11.1 candidate・機械検査の配線と監査保存
 
 各問題をq番号順に1問ずつ処理する。並行生成しない。
 
@@ -639,9 +678,9 @@ python scripts/machine_check.py \
 8. `verdict` に応じてFMT-80bの「機械検査 合格」または「機械検査 不合格（コード列挙）」だけを表示する。
 9. 機械検査の合否にかかわらず、第7節の独立レビューを実行する。機械検査failをレビュー結果で覆さない。
 
-## 7. 独立レビューの配線
+### 11.2 独立レビューの配線
 
-### 7.1 review_requestの構築
+#### 11.2.1 review_requestの構築
 
 各世代についてcandidateとmachine_reportをそれぞれのスキーマで再検証し、次の `review_request` を構築する。
 
@@ -652,15 +691,15 @@ python scripts/machine_check.py \
 
 構築した封筒を`output/<set_id>/.staging/<question_id>.<gen>.request.raw.json`へ排他的に新規作成する。同名が存在する場合は変更・削除せず`E-DATA-07`でS99へ遷移する。`python scripts/validate.py --schema review_request --file output/<set_id>/.staging/<question_id>.<gen>.request.raw.json` を通過させ、正準化した同じ封筒をレビュアー起動直前に `<question_id>.<gen>.request.json` として排他的に保存する。正規request監査の保存成功後に一時ファイルだけを削除する。不通過は `E-CONTRACT-01` として処理した後で一時ファイルだけを削除してセットを中止し、LLM判断で修復しない。
 
-### 7.2 起動と出力受理
+#### 11.2.2 起動と出力受理
 
-生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行の壁時計タイムアウトにする。超過時は実行中のレビュアーを停止する。直前に現在の設定ファイルとスナップショットが一致することを確認してから、Claude Codeでは`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`、Codexでは`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`を当該ホスト用配線で実行し、ラッパーの終了コード0かつ非空stdoutの場合だけ生テキストを取り込む。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
+生成側の会話履歴や他問題、過去世代を渡さず、`docs/cross-agent-compatibility.md` の当該ホスト用配線で毎回新しい独立コンテキストを起動する。起動プロンプトはCOR-07の3要素だけとし、セッション設定スナップショットの `review_timeout_seconds` を1実行の壁時計タイムアウトにする。超過時は実行中のレビュアーを停止する。直前に現在の設定ファイルとスナップショットが一致することを確認してから、Claude Codeでは`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`、Codexでは`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`を当該ホスト用配線で実行する。ラッパーがレビュアーの生stdout/stderrをCOR-08の固定argv・バイトstdinでC12へ渡して返したactionまたはCLIエラーだけを取り込み、ホストは生出力を再転送しない。レビュアーの読み取りは封筒と7.1節の8リソースだけ、書き込みとネットワークは不可とする。
 
-最終メッセージはCOR-08の順序で取り込む。ホストがbytesを返す場合はその生バイト列、文字列を返す場合はstrict UTF-8で1回だけエンコードした生バイト列を、JSONパース・再直列化より先に取得する。テキスト全体のJSONパースを先に試し、失敗時だけ最初のJSONコードフェンス内を試し、`python scripts/validate.py --schema review_result --file -` でスキーマと全string値・object keyのstrict UTF-8表現可能性を検証する。スキーマでは表現できないRR-01〜RR-05違反も受理しない。通過後も同じJSONをJS-01正準形へstrict UTF-8で直列化し、その同じ正準バイト列だけを `<question_id>.<gen>.review.json` に排他的に保存する。保存成功時だけ、その `machine_check_disputes[]` の要素数を `machine_check_dispute_count` へ1回加算する。invalid出力や同じ監査ファイルの再読込みでは加算せず、異なる問題・世代の各要素は独立して数える。
+最終メッセージの受理はC12だけがCOR-08の順序で行う。固定ラッパーはレビュアーの生stdout/stderrと実終了コードをシェル不使用の固定argv・バイトstdinでC12へ1回渡す。C12はJSONパース・再直列化より先に生バイト列を取得し、テキスト全体をJSON文書1個として解析してreview_resultスキーマ、全string値・object keyのstrict UTF-8表現可能性、RR-01〜RR-05、JS-01正準化を検査する。通過した同じ正準バイト列だけを `<question_id>.<gen>.review.json` に排他的に保存し、保存成功時だけ `machine_check_disputes[]` の要素数を `machine_check_dispute_count` へ1回加算する。invalid出力や同じ監査ファイルの再読込みでは加算せず、異なる問題・世代の各要素は独立して数える。ホストは生出力の取得・再送・コードフェンス抽出・検証・正準化・監査保存を行わない。
 
 プロセス異常、タイムアウト、空出力、パース不能、review_resultのスキーマ・RR記入規則不通過、全string値・object keyのstrict UTF-8符号化不能、またはJS-01正準化失敗は問題品質の不合格にも世代消費にも数えない。同一のrequestを変更せず最大2回再実行し、各失敗を `review.invalid1.txt`、`review.invalid2.txt`、`review.invalid3.txt` にAUD-09の正準JSON封筒で直ちに排他的保存する。非空の生出力バイト列があれば`validation_failure`として全文を`raw_output_base64`へバイト完全保存し、失敗段階・例外型・理由・位置を`diagnostic`へ入れる。ホスト文字列しか得られずstrict UTF-8化不能なら`utf8_encode_failure`、プロセス異常・タイムアウト・空出力なら`process_failure`を使う。1・2回目はFMT-80b事象11、初回を含む3実行全てが失敗したらT7のインフラ障害としてS99へ遷移し、`set.json`を書かない。
 
-## 8. 世代判定とセット横断検査
+### 11.3 世代判定とセット横断検査
 
 1. machine_reportがfail、またはreview_resultがfailなら世代failである。レビューは機械failをpassへ変更できない。レビューfail時はFMT-80b事象7を表示する。現在世代が `generation_max` 未満ならPRM-12の直前世代入力だけで次世代へ進みFMT-80b事象8を表示し、最終世代なら不成立として第9節へ進む。
 2. machine_reportとreview_resultがともにpassのときだけ、次を実行する。
@@ -672,7 +711,7 @@ python scripts/set_check.py --set-dir output/<set_id> --target <question_id>
 3. stdoutを `review/set_check.<question_id>.<gen>.json` に排他的保存する。failでもCLI終了コード0であり、判定を覆さない。failならFMT-80b事象14を表示し、現在世代が上限未満ならそのset_check違反もPRM-12へ含めて次世代へ進み、最終世代なら不成立とする。
 4. set_checkもpassのときだけT10のACCEPTEDとする。当該論理スロットについて、初期IDを`slot_question_id`、このスロットへ割り当てた全IDを割当順で`attempted_question_ids`、現在IDを`accepted_question_id`とし、AUD-11の6フィールドだけを持つ`review/slot.<slot_question_id>.outcome.json`を正準JSONで直ちに排他的保存する。`status`は`accepted`、`teacher_decision`はnullとする。保存後にFMT-80b事象6を表示して確定済み数を増やし、次のquestion_idへ進む。
 
-## 9. 不成立、補充、教師照会
+### 11.4 不成立、補充、教師照会
 
 試行対象総数は初期対象、補充、代替を合わせて要求数Nの2倍以下とする。提案モードではS35のlookup返却順の未採用候補を補充プールとして保持し、不成立時に先頭から決定的に補充する。補充・代替には割当済みIDを再利用せず、`q01`〜`q20` の未使用最小IDを割り当てる。
 
@@ -680,7 +719,7 @@ python scripts/set_check.py --set-dir output/<set_id> --target <question_id>
 
 代替指定は上限未満かつ未使用IDありの場合だけ提示し、S32と同じ原本照合後にgen1から実行する。教師が減数を選択した場合は、当該論理スロットの初期ID、割り当てた全IDを使ってAUD-11の`review/slot.<slot_question_id>.outcome.json`を正準JSONで直ちに排他的保存する。`status`は`reduced`、`accepted_question_id`はnull、`teacher_decision`は`reduce`とする。提案モードで未処理の初期論理スロットが残る場合、DLG-82の続行は現在のスロットだけをこの方法で減数にし、残りの初期対象を元の順序で補充なしに処理する。この場合は確定済み0件でも続行を提示し、未着手スロットを一括で減数にしない。未処理初期スロットがない場合だけ、確定済み1件以上なら減数後に最終確定を提示し、確定済み0件なら中止だけとする。S99では監査を残し、`set.json`を書かない。S80開始後にS99へ遷移した場合は、IF-52の監査保存文の直後に`機械検査誤検出疑い {machine_check_dispute_count}件（詳細は監査ファイル参照）`を0件でも表示する。S80開始前の中止では表示しない。
 
-## 10. 最終セット検査と確定
+### 11.5 最終セット検査と確定
 
 1問以上が確定し全スロットの処理が終わり、初期ID`q01`〜`qNN`に対応するN件のスロット終端監査を保存済みであることを確認したらFMT-80b事象12を表示し、次を実行する。
 

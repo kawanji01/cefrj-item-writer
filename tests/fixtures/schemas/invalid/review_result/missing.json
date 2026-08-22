@@ -7,8 +7,8 @@
     },
     {
       "check_id": "CHK-02",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-03",
@@ -27,13 +27,13 @@
     },
     {
       "check_id": "CHK-06",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-07",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-08",
@@ -42,8 +42,8 @@
     },
     {
       "check_id": "CHK-09",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-10",
@@ -67,8 +67,8 @@
     },
     {
       "check_id": "CHK-14",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-15",
@@ -77,13 +77,13 @@
     },
     {
       "check_id": "CHK-16",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "形式⑥のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-17",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "例文が1文のため",
+      "result": "not_applicable"
     },
     {
       "check_id": "CHK-18",
@@ -92,14 +92,39 @@
     },
     {
       "check_id": "CHK-19",
-      "note": "テスト用記録で適用項目を確認しました。",
-      "result": "pass"
+      "note": "トピック指定なしのため",
+      "result": "not_applicable"
     }
   ],
   "generation": "gen1",
   "machine_check_disputes": [],
   "question_id": "q01",
-  "sentence_grammar_inventory": [],
+  "sentence_grammar_inventory": [
+    {
+      "evidence": "教員版 gp:1 のレベル A1.1-A1.2 を引用しました。",
+      "grammar_item_id": "gp:1",
+      "level": "A1.1-A1.2",
+      "level_source": "kyoinban",
+      "span": "I am",
+      "structure": "人称代名詞主格(I)+be: I am"
+    },
+    {
+      "evidence": "教員版 gp:33 のレベル A1.1-B1.2 を引用しました。",
+      "grammar_item_id": "gp:33",
+      "level": "A1.1-B1.2",
+      "level_source": "kyoinban",
+      "span": "very happy",
+      "structure": "副詞(強意)"
+    },
+    {
+      "evidence": "教員版 gp:58 のレベル A1.1 を引用しました。",
+      "grammar_item_id": "gp:58",
+      "level": "A1.1",
+      "level_source": "kyoinban",
+      "span": "am",
+      "structure": "時制・相(現在)(be動詞)"
+    }
+  ],
   "set_id": "20990101-000000-rpl1",
   "verdict": "pass",
   "violations": []

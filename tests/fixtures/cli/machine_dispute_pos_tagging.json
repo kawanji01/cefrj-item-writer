@@ -1,0 +1,8 @@
+{
+  "claim": "正しくはabandonが指定レベル内として照合されるはずです。",
+  "dispute_type": "pos_tagging",
+  "evidence": "対象語は原本でlex:abandon:verbです。",
+  "location": "body.example.en token 2: \"abandon\"",
+  "machine_violation_code": "V-LEX-02",
+  "suggested_correction": "品詞照合規則を確認してください。"
+}

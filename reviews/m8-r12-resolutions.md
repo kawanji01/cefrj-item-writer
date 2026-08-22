@@ -1,0 +1,1 @@
+- R12-01: C12 preflightで実requestをstrict JSON・review_requestスキーマへ再検証し、現在stateから再構築したJS-01正準バイト列との完全一致を必須化して、両ラッパーの4種改変を子起動前に拒否する回帰を追加した (`scripts/flow_control.py`, `tests/unit/test_flow_control.py`)

@@ -1,0 +1,8 @@
+{
+  "detail": {
+    "temp_path": "output/20990101-000000-rpl1/.set.json.tmp.1234.0123456789abcdef0123456789abcdef"
+  },
+  "message": "set.jsonは完成しましたが一時リンクを削除できませんでした",
+  "remedy": "set.jsonを変更せず、権限を確認して表示された一時リンクだけを削除してください。finalize_set.pyは再実行しないでください。",
+  "warning_code": "W-CLEANUP-01"
+}

@@ -1,0 +1,2 @@
+- R10-01: CHK-03上限超過inventoryとviolationを配列index単位の最大二部マッチングで一対一対応させ、同一span・level・evidenceの別構造2件をviolation 1件では拒否、2件では受理し、余剰violationも拒否する回帰検査を追加した (`scripts/flow_control.py`, `tests/unit/test_flow_control.py`)
+- R10-02: CI-R-03の静的追跡をJSON文字列復元・文字列定数伝播・辞書alias・反復/計算キー・辞書内包・zip・setdefault/setitemへ拡張し、指摘3反例を含む自己負ケースを追加した (`tests/unit/test_fixtures.py`)

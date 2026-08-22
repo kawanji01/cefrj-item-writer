@@ -14,7 +14,7 @@
 
 - **COR-01** 挙動規則は次の2箇所にのみ置かなければならない(MUST)。
   1. 共通コア指示書: `agent/author-core.md`（作問エージェント指示書。内容要件の正は `docs/interaction-flow.md` と `docs/question-generation-spec.md`）、`agent/reviewer-core.md`（レビュアー指示書。内容要件の正は `docs/subagent-review-spec.md`）。
-  2. 決定的スクリプト: `scripts/` のCLI 8本（契約の正は `docs/architecture.md` 第5節）。
+  2. 決定的スクリプト: `scripts/` のCLI 9本（契約の正は `docs/architecture.md` 第5節）。
 - **COR-02** アダプタ（Claude Code: `CLAUDE.md`・`.claude/` 配下、Codex: `AGENTS.md`・`.codex/` 配下）は配線のみとし、次を書いてはならない(MUST NOT): 数値制約（語数上限・問題数・世代数）、検証項目・判定規則、対話の質問文テンプレート、生成制約、エラー文言、レベル体系の解釈規則。アダプタに書いてよい(MAY)のは、コア指示書の読込指示・CLI実行の配線・レビュアー起動の配線・ツール固有の設定値のみである。
 - **COR-03** 両アダプタは、同一の入力に対して同一のコア指示書と同一のCLIを同一の順序で使わなければならない(MUST)。ツール間で異なってよい(MAY)のは、レビュアーの起動機構（第3節・第4節）とツール固有の設定形式のみである。
 - **COR-04** 挙動を変更する場合はコア指示書または決定的スクリプト（と対応する設計文書）を変更しなければならず(MUST)、アダプタ側で挙動差を作ってはならない(MUST NOT)。
@@ -24,7 +24,8 @@
 
 - **COR-06** レビュアー起動は「1問1独立レビュー・再生成のたび新実行・文脈持ち越しなし」でなければならない(MUST)。両アダプタとも、起動ごとに新しい独立コンテキストを作る非対話サブプロセス（Claude Code=`.claude/run_reviewer.py`が監視する`claude -p`、Codex=`.codex/run_reviewer.py`が監視する`codex exec`）を使う。
 - **COR-07** レビュアーへ渡す起動プロンプトは配線文のみで構成しなければならない(MUST)。含める要素は次の3つに限る: ①`agent/reviewer-core.md` を読みそれに完全に従う指示、②入力封筒（review_request 準拠JSON。ファイル名・保存位置の正は `docs/subagent-review-spec.md`）のファイルパス、③最終出力を review_result JSON本文のみとする指示。検証規則・チェック項目を起動プロンプトに書いてはならない(MUST NOT)。
-- **COR-08** レビュアーの最終出力の取り込み手順は両ツール共通で次のとおりとする(MUST)。①最終メッセージの生出力をbytesまたはホスト文字列として取得 → ②テキスト全体をJSONとしてパースし、失敗した場合に限り最初のコードフェンス（```json または ``` で囲まれた区間）の内側をパースする → ③`python scripts/validate.py --schema review_result --file -` でスキーマと全string値・object keyのstrict UTF-8表現可能性を検証 → ④同じJSONをJS-01正準形へstrict UTF-8で直列化 → ⑤同じ正準バイト列だけを監査ファイル `review/<question_id>.<gen>.review.json` として保存（配置の正は `docs/subagent-review-spec.md`）。②〜④のいずれかに失敗した場合はインフラ障害（問題の不合格に数えない。同一requestで最大2回再実行→3回目失敗でセット中止）として扱う。invalid監査には、bytes取得済みなら`validation_failure`へ生出力全文と失敗段階の診断、文字列だけ取得してstrict UTF-8化不能なら`utf8_encode_failure`、出力なしなら`process_failure`を保存する。インフラ障害の判定・再実行・中止規則の正は `docs/subagent-review-spec.md`。
+- **COR-08** レビュアーの最終出力の取り込みは両ツール共通で、固定ラッパー自身がレビュアーの生stdoutをJSONパース・再直列化せず、シェル不使用の固定argvで起動した`python scripts/flow_control.py review --set-dir output/<set_id> --file -`のstdinへバイト列のまま渡さなければならない(MUST)。プロセス非0・期限超過・空出力では、実終了コードと生stderrを同じ方法で`review --process-failure <exit_code>`へ渡す。空出力かつ終了コード0は実終了コード0の`process_failure`とする。reviewer stdout/stderrをシェルコマンド文字列、ヒアドキュメント、一時rawファイルへ展開してはならない(MUST NOT)。同CLIは、テキスト全体のJSONパース、`review_result`スキーマと全string値・object keyのstrict UTF-8表現可能性、JS-01正準化、正準監査保存、invalid監査、同一request最大2回再実行action、3回目失敗時の中止を一元管理する。ラッパーは同CLIのstdout/stderr/終了コードを非改変で呼出し側へ返し、ホストとラッパーが受理判定・再実行回数・世代消費を決めてはならない(MUST NOT)（M8D-10）。
+- **COR-08a** 両固定ラッパーは子レビュアー起動前に、シェル不使用の固定argv `python scripts/flow_control.py review-preflight --set-dir output/<set_id> --request output/<set_id>/review/<question_id>.<gen>.request.json` を1回実行しなければならない(MUST)（M8D-13）。正常時はC12が返す`request_path`と`review_timeout_seconds`だけを使用して子を起動する。非0時はC12のstdout/stderr/終了コードを非改変で呼出し側へ返し、子を起動してはならない(MUST NOT)。このサブコマンドはラッパー内部専用であり、ホストへ直接実行させてはならない(MUST NOT)。検査内容・エラーコード・state寿命の正は`docs/architecture.md` CLI-33aとする。
 - **COR-09** レビュアー実行のタイムアウト値と超過時の扱いの正は `docs/subagent-review-spec.md` とする。両アダプタはその値をレビュアーのサブプロセス全体の壁時計待機に適用し、超過時は実行中のプロセスを停止しなければならない(MUST)。
 
 ## 3. Claude Code 配線
@@ -53,18 +54,18 @@
   - `description`: 日本語。「生成済み候補問題のCEFR-J適合性を独立に厳格検証する専用レビュアー。作問オーケストレータがレビュー工程で必ず使用する」という役割と使用契機を含める。
   - `tools`: `Read, Grep, Glob` のみを許可する。Write・Edit・Bash・ネットワーク系ツールを許可してはならない(MUST NOT)（レビュアーは読み取り専用。出力は最終メッセージのJSONのみ）。
 - **CCW-08** 定義ファイル本文は配線文のみとし(MUST)、次の3点で構成する: ①`agent/reviewer-core.md` を読みそれに完全に従う指示、②読み取りを許可する対象の列挙（入力封筒ファイル・`agent/reviewer-core.md`・`docs/cefrj-validation-spec.md`・`docs/subagent-review-spec.md`・`data/normalized/` 配下・`data/config/` 配下。これ以外のファイルを読んではならない旨）、③最終メッセージは review_result JSON本文のみとし、JSON以外の文章を出力しない指示。
-- **CCW-09** オーケストレータは、レビュー工程で`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`を実行しなければならない(MUST)。ラッパーは新規`claude -p`を`--safe-mode`、`--system-prompt-file agent/reviewer-core.md`、`--tools Read,Grep,Glob`、`--permission-mode dontAsk`、`--no-session-persistence`、`--no-chrome`、空の`--strict-mcp-config`で起動し、COR-07の3行だけをstdinへ渡す。生成側の会話内容・過去世代のレビュー内容、CLAUDE.md、ユーザー・プロジェクト設定、skills、plugins、MCPを子へ含めてはならない(MUST NOT)。レビュアーはBash・書込み・ネットワーク系ツールを持たない。Bashサンドボックスは子Claude実行基盤のモデル通信に必要な`api.anthropic.com`だけを許可し、この通信をレビュアーへ付与するネットワークツールとみなさない。他ドメインを許可してはならない(MUST NOT)（M7D-14）。ラッパーは検証済みでセッションスナップショットと一致する現在の`limits.json`から`review_timeout_seconds`を読み、子プロセスグループ全体へ壁時計期限を適用する。超過時は子を停止して非0終了し、INF-07へ返す。ラッパー自身は再実行・中止判定を行わない（M7D-13）。
-- **CCW-10** ラッパーが終了コード0で返したstdoutの生テキストだけを最終メッセージとして COR-08 の手順で取り込む(MUST)。終了コード非0、空stdout、期限超過はインフラ障害として扱う。`.claude/settings.json`は固定requestパスのラッパー呼出しだけを許可し、PreToolUseガードがコマンド全文を検査しなければならない(MUST)。
+- **CCW-09** オーケストレータは、レビュー工程で`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`を実行しなければならない(MUST)。ラッパーはCOR-08aのC12 preflightが終了0の場合だけ、新規`claude -p`を`--safe-mode`、`--system-prompt-file agent/reviewer-core.md`、`--tools Read,Grep,Glob`、`--permission-mode dontAsk`、`--no-session-persistence`、`--no-chrome`、空の`--strict-mcp-config`で起動し、COR-07の3行だけをstdinへ渡す。生成側の会話内容・過去世代のレビュー内容、CLAUDE.md、ユーザー・プロジェクト設定、skills、plugins、MCPを子へ含めてはならない(MUST NOT)。レビュアーはBash・書込み・ネットワーク系ツールを持たない。Bashサンドボックスは子Claude実行基盤のモデル通信に必要な`api.anthropic.com`だけを許可し、この通信をレビュアーへ付与するネットワークツールとみなさない。他ドメインを許可してはならない(MUST NOT)（M7D-14）。ラッパーはpreflightが返した`review_timeout_seconds`を子プロセスグループ全体へ壁時計期限として適用する。超過時は子を停止してINF-07の終了コード124とstderrをCOR-08へ渡す。ラッパー自身は再実行・中止判定を行わない（M7D-13、M8D-10、M8D-13）。
+- **CCW-10** ラッパーはレビュアーの生stdout/stderrと実終了コードをCOR-08のshell-free bridgeでC12へ渡し、C12が返したactionまたはCLIエラーをstdout/stderr/終了コードとも非改変で呼出し側へ返さなければならない(MUST)。`.claude/settings.json`は固定requestパスのラッパー呼出しだけを許可し、PreToolUseガードがコマンド全文を検査しなければならない(MUST)。
 
 ### 3.4 権限設定
 
 - **CCW-11** プロジェクト設定 `.claude/settings.json` の `permissions` は次の要件を満たさなければならない(MUST)。
-  - allow: `scripts/` のCLI 8本（`doctor.py` / `build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `lookup.py`）を `python` で実行するBashコマンド、およびリポジトリ配下のファイル読み取り・`output/` 配下への書き込み。
-  - allow: M7D-12の`output/<set_id>/.staging/`固定一時名に対するcandidate/review_request検証と専用削除ヘルパー。candidateは`<question_id>.<gen>.candidate.raw<1|2>.json`、review_requestは`<question_id>.<gen>.request.raw.json`だけを許可し、PreToolUseガードが一時ファイルの新規作成時に既存名との衝突を拒否し、検証コマンドのschemaとパス種別の組合せ、削除コマンド全文を検査する。汎用削除、監査正本の削除、別名・追加引数・複合コマンドを許可してはならない(MUST NOT)。
+  - allow: `scripts/` のCLI 9本（`doctor.py` / `build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `lookup.py` / `flow_control.py`）を `python` で実行するBashコマンド、およびリポジトリ配下のファイル読み取り・`output/` 配下への書き込み。`flow_control.py`のホスト側Bash呼出しはinit/candidate/decide/statusの固定形だけを許可し、reviewは固定ラッパー内部のシェル不使用子プロセスからだけ実行する。専用PreToolUseガードはset_id一致、initの単引用符付きstdin、candidate raw名、教師判断引数を検査し、`REV02`/`ERR02`ヒアドキュメントを含む直接review呼出しを拒否しなければならない(MUST)。
+  - allow: M8D-09の`output/<set_id>/.staging/`固定一時名に対するcandidate provider入力とC12専用`flow-state.json`。candidateは`<question_id>.<gen>.candidate.raw<1|2>.json`だけをホストが排他的に作成でき、受理後の削除と`flow-state.json`の作成・置換・削除は`flow_control.py`だけに許可する。ホストによるflow-stateの読取り・編集・削除、汎用削除、監査正本の削除、別名・追加引数・複合コマンドを許可してはならない(MUST NOT)。
   - allow: CCW-09の`python .claude/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`だけを許可し、PreToolUseガードが固定相対パスとコマンド全文を検査する。追加引数、環境変数代入、リダイレクト、パイプ、複合コマンドを許可してはならない(MUST NOT)。
   - allow: Bashサンドボックスの`network.allowedDomains`は`api.anthropic.com`だけとし、固定レビュアー子プロセスのモデルAPI通信に使う。他ドメイン、ワイルドカード、汎用ネットワークコマンドを許可してはならない(MUST NOT)（M7D-14）。
   - allow: `finalize_set.py`に限り、`output/`配下のset-dirを指定し、区切り語を単引用符で囲んだ`FIN01`ヒアドキュメントから必須のFIN-01 JSONをstdinへ渡す専用Bashコマンド。パイプ、中間メタデータファイル、コマンド置換、区切り語後の追加コマンドを許可してはならない(MUST NOT)。
-  - allow: `validate.py --schema review_result --file -`に限り、区切り語を単引用符で囲んだ`REV01`ヒアドキュメントからCOR-08のreview_result JSONをstdinへ渡す専用Bashコマンド。権限ルールは固定validateコマンドの接頭辞だけを許可し、PreToolUseガードが固定先頭行・終端区切り、本文がJSON object 1個であることをコマンド全文で検査する。パイプ、シェルが解釈する位置のコマンド置換、区切り語後の追加コマンドを許可してはならない(MUST NOT)（M7D-10）。単引用符付きヒアドキュメント本文中の文字列はシェル展開されず、review_resultの非改変データとして扱う。
+  - allow: `validate.py --schema review_result --file -`の`REV01`ヒアドキュメント許可は標準フローに使用しない。review_result受理検証はCOR-08の固定ラッパー内部からC12が子CLIとして実行し、ホスト側Bashへ生出力を展開してはならない(MUST NOT)（M8D-10）。
   - allow: S80開始時の識別子生成に限り、タイムゾーン付きローカル日時を秒精度で1回取得し、同じ日時から`created_at`と`set_id`を生成し、既存`output/<set_id>`との衝突時は同じ日時のまま4文字接尾辞だけを再生成する、`.claude/settings.json`記載の引数なし固定`python -c`コマンド。許可ルールはコマンド全文の完全一致とし、ワイルドカード、追加引数、標準入力、ファイル書込み、ネットワークアクセスを許可してはならない(MUST NOT)。
   - deny: WebFetch・WebSearch を含むネットワークアクセス系ツール（決定的処理の完全オフライン要件。`docs/architecture.md` ARC-05）。
 - **CCW-12** 権限設定はセッション中の追加確認なしに標準フロー（対話→生成→一時保存での受理検証→監査保存→機械検査→期限付き独立レビュー→確定→HTML）を完走できる範囲とすべきであり(SHOULD)、リポジトリ外への書き込み許可を含めてはならない(MUST NOT)。完成セットでは`.staging/`が存在しないか空でなければならない(MUST)。セットアップ処理外の決定的CLIは完全オフラインとし、M7D-14のモデルAPI通信を決定的CLIの通信許可へ流用してはならない(MUST NOT)。
@@ -84,7 +85,7 @@
   python .codex/run_reviewer.py --request <入力封筒パス>
   ```
 
-  ラッパーは、固定監査名に一致する通常ファイルのrequest 1件だけを受理し、検証済みでセッション設定スナップショットと一致する現在の`limits.json`から`review_timeout_seconds`を読む。次の固定argvをシェル不使用で構築し、COR-07の3行をstdinへ渡して、新しいプロセスグループで1回だけ起動しなければならない(MUST)。`<repo>`、`<codex>`、`<codex-last>`はラッパーが固定規則で解決・導出し、呼出し側から指定させてはならない(MUST NOT)。
+  ラッパーは、固定監査名に一致するrequest 1件についてCOR-08aのC12 preflightを実行し、終了0で通常ファイル性・設定・state・内容が検証された場合だけ、返された`review_timeout_seconds`を適用する。次の固定argvをシェル不使用で構築し、COR-07の3行をstdinへ渡して、新しいプロセスグループで1回だけ起動しなければならない(MUST)。`<repo>`、`<codex>`、`<codex-last>`はラッパーが固定規則で解決・導出し、呼出し側から指定させてはならない(MUST NOT)。
 
   ```text
   CODEX_HOME="${HOME}/.codex-cefrj-reviewer" <codex> exec \
@@ -111,7 +112,7 @@
   - `--ephemeral`: 起動ごとに新しい独立コンテキストを作り、レビュアーのセッション状態を永続化しない。
   - `--cd <repo>` / `--sandbox read-only`: 作業ディレクトリをリポジトリルートに固定し、レビュアーに書込みを許可しない（COR-05）。
   - `--skip-git-repo-check`: git管理状態に依存せず起動可能にする。
-  - `--output-last-message <codex-last>`: requestパスからCDX-06の固定名へ導出した作業ファイルに最終メッセージを書き出す。ラッパーは既存の同名作業ファイルだけを起動前に削除してよく(MAY)、成功時に通常ファイル・非シンボリックリンク・非空を確認して生バイト列をstdoutへ移し、処理後に同作業ファイルを削除してよい(MAY)。
+  - `--output-last-message <codex-last>`: requestパスからCDX-06の固定名へ導出した作業ファイルに最終メッセージを書き出す。ラッパーは既存の同名作業ファイルだけを起動前に削除してよく(MAY)、成功時に通常ファイル・非シンボリックリンク・非空を確認して生バイト列をCOR-08のC12子プロセスへ渡し、処理後に同作業ファイルを削除してよい(MAY)。
   - 末尾の`-`: ラッパーがCOR-07の3行をstdinから渡す。
   - ラッパーは子プロセス全体を壁時計で待機し、`review_timeout_seconds`超過時はプロセスグループへTERM、猶予後も残る場合はKILLを送り、終了コード124で停止しなければならない(MUST)。ラッパー自身は再実行・監査保存・セット中止判定を行ってはならない(MUST NOT)（M7D-16）。
 - **CDX-04** モデル指定オプション（`-m` / `--model`）を付けてはならない(MUST NOT)。レビュアーモデルはホストツールの既定モデル（Codex=GPT-5.6 sol）とする（`DECISIONS.md` の派生既定値）。
@@ -124,8 +125,8 @@
   ```
 
 - **CDX-06** 起動プロンプトファイルと `--output-last-message` の出力ファイルは、`output/<set_id>/review/` 配下に `<question_id>.<gen>.codex-prompt.txt` / `<question_id>.<gen>.codex-last.txt` の名で置いてもよい(MAY)。標準ラッパーはプロンプトをstdinから渡し、後者だけをrequest名から導出して一時使用する。これらはCodexアダプタ固有の作業ファイルであり、監査正本（candidate / machine / request / review の4種。`docs/subagent-review-spec.md`）ではない。削除してもよい(MAY)が、監査正本を削除してはならない(MUST NOT)。
-- **CDX-07** ラッパーまたは子`codex exec`の終了コードが非0の場合、期限超過の場合、および `--output-last-message` の作業ファイルが生成されない・通常ファイルでない・シンボリックリンクである・空である場合は、インフラ障害（COR-08 参照）として扱わなければならない(MUST)。
-- **CDX-08** ラッパーが終了コード0で返したstdoutの生テキストだけを COR-08 の手順で取り込む(MUST)。
+- **CDX-07** 子`codex exec`の終了コードが非0の場合、期限超過の場合、および`--output-last-message`の作業ファイルが生成されない・通常ファイルでない・シンボリックリンクである・空である場合、ラッパーは実終了コードと生stderrをCOR-08のC12子プロセスへ渡し、インフラ障害として処理させなければならない(MUST)。
+- **CDX-08** ラッパーは非空の最終メッセージ生バイト列をCOR-08のC12子プロセスへ渡し、そのactionまたはCLIエラーをstdout/stderr/終了コードとも非改変で返さなければならない(MUST)。
 - **CDX-09** サブプロセス起動時に、生成側セッションの会話履歴・追加の環境変数・ユーザーまたはプロジェクト由来の指示、設定、ルール、スキル、プラグイン、メモリを渡してはならない(MUST NOT)。Codexが不可避に付与する固定system/developer/tool定義と組み込みsystem skill catalogは実行基盤であり、この禁止対象から除外する。`--disable recommended_plugins` / `apps` / `plugins` / `workspace_dependencies`と`-c include_environment_context=false`を省略してはならず(MUST NOT)、実効入力のuserメッセージはCOR-07の3行1件だけでなければならない(MUST)。レビュアーがリポジトリから読めるのは、read-onlyサンドボックス下のCCW-08②と同じ列挙対象のみである（reviewer-core.md が読み取り許可対象を定める。正は `docs/subagent-review-spec.md`）。
 - **CDX-10** `codex` コマンドがPATH上に存在することは doctor.py の診断項目D12（`docs/architecture.md` CLI-10）で検出する。セットアップ手順書（第7節）は `codex --help`、`codex exec --help`、`python .codex/run_reviewer.py --help` の実行確認を含め、親起動の`--sandbox workspace-write` / `--ask-for-approval on-request`と、ラッパーが構築する子起動の`--ignore-user-config` / `--ignore-rules` / `--disable recommended_plugins` / `apps` / `plugins` / `workspace_dependencies` / `-c project_doc_max_bytes=0` / `-c include_environment_context=false` / `--ephemeral` / `--cd` / `--sandbox read-only` / `--skip-git-repo-check` / `--output-last-message`が受理されることを確認しなければならない(MUST)。専用`CODEX_HOME`を作問側とは別に認証し、同じコンテキスト無効化設定を付けた`codex debug prompt-input`のJSONを機械検査して、`role="user"`メッセージがちょうど1件、その`content`がCOR-07の3行だけを持つ`input_text` 1件と完全一致することを確認しなければならない(MUST)。不一致時はレビューを起動せずfail-closedとする。インストールされたCodexの版でこれらのオプションが受理されない場合は、セットアップ手順書のトラブルシュートに従いCodexを更新する。
 
@@ -133,7 +134,7 @@
 
 - **GUA-01** 両ツール間で同一であることを保証する(MUST)のは次の4点である。
   1. 手順の同一性: 対話フローの状態・順序・確認事項（`agent/author-core.md` 経由。正は `docs/interaction-flow.md`）。
-  2. 契約の同一性: CLI 8本の入出力契約・エラーコード・スキーマ（`docs/architecture.md`・`schemas/`）。
+  2. 契約の同一性: CLI 9本の入出力契約・エラーコード・スキーマ（`docs/architecture.md`・`schemas/`）。
   3. 決定的処理の同一性: 同一入力に対するCLI出力のバイト一致（`docs/architecture.md` CLI-04 の正準形）。
   4. 監査・成果物配置の同一性: `output/<set_id>/` 配下のファイル構成と命名（Codexアダプタ固有の作業ファイル CDX-06 を除く）。
 - **GUA-02** LLM出力の同一性（生成される問題文・訳・解説の文面、レビューの合否判断・指摘内容、所要時間）は保証範囲外であることを、成果物の利用者向け文書（README・セットアップ手順書）に明記しなければならない(MUST)。
@@ -142,7 +143,7 @@
 
 ## 6. 互換テスト
 
-- **CAT-01 決定的CLI一致テスト**: 同一フィクスチャ入力に対し、CLI 8本の出力（stdout JSONおよび生成ファイル）がバイト一致することを検証しなければならない(MUST)。ただし machine_report 系出力（`machine_check.py` / `set_check.py`）は、実行毎に変わる `generated_at` フィールドを除去した正準形で比較する（除外規定の正は `docs/testing-and-acceptance.md` CI-R-02）。このテストは決定的pytest CIに含め（テスト定義の正は `docs/testing-and-acceptance.md`）、さらに手動受け入れ時に Claude Code 環境と Codex 環境の両方で同一フィクスチャを実行し、出力のSHA-256が一致することを確認する。
+- **CAT-01 決定的CLI一致テスト**: 同一フィクスチャ入力に対し、CLI 9本の出力（stdout JSONおよび生成ファイル）がバイト一致することを検証しなければならない(MUST)。ただし machine_report 系出力（`machine_check.py` / `set_check.py`）は、実行毎に変わる `generated_at` フィールドを除去した正準形で比較する（除外規定の正は `docs/testing-and-acceptance.md` CI-R-02）。このテストは決定的pytest CIに含め（テスト定義の正は `docs/testing-and-acceptance.md`）、さらに手動受け入れ時に Claude Code 環境と Codex 環境の両方で同一フィクスチャを実行し、出力のSHA-256が一致することを確認する。
 - **CAT-02 アダプタ純度検査**: 手動受け入れチェックリストに、アダプタファイル（`CLAUDE.md`・`.claude/skills/cefrj-author/SKILL.md`・`.claude/agents/cefrj-reviewer.md`・`.claude/settings.json`・`AGENTS.md`）の目視検査を含めなければならない(MUST)。判定基準: COR-02 の禁止対象（数値制約・検証項目・判定規則・質問文テンプレート・生成制約・エラー文言・レベル解釈規則）の記載が1つでもあれば不合格。
 - **CAT-03 両ツール完走テスト**: 手動受け入れで、両ツールそれぞれで実LLMによるセット作成を完走し、`set.json` がスキーマ検証を通過し、同一 `set.json` を両環境の build_html.py に与えた出力がバイト一致することを確認しなければならない(MUST)。チェックリスト項目の正は `docs/testing-and-acceptance.md`。
 - **CAT-04** 互換テストの合否条件は正しさ（一致・純度・完走）のみとし、実行時間を合否条件にしてはならない(MUST NOT)。

@@ -1,0 +1,3 @@
+- R6-01: CHK-03の教員版根拠を正規化文法ID・直接/継承レベル・境界付き完全IDへ照合し、架空ID・前方一致・誤レベル・継承不備をINF再実行へ送る回帰を追加した (`scripts/flow_control.py`, `tests/unit/test_flow_control.py`)
+- R6-02: request確定後のレビュアー起動前障害を終了70のprocess failureとしてC12へ必ず1回送信し、両ラッパーのコマンド欠落・Popen失敗とCodex作業パス障害が3回で監査付き中止へ収束する回帰を追加した (`.claude/run_reviewer.py`, `.codex/run_reviewer.py`, `tests/unit/test_flow_control.py`)
+- R6-03: 作問コアから旧式のホスト直接C12送信・生出力再送・コードフェンス抽出手順を除去し、固定ラッパーのactionまたはCLIエラーだけを扱う契約を静的回帰で固定した (`agent/author-core.md`, `tests/unit/test_flow_control.py`)

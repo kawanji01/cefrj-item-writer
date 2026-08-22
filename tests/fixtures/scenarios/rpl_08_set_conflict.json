@@ -49,7 +49,7 @@
       "candidate_retries": [],
       "gen": "gen1",
       "question_id": "q01",
-      "review": "pass_q01_gen1.json",
+      "review": "pass_conflict_q01_gen1.json",
       "review_retries": []
     },
     {
@@ -57,7 +57,7 @@
       "candidate_retries": [],
       "gen": "gen1",
       "question_id": "q02",
-      "review": "pass_q02_gen1.json",
+      "review": "pass_conflict_q02_gen1.json",
       "review_retries": []
     },
     {
@@ -68,5 +68,6 @@
       "review": "pass_q02_gen2.json",
       "review_retries": []
     }
-  ]
+  ],
+  "teacher_decisions": []
 }

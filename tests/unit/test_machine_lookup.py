@@ -25,8 +25,20 @@ from machine_check import POS_CANDIDATES
 SET_ID = "20990101-020202-mch1"
 
 
-def report(name: str, **kwargs: object) -> dict[str, object]:
-    completed = machine_for_path(FIXTURES / "candidates" / name, SET_ID, **kwargs)
+def report(
+    name: str,
+    *,
+    expected_format: str | None = None,
+    expected_level: str | None = None,
+    requested_count: int = 1,
+) -> dict[str, object]:
+    completed = machine_for_path(
+        FIXTURES / "candidates" / name,
+        SET_ID,
+        expected_format=expected_format,
+        expected_level=expected_level,
+        requested_count=requested_count,
+    )
     assert completed.returncode == 0, completed.stderr.decode()
     return stdout_json(completed)
 

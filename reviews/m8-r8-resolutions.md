@@ -1,0 +1,3 @@
+- R8-01: 全インベントリ要素からL_ctx超過を導出してCHK-03 failと要素別violationを必須化し、固定候補のpass review 23件を既知の全教員版構造集合で再生成して矛盾受理・複数超過の回帰検査を追加した (`scripts/flow_control.py`, `tests/generate_assets.py`, `tests/fixtures/reviews/`, `tests/unit/test_flow_control.py`, `tests/unit/test_fixtures.py`)
+- R8-02: 部分machine report直書きを実`machine_check.py`出力と完全fixtureへ置換し、candidate・machine・review・set・CLI-05・監査・確定・flow actionおよび部分配列要素を検出する自己負ケース付きCI-R-03メタ検査へ拡張した (`tests/unit/test_flow_control.py`, `tests/unit/test_fixtures.py`)
+- R8-03: 全unit/replayテスト関数に既存CI/RPLテストIDを付与し、関数単位でID未記載を列挙・拒否するTST-08メタ検査へ強化した (`tests/unit/test_flow_control.py`, `tests/unit/test_fixtures.py`)

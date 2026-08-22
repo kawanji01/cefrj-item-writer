@@ -1,0 +1,1 @@
+- R20-01: 任意calleeへ渡されるsensitive callableを検証済みローカルwrapper以外でfail-closedに拒否し、直接・`getattr`の`__call__`を元identityへ正規化してoperator.call・starmap・`__call__`の5反例を回帰化した (tests/unit/test_fixtures.py)

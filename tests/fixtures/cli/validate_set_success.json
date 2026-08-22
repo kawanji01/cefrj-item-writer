@@ -1,0 +1,11 @@
+{
+  "set_dir": "output/20990101-000000-rpl1",
+  "set_json_path": "output/20990101-000000-rpl1/set.json",
+  "status": "complete",
+  "validation": {
+    "errors": [],
+    "schema": "set",
+    "schema_version": "1.0.0",
+    "valid": true
+  }
+}

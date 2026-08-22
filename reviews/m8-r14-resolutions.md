@@ -1,0 +1,1 @@
+- R14-01: CI-R-03のsinkを完全call identityで定義してimport・代入・解決不能aliasを追跡し、位置/keyword引数対応と`**kwargs`拒否、正準fixture/golden・製品出力・support pathを区別する`load_json`/JSON書込み由来検査、およびR14反例・正常例の自己回帰を追加した (`tests/unit/test_fixtures.py`)

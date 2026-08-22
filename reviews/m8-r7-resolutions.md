@@ -1,0 +1,4 @@
+- R7-01: CHK-03インベントリを1件以上必須として空配列を3回のINF監査付き中止へ送り、通常18件・machine-fail専用3件・set-conflict専用2件のpass reviewを実在span・正規化grammar根拠で再生成した (`scripts/flow_control.py`, `tests/generate_assets.py`, `tests/fixtures/reviews/`, `tests/fixtures/scenarios/`, `tests/unit/test_flow_control.py`, `tests/unit/test_fixtures.py`)
+- R7-02: CEFR-J単一値・範囲値を境界付き完全トークンで照合し、直接項目または継承元の`kyoinban.name_ja`へ構造名を完全一致させ、全reviewer_estimateへ推定レベル完全引用と日本語根拠を必須化した (`scripts/flow_control.py`, `tests/unit/test_flow_control.py`)
+- R7-03: CLI-05・set_check失敗・cleanup警告・AUD-09・disputeを製品生成または正準fixtureへ移し、全`tests/**/*.py`の直接・変数経由契約dictと生成器の正本再構築を検出する自己負ケース付きCI-R-03メタ検査へ拡張した (`tests/generate_assets.py`, `tests/fixtures/cli/`, `tests/fixtures/machine/`, `tests/unit/test_flow_control.py`, `tests/unit/test_fixtures.py`)
+- R7-04: 固定9 CLIのプロセス起動テストへCI-R-01を明記し、設計文書第2・第3節の全テストIDとテスト関数名・docstringを集合照合するメタ検査を追加した (`tests/unit/test_cli.py`, `tests/unit/test_fixtures.py`)

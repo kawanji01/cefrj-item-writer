@@ -1,0 +1,8 @@
+{
+  "detail": {},
+  "error_code": [
+    "E-DATA-08"
+  ],
+  "message": "コード型が不正です",
+  "remedy": "再実行してください。"
+}

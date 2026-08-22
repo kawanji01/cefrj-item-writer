@@ -1,0 +1,10 @@
+{
+  "detail": {
+    "differences": {
+      "data/config/limits.json": "テスト用差分"
+    }
+  },
+  "error_code": "E-DATA-08",
+  "message": "E-DATA-08 セッション設定スナップショットと現在の設定が一致しません",
+  "remedy": "進行中セットの監査を保持したまま中止し、python scripts/doctor.py を実行して新しいset_idで最初から作成してください。"
+}
