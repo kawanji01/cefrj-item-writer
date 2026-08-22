@@ -62,7 +62,29 @@
 
 全19件を `checks[]` にちょうど1件ずつ、`CHK-01`〜`CHK-19` の番号順で出力する。実施順で先行するCHK-18も、出力配列では番号順の位置に置く。
 
-適用外は `not_applicable` とし、noteは条件に応じて「形式③のため」「例文が1文のため」「トピック指定なしのため」の形で理由を日本語で記す。適用項目はpass/failのどちらかとし、noteは日本語1〜3文にする。CHK-18にfailは使わない。
+適用外は `not_applicable` とし、そのnoteは次の3つの固定文字列のいずれかと**完全一致**させる。語句の追加・敷衍・句点の付加・括弧書きをしてはならない（呼出し側が文字列完全一致で受理検証し、不一致は候補の合否ではなくレビュー出力の不受理として扱われる）。
+
+- 形式により適用外: `形式①のため`〜`形式⑨のため` のうち、封筒の候補の `format` に対応する1つ（例: `grammar_reorder` なら `形式⑦のため`）。
+- CHK-17で `context_sentence` がnull: `例文が1文のため`
+- CHK-19で封筒の `topic` がnull: `トピック指定なしのため`
+
+適用外になる条件は次の表だけであり、表にない組合せで `not_applicable` を使ってはならない。表で適用対象の項目は必ずpass/failのどちらかとし、noteは日本語1〜3文にする。CHK-18にfailは使わない。
+
+| CHK | 適用形式 | 形式以外の適用外条件 |
+|---|---|---|
+| CHK-01 | ⑤⑥⑦⑧⑨ | — |
+| CHK-02 | ①②③④ | — |
+| CHK-03, 04, 08, 11, 12, 13, 18 | 全形式 | — |
+| CHK-05 | ①②⑤⑥⑧ | — |
+| CHK-06 | ①② | — |
+| CHK-07 | ⑤ | — |
+| CHK-09 | ④ | — |
+| CHK-10 | ⑤⑥⑦⑧⑨ | — |
+| CHK-14 | ⑦ | — |
+| CHK-15 | ⑥ | — |
+| CHK-16 | ⑧ | — |
+| CHK-17 | ⑤⑥⑦⑧⑨ | `context_sentence` がnullなら `例文が1文のため` |
+| CHK-19 | 全形式 | `topic` がnullなら `トピック指定なしのため` |
 
 ## 4. チェックリスト
 
@@ -164,7 +186,12 @@ failとなった各CHKについて、独立した違反箇所ごとに `violatio
 - `expected_level` / `actual_level`: CHK-02/03/04/07/13のレベル超過では実値、それ以外はnull。
 - `suggestion`: 再生成側がそのまま採用できる具体的な文・選択肢・訳・解説案。「修正してください」だけにしない。
 
-CHK-03の `sentence_grammar_inventory[]` は合否にかかわらず全構造を記録する。`kyoinban` は原本の範囲値を範囲のまま保持し、`reviewer_estimate` は導入レベル1値だけを使う。
+CHK-03の `sentence_grammar_inventory[]` は合否にかかわらず全構造を記録する。`kyoinban` は原本の範囲値を範囲のまま保持し、`reviewer_estimate` は導入レベル1値だけを使う。各要素は呼出し側が `grammar.json` と照合して文字列完全一致で受理検証するため、次を守る。
+
+- `span`: 候補英文（⑦は `answer_sentence`、⑤⑥は正答代入後の完成文、⑧は元文と正答代入後の目標文、他は当該例文、2文時は `context_sentence` も可）から、語の途中で切らずに連続する語列をそのまま引用する。
+- `level_source=kyoinban` の場合: `structure` は当該 `gp:` 項目の `kyoinban.name_ja` と完全一致させる（`name_simple_ja`・補足・括弧書きを混ぜない）。`level` は `kyoinban.level_raw` と完全一致させる（範囲値は `A1.2-A1.3` のようにそのまま）。`evidence` には `gp:<ID>` と `level_raw` の値をそのまま含める。`level.source=kyoinban_inherited` の枝番では、`structure`・`level` は継承元親項目の `name_ja`・`level_raw` を使い、`evidence` に枝番IDと親項目IDの両方と「継承」の語を含める。
+- `level_source=reviewer_estimate` の場合: `grammar_item_id=null`、`level` は9段階の1値、`evidence` にその推定レベル値をそのまま含め、日本語で根拠を書く。
+- 導入レベル（範囲値は下限）が封筒の `grammar_intro_level_max` を超える要素が1つでもあればCHK-03はfailとし、超過要素ごとに1件ずつCHK-03のviolationを作る。その `expected_level` は `grammar_intro_level_max`、`actual_level` は当該要素の導入レベル、`location` には当該英文のフィールド名と `span` を二重引用符で囲んだ引用（例: `body.answer_sentence: "a little milk"`）を含め、`evidence` はインベントリ要素と同じ `gp:` ID・`level_raw`（推定なら `reviewer_estimate` の語と推定レベル）を含める。超過のない要素にCHK-03のviolationを作らない。
 
 ## 6. 機械検査誤検出疑い
 
@@ -194,5 +221,8 @@ CHK-03の `sentence_grammar_inventory[]` は合否にかかわらず全構造を
 6. `level_source`、ID、レベル、スパン、根拠が揃う。
 7. machine failをreview fail理由へ転記していない。
 8. 第5〜7節の出力契約に適合する。呼び出し側のスキーマ検証で受理可能な9フィールドを過不足なく出力する。
+9. `not_applicable` のnoteが第3節の固定文字列と完全一致し、第3節の表で適用対象の項目に `not_applicable` を使っていない。
+10. `sentence_grammar_inventory[]` の `structure` / `level` が `grammar.json` の `kyoinban.name_ja` / `kyoinban.level_raw` と完全一致し、`evidence` に `gp:` IDと `level_raw` を含み、`span` が候補英文の連続語列である。
+11. `machine_check_disputes[]` の `machine_violation_code` と `location` が、machine reportの `violations[]` に実在する組である。
 
 最終応答はJSONオブジェクト1個だけとし、コードフェンス、説明、前置き、後書きを付けない。
