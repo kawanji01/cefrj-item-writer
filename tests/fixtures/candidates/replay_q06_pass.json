@@ -1,13 +1,13 @@
 {
   "body": {
     "example": {
-      "en": "Can I borrow your pen today?",
-      "ja": "今日あなたのペンを借りてもよいですか。"
+      "en": "They advise students at this school.",
+      "ja": "彼らはこの学校で生徒に助言します。"
     },
-    "gloss": "〜を借りる",
-    "headword": "borrow",
+    "gloss": "〜に助言する",
+    "headword": "advise",
     "pos": "verb",
-    "target_surface": "borrow"
+    "target_surface": "advise"
   },
   "format": "vocab_flashcard_en2ja",
   "level": {
@@ -16,8 +16,8 @@
   },
   "question_id": "q06",
   "target": {
-    "display_name": "borrow",
-    "ref": "lex:borrow:verb",
+    "display_name": "advise",
+    "ref": "lex:advise:verb",
     "type": "lexical"
   }
 }

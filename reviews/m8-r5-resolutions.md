@@ -1,0 +1,4 @@
+- R5-01: zero-byte candidate/review出力を空base64のvalidation_failureではなくexit_code null・空stderrのprocess_failureとして監査し、正常再試行で完走する回帰を追加した (scripts/flow_control.py, tests/unit/test_flow_control.py)
+- R5-02: CHK-03対象の完成英文を9形式別に列挙し、実在する完全語列・正確な引用フィールド・同一level/source根拠をインベントリとviolation間で照合するようにした (scripts/flow_control.py, tests/unit/test_flow_control.py)
+- R5-03: Claude/Codexラッパーがtimeout後にプロセス群を停止してpipeをdrainし、生stderrをexit_code 124のprocess_failureへ渡すようにした (.claude/run_reviewer.py, .codex/run_reviewer.py, tests/unit/test_flow_control.py)
+- R5-04: 子CLIの診断ログ後にある末尾CLI-05 JSON文書だけを解析し、設計目録の既知エラーコードだけを伝播するようにした (scripts/flow_control.py, tests/unit/test_flow_control.py)

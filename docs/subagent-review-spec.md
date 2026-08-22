@@ -447,6 +447,8 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 
 ## 5. 再生成ループ仕様
 
+- **RG-00（実装主体）**: S80以降の本節5.1〜5.7の状態遷移、世代判定、補充・代替ID、教師照会データ、監査文書構築、確定集合は `scripts/flow_control.py` が一元管理しなければならない(MUST)。ホストLLMは同CLIのactionに応じたcandidate生成と独立レビュー実行だけを担当し、テストリプレイはこの2境界だけをfixture providerへ置換する。ホストLLM、アダプタ、テストハーネスが本節の制御ロジックを再実装してはならない(MUST NOT)（M8D-09）。
+
 ### 5.1 パラメータと前提
 
 - **RG-01**: 1問の世代上限は `data/config/limits.json` の `generation_max`（運用上の許容範囲1〜3、既定値3）とする。現行スキーマと監査命名が表現できる世代は `gen1` / `gen2` / `gen3` の3値であるため、3を超える設定値は共通事前検査で `E-DATA-05` とし、即席の世代名を作ってはならない。本節の遷移は上限3を前提に記述するが、実装は検証済み設定値を読み、値が1または2なら対応する最終世代で打ち切ら**なければならない**（MUST）。
@@ -646,7 +648,7 @@ CHK-03（文法構造）・CHK-04（語彙用法）・CHK-07（誤答排除知�
 | `review/<question_id>.<gen>.request.json` | `review_request` スキーマ検証通過済みの入力封筒（正準形で保存。内容の正は `docs/json-output-spec.md` AUD-08） | レビュアー起動直前（T4 完了後・RC-08 の検証通過後）。レビュアーにはこのファイルのパスを渡す（`docs/cross-agent-compatibility.md` COR-07） |
 | `review/<question_id>.<gen>.review.json` | スキーマ通過済み `review_result` | T5 通過直後 |
 
-- **AU-02a（検証前一時ファイル）**: candidateとreview_requestをファイルで受理検証するホストは、監査ディレクトリ外の`output/<set_id>/.staging/`だけを一時保存先とする（MUST）。candidateは`<question_id>.<gen>.candidate.raw<1|2>.json`、review_requestは`<question_id>.<gen>.request.raw.json`の固定名で排他的に新規作成し、同名が既存なら`E-DATA-07`で停止する。candidateは生出力のstrict UTF-8バイト列をパース前に保存し、対応する正規candidate監査またはAUD-09 invalid監査の排他保存後に削除する。review_requestは構築時のJSONを保存して検証し、検証成功時は同じ内容をJS-01正準化して正規request監査へ排他的に保存した後、検証失敗時は`E-CONTRACT-01`の処理後に削除する。削除はこの固定一時名だけを受理する専用ヘルパーで行い、最後の一時ファイルを削除したときは空の`.staging/`も削除する。クラッシュ等で一時ファイルが残ったセットを再開せず、新しいset_idで最初から実行する（再開はv2範囲外）。一時ファイルは監査ではなく、AU-01の`review/`直下制約およびAU-05の不変監査には含めない。
+- **AU-02a（検証前一時ファイル）**: candidateとreview_requestの受理検証には、監査ディレクトリ外の`output/<set_id>/.staging/`だけを一時保存先とする（MUST）。candidate provider入力は`<question_id>.<gen>.candidate.raw<1|2>.json`、C12が構築するreview_requestは`<question_id>.<gen>.request.raw.json`の固定名で排他的に新規作成し、同名が既存なら`E-DATA-07`で停止する。candidateは生出力のstrict UTF-8バイト列をパース前に保存し、対応する正規candidate監査またはAUD-09 invalid監査の排他保存後にC12が削除する。review_requestはC12が構築時のJSONを保存して検証し、検証成功時は同じ内容をJS-01正準化して正規request監査へ排他的に保存した後、検証失敗時は`E-CONTRACT-01`の処理後に削除する。M8D-09の`flow-state.json`だけは教師照会中を含む非終端状態で保持し、C12以外が読取り・編集・削除してはならない(MUST NOT)。完成・中止時はC12が削除し、空の`.staging/`も削除する。クラッシュ等で一時ファイルが残ったセットを再開せず、新しいset_idで最初から実行する（再開はv2範囲外）。一時ファイルは監査ではなく、AU-01の`review/`直下制約およびAU-05の不変監査には含めない。
 
 - **AU-03**: 異常系の補助監査ファイル（本文書が命名の正）:
 

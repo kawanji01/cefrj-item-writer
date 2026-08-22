@@ -1,0 +1,2 @@
+- R21-01: sensitive callableを保持する静的コンテナの全要素identityを名前アンパック、`pop()`、`values()`アンパック、ローカル関数のコンテナ戻り値へ伝播し、未知抽出は`unresolved-sensitive`として拒否するようCI-R-03を拡張して、指摘4反例と同形の正準fixture由来正常例を回帰化した (tests/unit/test_fixtures.py)
+- R21-02: 両レビューラッパーが`TimeoutExpired.stderr`と停止後drainを重複なく結合するよう修正し、後続drainが空のfake `Popen`回帰と、子のstderr準備完了を親側で同期する実プロセスタイムアウト回帰を追加した (.claude/run_reviewer.py, .codex/run_reviewer.py, tests/unit/test_flow_control.py)

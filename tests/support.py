@@ -16,6 +16,32 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
 FIXTURES = ROOT / "tests" / "fixtures"
 GOLDEN = ROOT / "tests" / "golden"
+OFFICIAL_FORMATS = (
+    "vocab_mcq_en2ja",
+    "vocab_mcq_ja2en",
+    "vocab_flashcard_en2ja",
+    "vocab_flashcard_ja2en",
+    "grammar_mcq",
+    "grammar_cloze",
+    "grammar_reorder",
+    "grammar_rewrite",
+    "grammar_example_selfcheck",
+)
+GOLDEN_CASE_FILES = (
+    "these_relative_clause.candidate.json",
+    "estimate_label.candidate.json",
+)
+SCRIPTS = ROOT / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from flow_control import (  # noqa: E402
+    build_config_snapshot,
+    build_finalize_metadata,
+    build_review_request,
+    build_session_from_candidate,
+    build_slot_outcome,
+)
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -117,46 +143,15 @@ def review_request(
 ) -> dict[str, Any]:
     limits = load_json(ROOT / "data" / "config" / "limits.json")
     proper = load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"]
-    band = candidate["level"]["value"].split(".", 1)[0]
-    if candidate["format"].startswith("vocab_"):
-        grammar_max = {"A1": "A1.3", "A2": "A2.2", "B1": "B1.2", "B2": "B2.2"}[band]
-        explanation_limit = None
-    else:
-        grammar_max = candidate["level"]["value"]
-        explanation_limit = limits["explanation_char_limits"][candidate["explanation"]["type"]]
-    return {
-        "candidate": candidate,
-        "constraints_snapshot": {
-            "limits": {
-                "explanation_char_limit": explanation_limit,
-                "sentence_word_limit": limits["sentence_word_limits"][band],
-            },
-            "proper_nouns": proper,
-            "topic": None,
-        },
-        "format": candidate["format"],
-        "generation": generation,
-        "level": candidate["level"],
-        "level_limits": {
-            "grammar_intro_level_max": grammar_max,
-            "vocabulary_level_max": band,
-        },
-        "machine_report": machine,
-        "question_id": candidate["question_id"],
-        "readable_resources": [
-            "data/normalized/lexicon.json",
-            "data/normalized/grammar.json",
-            "data/normalized/meta.json",
-            "data/config/limits.json",
-            "data/config/proper_nouns.json",
-            "docs/cefrj-validation-spec.md",
-            "docs/subagent-review-spec.md",
-            "agent/reviewer-core.md",
-        ],
-        "schema_version": "1.0.0",
-        "set_id": set_id,
-        "target_ref": candidate["target"]["ref"],
-    }
+    return build_review_request(
+        candidate,
+        machine,
+        set_id,
+        generation,
+        limits=limits,
+        proper_nouns=proper,
+        topic=None,
+    )
 
 
 def review_result(
@@ -228,14 +223,7 @@ def write_slot_outcome(
 ) -> None:
     write_json(
         set_dir / "review" / f"slot.{slot_id}.outcome.json",
-        {
-            "accepted_question_id": accepted_id,
-            "attempted_question_ids": attempted_ids,
-            "set_id": set_dir.name,
-            "slot_question_id": slot_id,
-            "status": "accepted",
-            "teacher_decision": None,
-        },
+        build_slot_outcome(set_dir.name, slot_id, attempted_ids, accepted_id),
     )
 
 
@@ -256,23 +244,21 @@ def finalize_metadata(
     final_ids: list[str],
     requested_count: int,
 ) -> dict[str, Any]:
-    return {
-        "config_snapshot": {
-            "limits": load_json(ROOT / "data" / "config" / "limits.json"),
-            "proper_nouns": load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"],
-        },
-        "created_at": (
-            f"{set_dir.name[0:4]}-{set_dir.name[4:6]}-{set_dir.name[6:8]}T"
-            f"{set_dir.name[9:11]}:{set_dir.name[11:13]}:{set_dir.name[13:15]}+09:00"
-        ),
-        "final_question_ids": final_ids,
-        "format": candidate["format"],
-        "level": candidate["level"],
-        "mode": "proposal",
-        "model": "m8-test",
-        "preferred_proper_nouns": [],
-        "requested_count": requested_count,
-        "set_id": set_dir.name,
-        "tool": "codex",
-        "topic": None,
-    }
+    created_at = (
+        f"{set_dir.name[0:4]}-{set_dir.name[4:6]}-{set_dir.name[6:8]}T"
+        f"{set_dir.name[9:11]}:{set_dir.name[11:13]}:{set_dir.name[13:15]}+09:00"
+    )
+    session = build_session_from_candidate(
+        candidate,
+        set_dir.name,
+        requested_count,
+        created_at=created_at,
+        mode="proposal",
+        model="m8-test",
+        tool="codex",
+    )
+    snapshot = build_config_snapshot(
+        load_json(ROOT / "data" / "config" / "limits.json"),
+        load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"],
+    )
+    return build_finalize_metadata(session, snapshot, final_ids)

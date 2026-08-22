@@ -1,5 +1,5 @@
 {
-  "description": "N=3の提案モードで2N対象×3世代で停止する",
+  "description": "N=3で補充枯渇後に減数し全6対象・18世代試行で停止する",
   "expected": {
     "attempts_total": 18,
     "audit_files": [
@@ -74,12 +74,13 @@
       "q06.gen3.candidate.json",
       "q06.gen3.machine.json",
       "q06.gen3.request.json",
-      "q06.gen3.review.json"
+      "q06.gen3.review.json",
+      "slot.q01.outcome.json",
+      "slot.q02.outcome.json"
     ],
     "outcome": "teacher_consult",
     "regeneration_payload_checks": [
-      "CHK-03",
-      "V-TGT-03"
+      "CHK-03"
     ],
     "set_questions": []
   },
@@ -90,12 +91,12 @@
     "mode": "proposal",
     "question_count": 3,
     "targets": [
-      "lex:test-1",
-      "lex:test-2",
-      "lex:test-3",
-      "lex:test-4",
-      "lex:test-5",
-      "lex:test-6"
+      "lex:accept:verb",
+      "lex:ability:noun",
+      "lex:abroad:adverb",
+      "lex:invite:verb",
+      "lex:achieve:verb",
+      "lex:advise:verb"
     ]
   },
   "scenario_id": "rpl_10_worst_case_bound",
@@ -122,54 +123,6 @@
       "gen": "gen3",
       "question_id": "q01",
       "review": "fail_q01_gen3.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q02_pass.json",
-      "candidate_retries": [],
-      "gen": "gen1",
-      "question_id": "q02",
-      "review": "fail_q02_gen1.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q02_pass.json",
-      "candidate_retries": [],
-      "gen": "gen2",
-      "question_id": "q02",
-      "review": "fail_q02_gen2.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q02_pass.json",
-      "candidate_retries": [],
-      "gen": "gen3",
-      "question_id": "q02",
-      "review": "fail_q02_gen3.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q03_pass.json",
-      "candidate_retries": [],
-      "gen": "gen1",
-      "question_id": "q03",
-      "review": "fail_q03_gen1.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q03_pass.json",
-      "candidate_retries": [],
-      "gen": "gen2",
-      "question_id": "q03",
-      "review": "fail_q03_gen2.json",
-      "review_retries": []
-    },
-    {
-      "candidate": "replay_q03_pass.json",
-      "candidate_retries": [],
-      "gen": "gen3",
-      "question_id": "q03",
-      "review": "fail_q03_gen3.json",
       "review_retries": []
     },
     {
@@ -243,6 +196,74 @@
       "question_id": "q06",
       "review": "fail_q06_gen3.json",
       "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q02",
+      "review": "fail_q02_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q02",
+      "review": "fail_q02_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q02_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q02",
+      "review": "fail_q02_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q03",
+      "review": "fail_q03_gen1.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen2",
+      "question_id": "q03",
+      "review": "fail_q03_gen2.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q03_pass.json",
+      "candidate_retries": [],
+      "gen": "gen3",
+      "question_id": "q03",
+      "review": "fail_q03_gen3.json",
+      "review_retries": []
+    },
+    {
+      "candidate": "replay_q06_pass.json",
+      "candidate_retries": [],
+      "gen": "gen1",
+      "question_id": "q07",
+      "review": "fail_q06_gen1.json",
+      "review_retries": []
+    }
+  ],
+  "teacher_decisions": [
+    {
+      "decision": "reduce",
+      "slot_question_id": "q01",
+      "target_ref": null
+    },
+    {
+      "decision": "reduce",
+      "slot_question_id": "q02",
+      "target_ref": null
     }
   ]
 }

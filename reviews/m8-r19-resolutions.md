@@ -1,0 +1,1 @@
+- R19-01: ローカル高階関数の位置・keyword-only・`*args`・`**kwargs`呼出しを仮引数へ対応付け、sensitive callable identityと入力由来をcallee scopeへ伝播し、通常引数・alias・可変引数・同名shadowの10反例と承認済み入力wrapperを回帰化した (tests/unit/test_fixtures.py)

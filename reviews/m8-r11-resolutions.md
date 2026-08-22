@@ -1,0 +1,2 @@
+- R11-01: 両固定ラッパーがC12のreview-preflightで設定全体・snapshot・直前requestを検証してtimeoutを確定し、不一致時は子を起動せずCLI-05を返す回帰検査を追加した (`scripts/flow_control.py`, `.claude/run_reviewer.py`, `.codex/run_reviewer.py`, `tests/unit/test_flow_control.py`)
+- R11-02: CI-R-03の静的追跡をモジュール文字列定数・import alias・dict.fromkeysへ拡張し、指摘3反例の自己負ケースを追加した (`tests/unit/test_fixtures.py`)

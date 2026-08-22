@@ -36,6 +36,11 @@
       "Bash(python scripts/lookup.py gp --keyword * --level * --limit 200)",
       "Bash(python scripts/lookup.py gp --level * --limit *)",
       "Bash(python scripts/lookup.py gp --level * --exclude-context-required --limit *)",
+      "Bash(python scripts/flow_control.py init --set-dir output/* --file - <<'FLOW01'\n*\nFLOW01)",
+      "Bash(python scripts/flow_control.py candidate --set-dir output/* --file output/*/.staging/*.candidate.raw*.json)",
+      "Bash(python scripts/flow_control.py decide --set-dir output/* --decision *)",
+      "Bash(python scripts/flow_control.py decide --set-dir output/* --decision alternative --target-ref *)",
+      "Bash(python scripts/flow_control.py status --set-dir output/*)",
       "Bash(python .claude/cleanup_staging.py --file output/*/.staging/*)",
       "Bash(python .claude/run_reviewer.py --request output/*/review/*.request.json)",
       "Bash(python -c 'import datetime,json,os,secrets,string;n=datetime.datetime.now(datetime.timezone.utc).astimezone(None);p=n.strftime(\"%Y%m%d-%H%M%S-\");a=string.ascii_lowercase+string.digits;s=next(x for _ in iter(int,1)if not os.path.lexists(os.path.join(\"output\",(x:=p+\"\".join(secrets.choice(a)for _ in range(4))))));print(json.dumps({\"created_at\":n.isoformat(timespec=\"seconds\"),\"set_id\":s},ensure_ascii=False,sort_keys=True,indent=2))')"
@@ -84,11 +89,15 @@
           {
             "type": "command",
             "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_machine_check.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard_flow_control.py\""
           }
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": "Read|Grep|Write|Edit",
         "hooks": [
           {
             "type": "command",

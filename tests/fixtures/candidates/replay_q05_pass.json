@@ -1,13 +1,13 @@
 {
   "body": {
     "example": {
-      "en": "I will invite my friend to dinner.",
-      "ja": "私は友達を夕食に招待します。"
+      "en": "We can achieve our goal this year.",
+      "ja": "私たちは今年目標を達成できます。"
     },
-    "gloss": "〜を招待する",
-    "headword": "invite",
+    "gloss": "〜を達成する",
+    "headword": "achieve",
     "pos": "verb",
-    "target_surface": "invite"
+    "target_surface": "achieve"
   },
   "format": "vocab_flashcard_en2ja",
   "level": {
@@ -16,8 +16,8 @@
   },
   "question_id": "q05",
   "target": {
-    "display_name": "invite",
-    "ref": "lex:invite:verb",
+    "display_name": "achieve",
+    "ref": "lex:achieve:verb",
     "type": "lexical"
   }
 }

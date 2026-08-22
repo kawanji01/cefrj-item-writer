@@ -6,15 +6,15 @@
 | 対象読者 | 実装者（Codex）、レビュー担当者、設計文書の他執筆者。 |
 | 参照文書 | `docs/requirements.md`（要件・スコープ外/v2リストの正）、`docs/interaction-flow.md`、`docs/question-generation-spec.md`、`docs/cefrj-validation-spec.md`、`docs/subagent-review-spec.md`、`docs/json-output-spec.md`、`docs/html-output-spec.md`、`docs/cross-agent-compatibility.md`、`docs/testing-and-acceptance.md`、`DECISIONS.md`、`IMPLEMENTATION_PLAN.md` |
 | 規範語彙凡例 | 「しなければならない(MUST)」=絶対要件。「してはならない(MUST NOT)」=絶対禁止。「すべきである(SHOULD)」=正当な理由がない限り従う。「してもよい(MAY)」=任意。 |
-| この文書が「正」とする範囲 | ①コンポーネント分割と責務、②データフロー、③リポジトリ構成、④CLI 8本の入出力契約（引数・stdin/stdout・終了コード）、⑤**エラーコード目録**、⑥バージョン管理（スキーマsemver・`data_version`）、⑦運用手順（原本更新・allowlist追加・リリース・教師の更新・フィクスチャ更新）。検証内容・生成規則・対話文言・スキーマのフィールド定義は本書の正ではなく、各担当文書を参照する。 |
+| この文書が「正」とする範囲 | ①コンポーネント分割と責務、②データフロー、③リポジトリ構成、④CLI 9本の入出力契約（引数・stdin/stdout・終了コード）、⑤**エラーコード目録**、⑥バージョン管理（スキーマsemver・`data_version`）、⑦運用手順（原本更新・allowlist追加・リリース・教師の更新・フィクスチャ更新）。検証内容・生成規則・対話文言・スキーマのフィールド定義は本書の正ではなく、各担当文書を参照する。 |
 
 ---
 
 ## 1. アーキテクチャ原則
 
 - **ARC-01** 問題データの正本はJSON（`output/<set_id>/set.json`）でなければならない(MUST)。HTMLは合格済み `set.json` のみから決定的に生成しなければならない(MUST)。
-- **ARC-02** 挙動規則（対話手順・生成制約・検証規則・エラー文言）は、共通コア指示書（`agent/author-core.md`・`agent/reviewer-core.md`）と決定的スクリプト（`scripts/` 配下のPython CLI）に集約しなければならない(MUST)。ツール別アダプタ（Claude Code / Codex）は配線のみとし、挙動規則を書いてはならない(MUST NOT)。配線の詳細は `docs/cross-agent-compatibility.md` を正とする。
-- **ARC-03** 決定的に実行できる処理（正規化・機械検査・セット横断検査・スキーマ検証・セット確定・HTML生成・照会・診断）は、すべてPython 3.11+のCLIとして実装しなければならない(MUST)。LLMに委ねてよいのは、対話・問題文生成・機械化不能な適合性判断（独立レビュー）のみである。
+- **ARC-02** 挙動規則（対話手順・生成制約・フロー状態遷移・検証規則・エラー文言）は、共通コア指示書（`agent/author-core.md`・`agent/reviewer-core.md`）と決定的スクリプト（`scripts/` 配下のPython CLI）に集約しなければならない(MUST)。ツール別アダプタ（Claude Code / Codex）とテストproviderは配線のみとし、挙動規則を書いてはならない(MUST NOT)。配線の詳細は `docs/cross-agent-compatibility.md` を正とする。
+- **ARC-03** 決定的に実行できる処理（フロー状態遷移・世代管理・補充・監査文書構築・正規化・機械検査・セット横断検査・スキーマ検証・セット確定・HTML生成・照会・診断）は、すべてPython 3.11+のCLIとして実装しなければならない(MUST)。LLMに委ねてよいのは、対話・問題文生成・機械化不能な適合性判断（独立レビュー）のみである。
 - **ARC-04** 機械検査の違反は覆せない自動不合格としなければならない(MUST)。独立LLMレビューは追加の不合格判定のみ行うことができ、機械検査の違反を上書きしてはならない(MUST NOT)。検査項目の分担の正は `docs/cefrj-validation-spec.md` の検証マトリクス。
 - **ARC-05** セットアップ完了後の決定的スクリプトとテスト本体は完全オフラインで動作しなければならず(MUST)、ネットワークアクセスをしてはならない(MUST NOT)。例外処理は`python scripts/setup.py`による`requirements.txt`の固定版依存パッケージとspaCyモデル（en_core_web_sm）の取得、およびCI・開発環境でテスト開始前に行う`requirements-dev.txt`の固定pytest取得に限りネットワークアクセスしてもよい(MAY)。テレメトリを実装してはならない(MUST NOT)。
 - **ARC-06** 全CLIは実行前に前提条件検査を行い、不成立時は本書第6節の定義済みエラーコードと日本語対処手順を出力して停止しなければならない(MUST)。
@@ -24,7 +24,7 @@
 
 | # | コンポーネント | 実体 | 責務 | 挙動規則の正 |
 |---|---|---|---|---|
-| C1 | 対話オーケストレータ | ホストLLM + `agent/author-core.md` | 教師との日本語対話（1ターン1質問）、条件確定、生成〜確定までの工程進行、教師照会 | `docs/interaction-flow.md` |
+| C1 | 対話オーケストレータ | ホストLLM + `agent/author-core.md` | 教師との日本語対話（1ターン1質問）、条件確定、C12 actionに応じた候補生成・独立レビュー境界の実行、教師照会の表示 | `docs/interaction-flow.md` |
 | C2 | 生成器 | ホストLLM（C1と同一セッション） | 候補問題（candidate JSON）の生成・再生成 | `docs/question-generation-spec.md` |
 | C3 | 照会サービス | `scripts/lookup.py` | 正規化データの検索（明示指定照合・提案候補列挙・誤答プール取得） | 本書第5節（契約）、検索規則は `docs/cefrj-validation-spec.md`・`docs/question-generation-spec.md` |
 | C4 | 正規化ビルダー | `scripts/build_normalized.py` | 原本xlsx→`data/normalized/`（lexicon.json / grammar.json / meta.json）の決定的変換 | `docs/cefrj-validation-spec.md` 正規化仕様 |
@@ -35,6 +35,7 @@
 | C9 | HTML生成器 | `scripts/build_html.py`（Python + Jinja2） | `set.json` から単一自己完結HTMLを決定的に生成 | `docs/html-output-spec.md` |
 | C10 | スキーマ検証器 | `scripts/validate.py` | 9スキーマ（`schemas/`）に対する文書検証 | `schemas/*.schema.json`、運用は本書第5.8節 |
 | C11 | 診断 | `scripts/doctor.py` | 環境・データ・配線の一括診断 | 本書第5.1節 |
+| C12 | フロー制御器 | `scripts/flow_control.py` | S80以降の世代・補充・停止状態、監査文書構築、決定的CLI列、教師照会データ、確定集合の一元管理 | `docs/subagent-review-spec.md` 第5〜8節 |
 
 - **ARC-08** 上表の「挙動規則の正」列に挙げた文書以外で当該規則を再定義してはならない(MUST NOT)。本書のCLI契約は入出力の形（引数・stdin/stdout・終了コード・エラーコード）のみを定める。
 
@@ -70,6 +71,7 @@ flowchart TD
 - **ARC-09** フロー上の分岐規則の正は次のとおりとする(MUST)。対話・照合・教師照会=`docs/interaction-flow.md`。再生成ループ・世代管理・補充・停止条件・インフラ障害の扱い=`docs/subagent-review-spec.md`。candidate スキーマ不通過時の「同一世代内1回再指示→失敗なら世代消費」および review_result スキーマ不通過時の「インフラ障害扱い（不合格に数えず、最大2回再実行→セット中止）」も同文書を正とし、本書は対応するエラーコード（E-CONTRACT-01）のみ定義する。
 - **ARC-10** 監査ファイル（`review/<question_id>.<gen>.candidate.json` / `.machine.json` / `.request.json` / `.review.json`）は全世代・全試行について保存しなければならない(MUST)。配置の正は `docs/subagent-review-spec.md`。
 - **ARC-11** レビュアー（C6）に渡してよい入力は、候補問題JSON・機械検査レポート・検証仕様・正規化データへの読み取り専用アクセスのみである(MUST)。生成側（C1/C2）の会話履歴をレビュアーから見えるようにしてはならない(MUST NOT)。
+- **ARC-11a** C1はS80開始後、C12が返す `generate_candidate` / `run_review` / `teacher_consult` / `completed` / `aborted` actionだけに従わなければならない(MUST)。C1およびテストハーネスが世代停止、補充所属、合否集計、監査文書、教師照会要約、確定集合を再実装してはならない(MUST NOT)。候補生成と独立レビュー実行だけをprovider境界とする。
 
 ## 4. リポジトリ構成
 
@@ -85,11 +87,11 @@ cefr_j_agents/
 │   ├── normalized/           # lexicon.json / grammar.json / meta.json（ビルドしてコミット）
 │   └── config/               # limits.json / proper_nouns.json
 ├── agent/                    # author-core.md / reviewer-core.md（共通コア指示書）
-├── scripts/                  # 本書第5節のCLI 8本
+├── scripts/                  # 本書第5節のCLI 9本
 ├── templates/                # index.html.j2（自己完結HTML用Jinja2テンプレート）
 ├── tests/                    # pytest + フィクスチャ（docs/testing-and-acceptance.md）
 ├── .github/workflows/ci.yml  # Python 3.11の決定的pytest CI（M8D-01）
-├── output/<set_id>/          # set.json / index.html / review/（実行時生成。コミットしない）
+├── output/<set_id>/          # set.json / index.html / review/ / 一時.staging/（実行時生成。コミットしない）
 ├── .claude/                  # Claude Codeアダプタ（docs/cross-agent-compatibility.md）
 ├── CLAUDE.md                 # Claude Codeアダプタ（配線のみ）
 ├── AGENTS.md                 # Codexアダプタ（配線のみ）
@@ -100,6 +102,7 @@ cefr_j_agents/
 
 - **ARC-12** `output/` はバージョン管理にコミットしてはならない(MUST NOT)。`data/normalized/` は出典ヘッダー付きでコミットしなければならない(MUST)。
 - **ARC-13** 上記の構成要素の追加・改名は `DECISIONS.md` への決定追記を伴わなければならない(MUST)。
+- **ARC-14** `output/<set_id>/.staging/flow-state.json`はC12だけが排他的に作成・置換・削除する一時状態であり、C1・C2・C6・アダプタ・テストproviderが内容を編集してはならない(MUST NOT)。完成・中止時は削除し、教師照会中だけ同一セッション継続のため保持してよい(MAY)。クラッシュ後の処理再開へ使用してはならない(MUST NOT)。
 
 ## 5. CLI契約
 
@@ -117,7 +120,7 @@ cefr_j_agents/
 - **CLI-07** 入力ファイル引数が `-` の場合はstdinのバイト列を読み、実行環境の標準入力エンコーディングに依存せずUTF-8として復号する(MUST)。stdinまたはファイルのJSONがUTF-8でない、パース不能、またはパース後のstring値・object keyのいずれかがstrict UTF-8へ符号化不能な場合は E-INPUT-03 で停止する(MUST)。`machine_check.py` のcandidate JSONに含まれる整数トークンは符号を除く10進4,300桁以下とし、超過はパース不能の E-INPUT-03 とする(MUST)。
 - **CLI-08** 各CLIは処理開始前に、当該CLIの前提条件（下表「前提検査」）を検査しなければならない(MUST)。前提検査の共通セット【基本】= Python版（E-ENV-01）・依存パッケージ（E-ENV-02）・カレントディレクトリ（E-ENV-04）。正規化データを読むCLIはさらに【データ】= 原本xlsx存在（E-DATA-01）・原本チェックサム照合（E-DATA-02）・正規化データ存在（E-DATA-03）・スキーマ通過と内部整合（E-DATA-04）・設定ファイル（E-DATA-05）を検査する。原本欠落・チェックサム不一致・正規化データ不整合のいずれかがあれば処理を拒否しなければならない(MUST)。
 
-### 5.1 契約一覧（8本）
+### 5.1 契約一覧（9本）
 
 | CLI | 目的 | 主な引数 | stdin | stdout（正常時） | 終了コード | 前提検査 |
 |---|---|---|---|---|---|---|
@@ -129,6 +132,7 @@ cefr_j_agents/
 | `build_html.py` | set.json→単一自己完結HTMLの決定的生成 | `--set <path>`（必須。set.json） / `--out <path>`(既定: 入力と同ディレクトリの `index.html`) | 使わない | 生成サマリーJSON（5.7） | 0/1/2 | 【基本】+ 入力スキーマ（E-CONTRACT-01）+ メジャー一致（E-CONTRACT-02） |
 | `validate.py` | 9スキーマに対する文書検証・セット状態識別 | 通常モード: `--schema <名>` / `--file <path\|- >`（ともに必須）。状態確認モード: `--set-dir <path>`（通常モードと排他） | `--file -` 指定時に検証対象JSON | 検証結果JSONまたはセット状態JSON（5.8） | 0=妥当または未完成状態識別 / 1=不当（E-CONTRACT-01）または他エラー / 2 | 【基本】+ スキーマファイル存在（E-ENV-04） |
 | `lookup.py` | 正規化データ照会 | サブコマンド `lex` / `gp`（5.9） | 使わない | 照会結果JSON（5.9） | 0=完遂（0件でも0） / 1/2 | 【基本】【データ】 |
+| `flow_control.py` | S80以降の決定的状態遷移 | `init` / `candidate` / `review-preflight` / `review` / `decide` / `status` と `--set-dir`（5.10） | `--file -`指定時のinit/candidate/review JSON | 次のaction、review-preflight結果、または終端結果JSON（5.10） | 0/1/2 | 【基本】【データ】+ E-DATA-05/07/08 + E-CONTRACT-01/03/04/05 |
 
 以下、各CLIの詳細契約。
 
@@ -217,6 +221,14 @@ cefr_j_agents/
   - 複数オプションはAND条件とする(MUST)。`--keyword`は検索語と対象文字列をNFC正規化・casefoldした後、`item_list.name_ja`および非nullの`kyoinban.name_simple_ja`に部分一致させる。
 - **CLI-31** stdout: `{"matches": [<正規化データのエントリ形式（normalized_lexicon / normalized_grammar のエントリ定義に従う）>], "total": <int>}`。`total` は limit 適用前の総件数とする(MUST)。0件は正常（終了コード0・`matches` 空配列）とする(MUST)。通常照会の返却順はlex=`docs/cefrj-validation-spec.md` NRM-13順、gp=同NRM-25順を維持する。lexの`--headword`は一致エントリと同一グループのエントリへ展開した後に他条件で絞り込む。`--pool-for`は指定対象自身を除外し、`docs/question-generation-spec.md` GEN-14のカテゴリ優先順位で整列する。同順位はNRM-13順とする。
 
+### 5.10 flow_control.py
+
+- **CLI-32（init）** `flow_control.py init --set-dir output/<set_id> --file <path|->` は、S70で確定したセッションJSONを受け取る。トップレベルは `created_at` / `format` / `level` / `mode` / `model` / `preferred_proper_nouns` / `requested_count` / `set_id` / `targets` / `tool` / `topic` の11フィールドだけとする。明示モードの`targets`はN件、提案モードはlookup返却順の初期N件と補充プールを合わせてN〜`min(2N,20)`件とする。`--set-dir`は未作成でなければならず、CLIは`review/`と`.staging/flow-state.json`を排他的に作成し、最初の`generate_candidate` actionを返す。同名セット・状態・監査へ上書きしてはならない(MUST NOT)。
+- **CLI-33（provider入力）** `candidate --set-dir <path> --file <path|->` は直前の`generate_candidate` actionに対するcandidate生出力だけを受け、T1〜T4を実行する。`review --set-dir <path> --file <path|->` は直前の`run_review` actionに対するreview_result生出力を受け、ラッパー非0・期限超過・空出力では代わりに`review --set-dir <path> --process-failure <exit_code>`のstdinからstderr生バイト列を受け、T5〜T11またはINF-01〜02を実行する。両ツールの固定レビュアーラッパーは、レビュアーの生stdout/stderrをシェル文字列・ヒアドキュメント・一時rawファイルへ展開せず、固定argvで起動した本CLIへバイトstdinとして直接渡し、本CLIのstdout/stderr/終了コードを呼出し側へ返さなければならない(MUST)（M8D-10）。各コマンドは入力受理、invalid監査、正準監査、machine_check/set_check、世代消費、補充、確定をC12の状態から決定し、次actionをstdoutへ返す。ホストまたはテストproviderが`question_id`・`generation`・`target_ref`を指定して遷移を選んではならない(MUST NOT)。
+- **CLI-33a（review-preflight）** `review-preflight --set-dir output/<set_id> --request output/<set_id>/review/<question_id>.<gen>.request.json`は、両固定レビュアーラッパーだけが子レビュアー起動直前に固定argvで呼び、ホストから直接実行してはならない(MUST NOT)（M8D-13）。C12は、①現在設定全体の検証（不当=`E-DATA-05`）、②セッション設定snapshotとの完全一致（不一致=`E-DATA-08`）、③直前`run_review` actionと`--request`文字列の一致（不一致=`E-CONTRACT-01`）、④actionが指すrequest監査の存在・通常ファイル・非シンボリックリンク（不成立=`E-CONTRACT-03`）、⑤実requestのstrict UTF-8・標準JSON・`review_request`スキーマ再検証、および現在stateのcandidate・machine report・generation・session・設定snapshotから再構築したJS-01正準バイト列との完全一致（不一致=`E-CONTRACT-01`）をこの順で検査する。正常stdoutは`{"request_path": "<入力値>", "review_timeout_seconds": <検証済み現在limitsの整数>}`の2フィールドだけとする。必須引数欠落は`E-INPUT-01`とする。終了1/2では監査正本を変更・削除せずflow-stateを削除し、ラッパーはC12のstdout/stderr/終了コードを非改変で返して子を起動してはならない(MUST NOT)。
+- **CLI-34（教師判断）** `decide --set-dir <path> --decision <alternative|reduce|abort> [--target-ref <照合済みID>]` は直前の`teacher_consult` actionが提示した選択肢だけを受理する。`alternative`はS32と同じ原本照合済みのtarget_refを必須とし、未使用最小question_idを割り当てる。`reduce`は当該論理スロットだけのAUD-11を保存し、`abort`は監査を保持して中止する。
+- **CLI-35（actionと一時状態）** 非終端stdoutの`action`は `generate_candidate` / `run_review` / `teacher_consult` のいずれか、終端は `completed` / `aborted` とする。`generate_candidate`はquestion_id・generation・target_ref・candidate_output_number・直前世代だけのregenerationを、`run_review`はrequest_pathを、`teacher_consult`はRG-16の全世代理由・確定数/要求数・試行対象総数/上限・提示可能choicesを含む。レビュー受理3回失敗または最終set_check failによる`aborted`は、教師選択の中止と区別する`reason`に加え、CLI-05完全形を`error` object（`error_code` / `message` / `remedy` / `detail`）として含めなければならない(MUST)。finalize終了0のstderrにCLI-22a警告がある`completed`は、その`warning_code` / `message` / `remedy` / `detail`を非改変で含める。`completed` / `aborted`およびS80後の終了1/2では監査正本を保持してflow-stateを削除し、教師照会中だけ保持する。`status --set-dir <path>`は保持中の直前actionを読み取り専用で返す。
+
 ## 6. エラーコード目録（正）
 
 - **ERR-01** エラーコードの体系は `E-ENV-xx`（環境）/ `E-DATA-xx`（データ整合）/ `E-CONTRACT-xx`（スキーマ・契約違反）/ `E-INPUT-xx`（入力不正）の4系列とし、本節の目録を全系列の正とする(MUST)。他文書はコードの参照のみ行い、再定義してはならない(MUST NOT)。コードの追加・変更は本節の改訂と `DECISIONS.md` への追記を伴わなければならない(MUST)。
@@ -244,7 +256,7 @@ cefr_j_agents/
 | E-DATA-04 | 正規化データの不整合または陳腐化: normalized JSONがスキーマ不通過、`meta.json` の `data_version`・チェックサムと lexicon.json / grammar.json の記録値が相互に矛盾、metaの原本版・パイプライン版・3ファイルの`data_version`が現在の`sources.json.version_label` 2値と実行中の正規化パイプライン版から導出した期待値に一致しない、または不適合な既存metaから原本変更防止用の安全根拠を取得できない | 不整合の内容（スキーマ違反箇所または矛盾・陳腐化したフィールド）を明記し、陳腐化の場合はフィールドごとの期待値・実測値を列挙 | `python scripts/build_normalized.py` で再ビルドする。同じE-DATA-04で停止する場合は `git checkout -- data/normalized/meta.json` でコミット済みmetaを復元してから再ビルドする。再発する場合は正規化パイプラインの不具合として報告する |
 | E-DATA-05 | 設定ファイル不正: `data/config/limits.json`・`proper_nouns.json` のいずれかが欠落・スキーマ不通過、または現行スキーマが表現できない `generation_max > 3` | 対象ファイルと違反箇所（JSONポインタ）を明記。世代上限超過時は受取値と許容範囲1〜3を明記 | `git checkout` で復元するか、`python scripts/validate.py --schema config_limits --file data/config/limits.json`（proper_nounsも同様）で違反箇所を確認し修正する。`generation_max`は1〜3へ戻し、4世代以上への拡張は関連スキーマと監査命名の改訂を先行させる |
 | E-DATA-06 | 原本構造・内容不一致: build_normalized.py が期待するシート名・列名・行位置を原本xlsxに見いだせない、必須セル値が値域外、ID結合・親子・併記variant対応が解決不能、またはNRM-31の件数不変条件を満たさない | 見つからなかったシート名・列名・行位置、値域外セル、解決不能ID、または不一致の件数を全件列挙 | 原本の版が設計前提（Wordlist Ver1.6 / Grammar Profile full 20200220）と一致するか確認する。新版へ移行する場合は OPS-01 に従い正規化仕様の改訂を先行させる |
-| E-DATA-07 | 出力ファイル上書き衝突: オーケストレータが排他的に作成しようとした `output/<set_id>/review/` の監査ファイル、またはM7D-12の `output/<set_id>/.staging/` 一時ファイルが既に存在する | 衝突した既存ファイルの相対パスを明記 | 既存ファイルを変更・削除せず保持し、新しい `set_id` でセットを最初から作成する |
+| E-DATA-07 | 出力ファイル上書き衝突: C12が排他的に作成しようとした `output/<set_id>/review/` の監査ファイル、またはM8D-09の `output/<set_id>/.staging/` 固定一時ファイルが既に存在する | 衝突した既存ファイルの相対パスを明記 | 既存ファイルを変更・削除せず保持し、新しい `set_id` でセットを最初から作成する |
 | E-DATA-08 | セッション設定スナップショット不一致: doctor成功直後に固定した `limits.json`・`proper_nouns.json` のJSON値と、S80開始時・各処理前・finalize時の現在値が一致しない | 不一致ファイルと、スナップショット値・現在値の差分を明記 | 進行中セットの監査を保持したまま中止し、設定変更後に `python scripts/doctor.py` を実行して新しい `set_id` で最初から作成する |
 
 ### 6.3 E-CONTRACT（スキーマ・契約違反）
@@ -277,13 +289,13 @@ cefr_j_agents/
 - **VER-06** 正規化データの多版並存をしてはならない(MUST NOT)。`data/normalized/` は常に単一版とし、過去版はgit履歴で参照する。
 - **VER-07** 設定ファイル（`limits.json`・`proper_nouns.json`）の変更は通常コミットと `CHANGELOG.md` への記載を伴わなければならない(MUST)。
 - **VER-08** リリースはgitタグで行い、リリースごとに手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施しなければならない(MUST)。
-- **VER-09** M8完了時の初回リリースはannotated tag `v1.0.0`とし、タグ注釈に第1層・第2層の全通過とA-01〜A-15の全合格を記録しなければならない(MUST)。受け入れ記録のパスは`tests/acceptance/records/v1.0.0.md`とする。
+- **VER-09** M8完了時の初回リリースはannotated tag `v1.0.0`とし、タグ注釈に第1層・第2層の全通過とA-01〜A-15の全合格を記録しなければならない(MUST)。受け入れ記録のパスは`tests/acceptance/records/v1.0.0.md`とする。最終受け入れ前に同名タグを作成した場合はM8D-11に従い、リモート未公開なら最終確定コミットへ作り直し、公開済みならタグを移動せず修正版`v1.0.1`と`tests/acceptance/records/v1.0.1.md`を作成しなければならない(MUST)。
 
 ## 8. 運用手順
 
 - **OPS-01 原本更新手順**: 次の順で実施しなければならない(MUST)。①新版xlsxを `data/source/` に配置し、新版の`version_label`・入手URL・ダウンロード日を `data/source/sources.json` に更新する（ファイル名が変わる場合は本書 E-DATA-01 の固定名定義と `docs/cefrj-validation-spec.md` 正規化仕様の改訂を先行させる）→ ②`python scripts/build_normalized.py --diff` を実行し、書き込みなしで新旧差分レポートを確認 → ③差分を承認したら `python scripts/build_normalized.py --accept-source-change` で本ビルドし `data/normalized/` を更新 → ④`data_version`（VER-04）が更新されたことを `meta.json` で確認 → ⑤`CHANGELOG.md` に原本版・差分要約を記載 → ⑥コミット。差分確認前に本ビルド結果をコミットしてはならない(MUST NOT)。
 - **OPS-02 固有名詞allowlist追加手順**: ①教師が追加候補語を提示 → ②選定基準（学習者への馴染み・文化的中立。基準の正は `docs/cefrj-validation-spec.md` の免除規則）に照らして判断 → ③`data/config/proper_nouns.json` を編集 → ④`python scripts/validate.py --schema config_proper_nouns --file data/config/proper_nouns.json` で検証 → ⑤コミットと `CHANGELOG.md` 記載。総語数は50〜100語の範囲を維持すべきである(SHOULD)。
-- **OPS-03 リリース手順**: ①`CHANGELOG.md` 整理 → ②決定的pytest CI 全通過 → ③手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施し全項目合格 → ④M8初回はVER-09のannotated tag `v1.0.0`を付与 → ⑤タグをpush。③に不合格項目がある状態でタグを付与してはならない(MUST NOT)。
+- **OPS-03 リリース手順**: ①`CHANGELOG.md` 整理 → ②決定的pytest CI 全通過 → ③手動受け入れチェックリスト（`docs/testing-and-acceptance.md`）を実施し全項目合格 → ④M8初回はVER-09のannotated tag `v1.0.0`を付与 → ⑤タグをpush。③に不合格項目がある状態でタグを付与してはならない(MUST NOT)。最終受け入れ前の`v1.0.0`が既にある場合、④の前に`git ls-remote --tags origin refs/tags/v1.0.0`で公開状態を確認し、未公開時だけローカルタグを作り直す。公開済みなら移動・削除せず、③を`v1.0.1`用記録で完了して修正版タグを付与する（M8D-11）。
 - **OPS-04 教師の更新手順**: `git pull` → `python scripts/doctor.py` の2手順とする(MUST)。doctor が fail を返した場合は表示された remedy に従う。
 - **OPS-05 フィクスチャ更新手順**: 更新のトリガーは次の3つに限る(MUST): ①スキーマの版上げ、②正規化パイプライン変更（data_version 更新）、③検証仕様の規則変更。トリガー発生時、リリース前にフィクスチャを再記録しなければならない(MUST)。フィクスチャの様式・再記録の具体的手順・ゴールデンのチェックサム固定の正は `docs/testing-and-acceptance.md`。
 - **OPS-06 NOTICE内容要件**: リポジトリ直下の `NOTICE`（実装物。`docs/requirements.md` FR-41）は次の5項を必ず含まなければならない(MUST)。

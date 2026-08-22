@@ -1,0 +1,2 @@
+- R17-01: process helperの未展開`**kwargs`と成功`CompletedProcess`の非明示・非正準stdoutをfail-closedに拒否し、既存machine helperを明示keyword形へ変更して両反例を自己負回帰化した (tests/unit/test_fixtures.py, tests/unit/test_machine_lookup.py)
+- R17-02: with optional variableとcall/iterator/for経由のsensitive callableを`unresolved-sensitive`へ伝播し、context manager・iterator aliasの反例を自己負回帰化した (tests/unit/test_fixtures.py)

@@ -1,0 +1,24 @@
+{
+  "checked_question_ids": [
+    "q01",
+    "q02"
+  ],
+  "data_version": "wl1.6+gp20200220+norm1.0.2",
+  "generated_at": "2099-01-01T00:00:00Z",
+  "schema_version": "1.0.0",
+  "scope": "set",
+  "set_id": "20990101-000000-rpl1",
+  "target_question_id": null,
+  "verdict": "fail",
+  "violations": [
+    {
+      "actual_level": null,
+      "code": "V-SET-02",
+      "evidence": "正規化後に同一となる例文が2問で使われています: 'I accept your ability.'",
+      "expected_level": null,
+      "location": "questions[q01, q02] の英文検査対象",
+      "suggestion": "意味を保ったまま、他問と一致しない新しい例文へ差し替えてください。"
+    }
+  ],
+  "warnings": []
+}

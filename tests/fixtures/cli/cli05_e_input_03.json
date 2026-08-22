@@ -1,0 +1,8 @@
+{
+  "detail": {
+    "source": "-"
+  },
+  "error_code": "E-INPUT-03",
+  "message": "E-INPUT-03 provider入力がstrict UTF-8の標準JSONではありません",
+  "remedy": "入力をstrict UTF-8の標準JSONへ修正してください。"
+}

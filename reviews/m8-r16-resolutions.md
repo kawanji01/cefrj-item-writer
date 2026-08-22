@@ -1,0 +1,2 @@
+- R16-01: 手書き成功JSONを製品生成値・正準CLI fixtureへ置換し、process helperの入力パス/stdinと直接subprocess・成功CompletedProcess stdoutをCI-R-03のfail-closed sinkとして自己回帰化した (tests/unit/test_cli.py, tests/unit/test_flow_control.py, tests/unit/test_fixtures.py, tests/generate_assets.py, tests/fixtures/cli/)
+- R16-02: scope合流・外側再束縛・反射call・計算キーを追跡し、正準root遡り・絶対/親/動的path成分を既定拒否してレビュー列挙の全迂回を自己負ケースへ固定した (tests/unit/test_fixtures.py)

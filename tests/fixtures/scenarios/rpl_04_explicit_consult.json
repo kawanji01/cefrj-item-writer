@@ -58,5 +58,6 @@
       "review": "fail_q01_gen3.json",
       "review_retries": []
     }
-  ]
+  ],
+  "teacher_decisions": []
 }

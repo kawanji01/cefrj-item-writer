@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code独立レビュアーを壁時計期限付きで1回だけ実行する。"""
+"""Claude Code独立レビュアーを1回実行し、結果をC12へ安全に渡す。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 import signal
-import stat
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -26,19 +25,15 @@ LAUNCH_ERROR_EXIT_CODE = 70
 TERMINATION_GRACE_SECONDS = 1.0
 
 
-class ReviewerTimeoutError(TimeoutError):
-    """レビュアーのプロセスグループを期限超過で停止した。"""
-
-    def __init__(self, pid: int) -> None:
-        super().__init__(f"reviewer process {pid} timed out")
-        self.pid = pid
-
-
 @dataclass(frozen=True)
 class ReviewerProcessResult:
     returncode: int
     stdout: bytes
     stderr: bytes
+
+
+class ReviewerLaunchError(RuntimeError):
+    """request確定後のレビュアー起動準備に失敗した。"""
 
 
 def fail(message: str, exit_code: int = 2) -> None:
@@ -54,38 +49,53 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _require_regular_path(path: Path, repo_root: Path) -> None:
-    relative = path.relative_to(repo_root)
-    current = repo_root
-    for part in relative.parts:
-        current = current / part
-        try:
-            mode = current.lstat().st_mode
-        except OSError as exc:
-            fail(f"レビュアー入力パスを確認できません: {exc}")
-        if current != path and (not stat.S_ISDIR(mode) or current.is_symlink()):
-            fail(f"レビュアー入力の親が実ディレクトリではありません: {current}")
-    if not stat.S_ISREG(path.lstat().st_mode) or path.is_symlink():
-        fail("レビュアー入力は通常ファイルでなければなりません")
-
-
 def checked_request_path(raw_path: str, repo_root: Path) -> Path:
     if REQUEST_PATH_RE.fullmatch(raw_path) is None:
         fail("入力封筒パスが固定監査名に一致しません")
-    path = repo_root / raw_path
-    _require_regular_path(path, repo_root)
-    return path
+    return repo_root / raw_path
 
 
-def load_timeout_seconds(repo_root: Path) -> int:
-    limits_path = repo_root / "data/config/limits.json"
+def run_review_preflight(
+    repo_root: Path, request_path: Path
+) -> subprocess.CompletedProcess[bytes]:
+    """C12に設定・snapshot・直前requestと適用timeoutを一括確定させる。"""
+
+    relative_request = request_path.relative_to(repo_root).as_posix()
+    set_dir = request_path.parents[1].relative_to(repo_root).as_posix()
+    return subprocess.run(
+        [
+            sys.executable,
+            str(repo_root / "scripts" / "flow_control.py"),
+            "review-preflight",
+            "--set-dir",
+            set_dir,
+            "--request",
+            relative_request,
+        ],
+        cwd=repo_root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def preflight_timeout_seconds(
+    completed: subprocess.CompletedProcess[bytes], request_path: str
+) -> int:
     try:
-        limits = json.loads(limits_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        fail(f"review_timeout_secondsを読み取れません: {exc}")
-    value = limits.get("review_timeout_seconds") if isinstance(limits, dict) else None
+        result = json.loads(completed.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ReviewerLaunchError(f"review preflight結果を読み取れません: {exc}") from exc
+    if not isinstance(result, dict) or set(result) != {
+        "request_path",
+        "review_timeout_seconds",
+    }:
+        raise ReviewerLaunchError("review preflight結果の固定フィールドが不正です")
+    if result["request_path"] != request_path:
+        raise ReviewerLaunchError("review preflight結果のrequest_pathが一致しません")
+    value = result["review_timeout_seconds"]
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        fail("review_timeout_secondsは1以上の整数でなければなりません")
+        raise ReviewerLaunchError("review preflight結果のtimeoutが不正です")
     return value
 
 
@@ -141,6 +151,35 @@ def _stop_process_group(process: subprocess.Popen[bytes]) -> None:
         process.wait()
 
 
+def _merge_timeout_stderr(
+    partial: bytes | str | None, drained: bytes
+) -> bytes:
+    partial_bytes = (
+        partial.encode("utf-8") if isinstance(partial, str) else partial or b""
+    )
+    if not partial_bytes:
+        return drained
+    if not drained:
+        return partial_bytes
+    limit = min(len(partial_bytes), len(drained))
+    pattern = drained[:limit]
+    prefix_lengths = [0] * limit
+    matched = 0
+    for index in range(1, limit):
+        while matched and pattern[index] != pattern[matched]:
+            matched = prefix_lengths[matched - 1]
+        if pattern[index] == pattern[matched]:
+            matched += 1
+        prefix_lengths[index] = matched
+    matched = 0
+    for value in partial_bytes[-limit:]:
+        while matched and value != pattern[matched]:
+            matched = prefix_lengths[matched - 1]
+        if value == pattern[matched]:
+            matched += 1
+    return partial_bytes + drained[matched:]
+
+
 def run_with_timeout(
     command: Sequence[str], prompt: bytes, timeout_seconds: int, cwd: Path
 ) -> ReviewerProcessResult:
@@ -154,43 +193,79 @@ def run_with_timeout(
     )
     try:
         stdout, stderr = process.communicate(input=prompt, timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         _stop_process_group(process)
-        raise ReviewerTimeoutError(process.pid) from None
+        _discarded_stdout, drained_stderr = process.communicate()
+        stderr = _merge_timeout_stderr(exc.stderr, drained_stderr)
+        return ReviewerProcessResult(TIMEOUT_EXIT_CODE, b"", stderr)
     return ReviewerProcessResult(process.returncode, stdout, stderr)
+
+
+def submit_to_flow_control(
+    repo_root: Path,
+    request_path: Path,
+    result: ReviewerProcessResult,
+) -> subprocess.CompletedProcess[bytes]:
+    """非信頼のreviewer bytesをシェルを介さずC12へ1回渡す。"""
+
+    set_dir = request_path.parents[1].relative_to(repo_root).as_posix()
+    command = [
+        sys.executable,
+        str(repo_root / "scripts" / "flow_control.py"),
+        "review",
+        "--set-dir",
+        set_dir,
+    ]
+    if result.returncode == 0 and result.stdout:
+        command.extend(["--file", "-"])
+        payload = result.stdout
+    else:
+        command.extend(["--process-failure", str(result.returncode)])
+        payload = result.stderr
+    return subprocess.run(
+        command,
+        cwd=repo_root,
+        input=payload,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def relay(completed: subprocess.CompletedProcess[bytes]) -> int:
+    if completed.stdout:
+        sys.stdout.buffer.write(completed.stdout)
+    if completed.stderr:
+        sys.stderr.buffer.write(completed.stderr)
+    return completed.returncode
 
 
 def main() -> None:
     args = parse_args()
     repo_root = Path(__file__).resolve().parents[1]
-    checked_request_path(args.request, repo_root)
-    timeout_seconds = load_timeout_seconds(repo_root)
-    claude_path = shutil.which("claude")
-    if claude_path is None:
-        fail("claudeコマンドがPATH上にありません", LAUNCH_ERROR_EXIT_CODE)
-
+    request_path = checked_request_path(args.request, repo_root)
     try:
+        preflight = run_review_preflight(repo_root, request_path)
+        if preflight.returncode != 0:
+            raise SystemExit(relay(preflight))
+        timeout_seconds = preflight_timeout_seconds(preflight, args.request)
+        claude_path = shutil.which("claude")
+        if claude_path is None:
+            raise ReviewerLaunchError("claudeコマンドがPATH上にありません")
         result = run_with_timeout(
             build_command(claude_path),
             build_prompt(args.request),
             timeout_seconds,
             repo_root,
         )
-    except ReviewerTimeoutError:
-        fail(
-            f"独立レビュアーが{timeout_seconds}秒の壁時計期限を超過したため停止しました",
-            TIMEOUT_EXIT_CODE,
+    except (OSError, ReviewerLaunchError) as exc:
+        result = ReviewerProcessResult(
+            LAUNCH_ERROR_EXIT_CODE,
+            b"",
+            f"独立レビュアーを起動できません: {exc}\n".encode("utf-8"),
         )
-    except OSError as exc:
-        fail(f"独立レビュアーを起動できません: {exc}", LAUNCH_ERROR_EXIT_CODE)
 
-    if result.returncode != 0:
-        if result.stderr:
-            sys.stderr.buffer.write(result.stderr)
-        raise SystemExit(result.returncode if result.returncode > 0 else LAUNCH_ERROR_EXIT_CODE)
-    if not result.stdout:
-        fail("独立レビュアーのstdoutが空です", LAUNCH_ERROR_EXIT_CODE)
-    sys.stdout.buffer.write(result.stdout)
+    raise SystemExit(relay(submit_to_flow_control(repo_root, request_path, result)))
 
 
 if __name__ == "__main__":

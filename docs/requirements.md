@@ -84,7 +84,7 @@
 ### 4.6 データ・CLI・運用
 
 - **FR-32 正規化データ**: 原本xlsxから `data/normalized/`（lexicon.json / grammar.json / meta.json）を決定的にビルドし、出典ヘッダー付きでコミットしなければならない(MUST)。原本と正規化の整合はSHA-256チェックサムで起動時検証しなければならない(MUST)（D-22, DD-02）。正: `docs/cefrj-validation-spec.md`（変換規則）、`docs/architecture.md`（運用）。
-- **FR-33 CLI群**: `doctor.py` / `build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `lookup.py` の8本のPython CLIを提供し、全てJSON入出力・定義済み終了コードに従わなければならない(MUST)（D-09, D-18）。契約の正: `docs/architecture.md`。
+- **FR-33 CLI群**: `doctor.py` / `build_normalized.py` / `machine_check.py` / `set_check.py` / `finalize_set.py` / `build_html.py` / `validate.py` / `lookup.py` / `flow_control.py` の9本のPython CLIを提供し、全てJSON入出力・定義済み終了コードに従わなければならない(MUST)（D-09, D-18, M8D-09）。契約の正: `docs/architecture.md`。
 - **FR-34 doctor診断**: `doctor.py` は環境・依存・データ整合を一括診断し、日本語の対処手順を提示しなければならない(MUST)（D-09, D-20）。正: `docs/architecture.md`。
 - **FR-35 エラー処理**: 全CLIは実行前に前提条件を検査し、定義済みエラーコード（接頭辞 `E-ENV-` / `E-DATA-` / `E-CONTRACT-` / `E-INPUT-`）＋日本語対処手順で停止しなければならない(MUST)。データ不整合（原本欠落・チェックサム不一致・正規化陳腐化）は処理を拒否しなければならない(MUST)（D-20）。エラーコード目録の正: `docs/architecture.md`。
 - **FR-36 レビュアー出力のインフラ障害扱い**: レビュアー出力のスキーマ不通過はインフラ障害として扱い、問題の不合格に数えてはならない(MUST NOT)。最大2回再実行し、なお失敗ならセットを中止しなければならない(MUST)（D-20）。正: `docs/subagent-review-spec.md`。

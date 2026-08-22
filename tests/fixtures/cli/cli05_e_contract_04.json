@@ -1,0 +1,11 @@
+{
+  "detail": {
+    "problems": [
+      "テスト用の確定条件違反です"
+    ],
+    "total": 1
+  },
+  "error_code": "E-CONTRACT-04",
+  "message": "E-CONTRACT-04 セット確定条件を満たしていません: テスト用の確定条件違反です",
+  "remedy": "docs/interaction-flow.mdの不成立時教師照会フローに戻り、確定を強行しないでください。"
+}

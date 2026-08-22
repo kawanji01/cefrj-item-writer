@@ -1,5 +1,90 @@
 # CHANGELOG
 
+## Unreleased — M8 R3〜R23対応・v1.0.1修正版候補
+
+### レビュー対応
+
+- R3-01〜R3-06に対応し、レビュアー生stdout/stderrをシェル文字列へ展開しない固定argv・バイトstdinのbridge、CLI-05完全形の終端action、異常終端時のflow-state削除、`W-CLEANUP-01`完全伝播、machine disputeのcode/location照合、外部入力不当と子CLI内部異常の分離を実装した。
+- R3-07に対応し、教師判断を製品`decide` CLIへの外部入力イベントとしてリプレイへ追加した。RPL-10は`q01`〜`q06`の6対象を各3世代、計18試行して2件のreduce終端監査を残し、上限外`q07`を要求・監査しないことを検査する。
+- R4-01〜R4-04に対応し、共通事前検査を含む全異常終端でのflow-state削除、子CLI終了1/2の正確な分類、Codex作業ファイル異常時の実returncode・生stderr保持、candidate rawの監査保存成功後削除を実装した。
+- R4-05に対応し、CHK-03の`expected_level`をcandidateから導出したL_ctxへ完全一致させ、`actual_level`の真超過とCEFR-J 9段階、同一span・導入レベル・根拠を持つ文法構造インベントリとの対応を意味検証するようにした。RPL fail fixtureもL_ctx=A2.2・actual=B1.1の整合形へ更新した。
+- R5-01〜R5-04に対応し、0バイトprovider出力のprocess failure監査、CHK-03対象英文と根拠の完全一致、timeout後のpipe drainによる生stderr保持、子CLIの末尾CLI-05 JSONと既知エラーコードの厳密な伝播を実装した。
+- R6-01に対応し、CHK-03の教員版根拠を検証済み正規化文法ID、直接付与または継承元の`level_raw`、境界付き完全IDへ照合し、架空ID・前方一致・誤レベル・継承不備をINF再実行へ送るようにした。
+- R6-02〜R6-03に対応し、request確定後のレビュアー起動前障害をC12のprocess failureへ統一して3回で監査付き中止へ収束させ、作問コアから旧式のホスト直接C12送信・生出力再送・コードフェンス抽出手順を除去した。
+- R7-01〜R7-02に対応し、CHK-03インベントリを非空必須とし、教員版の単一値・範囲値と構造名を正規化grammarへ完全照合した。通常・machine-fail・set-conflictのpass reviewを候補別の実在spanと正規化根拠で分離し、reviewer_estimateにも推定レベル完全引用と日本語根拠を必須化した。
+- R7-03〜R7-04に対応し、テスト内の手組み契約JSONを製品生成または正準fixtureへ移した。全テストPythonと生成器を走査するCI-R-03メタ検査、固定9 CLIのCI-R-01追跡、第1層・第2層の全テストID集合を関数名・docstringへ照合するメタ検査を追加した。
+- R8-01に対応し、CHK-03インベントリ自身からL_ctx超過を導出してcheck・verdict・要素別violationとの整合を必須化した。固定候補のpass review 23件は、未来時制とwill、所有格、文型を含む既知の全教員版構造集合へ再生成した。
+- R8-02〜R8-03に対応し、部分machine report直書きを実machine出力へ置換した。完全・部分の製品JSONを検出するCI-R-03自己負検査と、全unit/replayテスト関数に既存CI/RPL IDがあることを要求するTST-08関数単位メタ検査を追加した。
+- R9-01に対応し、固定英文のCHK-03インベントリ生成を`kyoinban`と`reviewer_estimate`の両方へ対応させ、主動詞`has`の現在時制を推定導入レベルA1.1・日本語根拠付きでq02のpass/fail reviewへ追加した。41件の固定reviewを既知構造集合と製品意味検証へ照合する。
+- R9-02に対応し、CI-R-03メタ検査をdict literalだけでなく`dict(...)`、空辞書への段階的代入、`update()`、辞書merge/unpackへ拡張し、各構築形の自己負ケースを追加した。
+- R9-03に対応し、timeout試験の偽レビュアーを別PythonのコールドスタートからPOSIX shellへ変更し、3秒の起動猶予でTERM無視・KILL・生stderr drainを検査するようにした。対象2件の3並列反復と全239件の3回連続実行で安定通過を確認した。
+- R9-04に対応し、製品成果物でないローカル`.agents/`と`.tmp-slide-*/`を削除せずGit追跡対象外にした。
+- R10-01に対応し、CHK-03の上限超過inventoryとviolationsを配列index単位の最大二部マッチングで一対一照合し、同一span・level・evidenceの複数構造によるviolation使い回しと余剰violationを拒否した。
+- R10-02に対応し、CI-R-03の静的追跡をJSON文字列復元、文字列定数、辞書alias、反復・計算キー、辞書内包、zip、setdefault/setitemへ拡張し、製品JSONの迂回構築を自己負検査で拒否した。
+- R11-01に対応し、両固定レビュアーラッパーが子起動前にC12のreview-preflightを実行して、現在設定全体の検証、セッションsnapshotとの一致、直前requestとの対応、適用timeoutを一括確定するようにした。不一致・不当設定では子を起動せず、C12の定義済みCLI-05を非改変で返す。
+- R11-02に対応し、CI-R-03の静的追跡をモジュールから関数への文字列定数参照、import alias、dict.fromkeysへ拡張し、製品JSONの追加迂回構築を自己負検査で拒否した。
+- R12-01に対応し、review-preflightが実requestをstrict JSON・スキーマで再検証し、現在stateのcandidate・machine report・generation・session・設定snapshotから再構築したJS-01正準バイト列との完全一致を要求するようにした。両ラッパーで4種のrequest改変を子起動前に拒否し、監査保持・flow-state削除を確認した。
+- R13-01 / 承認済みM8D-13に対応し、review-preflightを両固定ラッパー内部専用CLIとして、固定argv、検査順、正常2フィールド、定義済みエラー、監査保持・state寿命まで正文化した。通常ファイル性をC12へ集約し、help・必須引数・request欠落・直前action不一致・改変・正常系を回帰化した。
+- R13-02に対応し、CI-R-03を製品関数・JSON書込みsinkへ到達する値のファイル・関数限定allowlist由来を追跡するfail-closed検査へ改めた。文字列・bytes payloadをAPI名に依存せず検査し、`JSONDecoder.decode`、bytes版`json.loads`、未知decoder/helper、許可済み関数名の局所偽装、偽stdout、書込み迂回を自己負ケースで拒否する。
+- R14-01に対応し、CI-R-03のsinkをimport元を含む完全call identityで定義してimport alias・代入alias・解決不能aliasを追跡し、位置/keyword引数、`**kwargs`、正準fixture/golden・製品直前出力・support pathを区別する`load_json`/JSON書込み由来をfail-closedに検査するようにした。R14の3反例、正準外一時JSON、条件alias、任意名一時書込みを自己負ケースへ追加し、正準fixtureのkeyword・alias正常例も固定した。
+- R15-01に対応し、CI-R-03のscope別symbol tableでimport済みloader/source/sinkへの名前・属性・`Assign`・`AnnAssign`・`NamedExpr`・分割代入・反復/with/例外束縛・拡張代入・削除・関数/クラス再定義を追跡し、ネストscopeへ状態を継承して条件分岐の異なるidentityをfail-closedに合流させた。静的`getattr`とtuple/list/dictのsubscript calleeを完全identityへ解決し、loader局所上書き・動的sink・各再束縛・コンテナ/ネスト/分岐経由の反例と、正準loaderを維持した静的間接呼出し・同一identity分岐の正常例を自己回帰へ追加した。
+- R16-01に対応し、`finalize_set.py`の手書きstdinと成功子CLIの手組みstdoutを、製品helper生成値と生成器管理の正準CLI fixtureへ置換した。CI-R-03では`run_cli` / `machine_for_path`を入力sinkとして検査し、非正準path・手書きstdin・手組み成功stdout・明示allowlist外の直接`subprocess.run` / `Popen`をfail-closedに拒否する自己負ケースを追加した。
+- R16-02に対応し、CI-R-03のscope合流を`Try` / `Match` / loopへ広げ、`Global` / `Nonlocal`、`globals` / `locals` / `vars` / `__dict__`、計算名`getattr`と敏感symbolへの`setattr`を追跡した。pathは定数相対成分だけを承認して`.parent` / `.parents` / `..` / 絶対・動的成分を既定拒否し、計算dict keyを復元してレビュー列挙の全迂回を自己負ケースへ固定した。
+- R17-01に対応し、process helperの静的展開不能な`**kwargs`を無条件にcall-shape違反とした。成功`CompletedProcess`は明示的な整数returncode・stdoutとstdoutの承認済み由来を必須化し、既存machine report helperも任意kwargs転送から3引数の明示keyword転送へ変更した。
+- R17-02に対応し、context managerのoptional variableへcontext式中のsensitive callable由来を伝播した。代入RHSのnested call/iteratorと`for` / `async for`のiterator subtreeも追跡し、identityを確定できないaliasを`unresolved-sensitive`として拒否する自己負ケースを追加した。
+- R18-01に対応し、CI-R-03のsensitive callable identityを位置・keyword-onlyデフォルト引数、関数返却値、class属性へ伝播した。process/sink default、return factory、class属性の5反例を自己負回帰へ追加し、未知由来入力がこれらの境界から製品process・JSON書込みsinkへ到達する経路をfail-closedに拒否する。
+- R18-02に対応し、CI-MCH-18用巨大整数candidate生成のカンマ位置をFIX-02正準形へ修正して4,300・4,301・5,000桁fixtureを再生成した。正準形メタ検査は巨大整数tokenだけをplaceholderへ置換して整数変換上限に依存せず期待バイト列を構築し、3件とも完全バイト一致を要求する。
+- R18-03 / 承認済みM8D-14に対応し、FIX-06のスキーマ不通過例外へCI-MCH-18とCI-SCH-04を追加した。候補・レビューfixtureの除外は固定ファイル名と完全一致する`test_ids`の許可リストだけに限定し、`purpose`自由記述による除外を廃止して、各例外のJSON解析失敗または実スキーマ不合格も検査する。
+- R19-01に対応し、CI-R-03がローカル高階関数の位置・keyword-only・`*args`・`**kwargs`呼出しを仮引数へ対応付け、sensitive callable identity、入力由来、path、静的payloadをcallee scopeへ伝播するようにした。sink/process通常引数、keyword-only、引数・関数alias、call側と定義側の可変引数、仮引数同名shadowの10反例を拒否し、承認済みfixture由来だけを渡す正常wrapperは通過する自己回帰を追加した。
+- R20-01に対応し、任意calleeへ引数として渡されるsensitive callableを、R19で仮引数・入力由来まで検証するローカルwrapper以外ではfail-closedに拒否するようCI-R-03を拡張した。loader・encoder等の呼出し結果はcallable objectと区別し、直接または`getattr`で得る`__call__`は元のsink/process identityへ正規化する。`operator.call`のsink/process、`itertools.starmap`、2種の`__call__`の5反例を自己回帰へ追加した。
+- R21-01に対応し、CI-R-03がsensitive callableを含む静的コンテナの全要素identityを保持し、名前アンパック、`pop()`、`values()`アンパック、ローカル関数のコンテナ戻り値へ伝播するようにした。未知の抽出操作は`unresolved-sensitive`としてfail-closedに拒否し、指摘4反例、未知抽出1反例、正準fixture由来だけを同じ4形で渡す正常例を自己回帰へ追加した。
+- R21-02に対応し、Claude/Codex両レビューラッパーのtimeout処理が`TimeoutExpired.stderr`と停止後のdrainを最大重複分だけ除いて結合するようにした。後続`communicate()`が空でも部分stderrを保持するfake `Popen`回帰を両ラッパーへ追加し、実プロセス回帰は子がstderrを書き終えた準備完了を親側で確認してから期限超過結果を検証する形へ変更した。
+- R22-01に対応し、CI-R-03がsensitive callableコンテナを名前から反復する形、`keys()`・`values()`・`items()` viewとネストした`next(iter(...))`、関数内ローカル変数を介したコンテナ戻り値へ要素identityを伝播するようにした。指摘3反例、`next(iter(calls.values()))`、`next(iter(calls.items()))[1]`と、正準fixture由来だけを同じ5形で渡す正常例を自己回帰へ追加した。
+- R22-02に対応し、Claude Codeのstagingガードを`Read`のPreToolUseにも配線した。相対・正規化相対・リポジトリ内絶対パスの`output/<set_id>/.staging/flow-state.json`だけをCCW-11違反として拒否し、通常の仕様・監査・candidate staging読取りと`flow_control.py status`を維持するCLI回帰を追加した。
+- R23-01に対応し、CI-R-03のcallableコンテナへsequence/mapping/keys/values/itemsの種別を保持して、名前へ束縛したdict viewのアンパック・反復・ネスト抽出へ要素identityを伝播するようにした。ローカル関数のIf/Try/Match/loop別container状態を解析・合流し、全経路同一のsensitive戻り値を確定、合流不能をfail-closed化した。指摘2反例、制御構造の派生3例と同形正常例を自己回帰へ追加した。
+- R23-02に対応し、Claude Codeのstagingガードを`Grep`のPreToolUseにも配線した。flow-state自身、`.staging`、set-dir、`output/`、リポジトリルートとその絶対祖先、およびpath省略時の既定ルート検索をCCW-11違反として拒否し、通常の仕様・監査・candidate検索を維持するCLI回帰を追加した。
+- 公開済み`v1.0.0`は移動・削除しない。コードレビュー収束後の最終コミット候補でA-01〜A-15を再実施し、全合格後に`tests/acceptance/records/v1.0.1.md`、本CHANGELOGのリリース記録、annotated tag `v1.0.1`を作成する。現時点では受け入れ合格・リリース完了を主張しない。
+
+### M8 DoD再確認（2026-08-23、R23対応後）
+
+1. 第1層・第2層: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit tests/replay -q`をR23対応後の最終状態で実行し、258件全てpass（760.59秒）。`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m py_compile scripts/*.py .claude/*.py .claude/hooks/*.py .codex/*.py tests/unit/*.py tests/replay/*.py tests/generate_assets.py`、`jq empty .claude/settings.json tests/fixtures/cli/index.json tests/fixtures/cli/finalize_success.json tests/fixtures/cli/validate_set_success.json`、`git diff --check b3c61b13d6e5b1a768831e4a93339f5d26f91702`も終了コード0。
+2. ゴールデン候補: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit/test_fixtures.py::test_ci_fix_01_golden_cases_machine_pass tests/unit/test_cli.py::test_ci_cli_02_machine_compatibility_golden -q`を実行し、2件pass（3.83秒）。2候補のスキーマ・機械検査通過とmachine互換ゴールデン一致を確認した。
+3. A-01〜A-15: 未実施。`tests/acceptance/records/`に存在するのは公開済み`v1.0.0.md`だけで、R3-08およびACC-01に従いコードレビュー収束後の最終コミット候補で実LLMを用いて再実施する。
+4. タグ付きリリース: 未実施。`git tag --list 'v1.0.*'`は公開済み`v1.0.0`だけであり、A-01〜A-15合格後にannotated tag `v1.0.1`を作成する。
+5. 更新手順: 未実施。`v1.0.1`候補のコミット・push後、クリーンな更新環境で`git pull --ff-only`から`doctor.py`成功までを確認する。
+
+補助確認として、R23-01の指摘2反例、If/Try/Match/loopの同一container合流、view束縛と同形正常系を含むCI-R-03メタ回帰はpassし、`tests/unit/test_fixtures.py`全11件もpass（3.56秒）した。R23-02のflow-state Read/Grepガード回帰はpassし、内部stateの相対・絶対指定とGrepの祖先検索範囲を拒否して通常の仕様・監査・candidate検索を許可した。`.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、`.venv/bin/python scripts/build_normalized.py --diff`はlexicon 7,988件・grammar 501件、追加・削除・レベル変更0件、`written=[]`だった。
+
+### M8 DoD再確認（2026-08-23、R22対応後）
+
+1. 第1層・第2層: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit tests/replay -q`をR22対応後の最終状態で実行し、258件全てpass（728.26秒）。`.venv/bin/python -m py_compile scripts/*.py .claude/*.py .claude/hooks/*.py .codex/*.py tests/unit/*.py tests/replay/*.py tests/generate_assets.py`、`jq empty .claude/settings.json tests/fixtures/cli/index.json tests/fixtures/cli/finalize_success.json tests/fixtures/cli/validate_set_success.json`、`git diff --check b3c61b13d6e5b1a768831e4a93339f5d26f91702`も終了コード0。
+2. ゴールデン候補: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit/test_fixtures.py::test_ci_fix_01_golden_cases_machine_pass tests/unit/test_cli.py::test_ci_cli_02_machine_compatibility_golden -q`を実行し、2件pass（3.13秒）。2候補のスキーマ・機械検査通過とmachine互換ゴールデン一致を確認した。
+3. A-01〜A-15: 未実施。`tests/acceptance/records/`に存在するのは公開済み`v1.0.0.md`だけで、R3-08およびACC-01に従いコードレビュー収束後の最終コミット候補で実LLMを用いて再実施する。
+4. タグ付きリリース: 未実施。`git tag --list 'v1.0.*'`は公開済み`v1.0.0`だけであり、A-01〜A-15合格後にannotated tag `v1.0.1`を作成する。
+5. 更新手順: 未実施。`v1.0.1`候補のコミット・push後、クリーンな更新環境で`git pull --ff-only`から`doctor.py`成功までを確認する。
+
+補助確認として、R22-01の指摘3反例・ネスト抽出2反例・同形正常系を含むCI-R-03メタ回帰はpassし、`tests/unit/test_fixtures.py`全11件もpass（3.36秒）した。R22-02のflow-state Readガード回帰は1件pass（0.26秒）し、相対・正規化相対・正規化絶対・絶対の内部stateを拒否して通常4経路を許可した。`.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、`.venv/bin/python scripts/build_normalized.py --diff`はlexicon 7,988件・grammar 501件、追加・削除・レベル変更0件、`written=[]`だった。
+
+### M8 DoD再確認（2026-08-23、R21対応後）
+
+1. 第1層・第2層: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit tests/replay -q`をR21対応後の最終状態で実行し、257件全てpass（760.15秒）。`.venv/bin/python -m py_compile scripts/*.py .claude/*.py .claude/hooks/*.py .codex/*.py tests/unit/*.py tests/replay/*.py tests/generate_assets.py`、`jq empty .claude/settings.json tests/fixtures/cli/index.json tests/fixtures/cli/finalize_success.json tests/fixtures/cli/validate_set_success.json`、`git diff --check b3c61b13d6e5b1a768831e4a93339f5d26f91702`も終了コード0。
+2. ゴールデン候補: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit/test_fixtures.py::test_ci_fix_01_golden_cases_machine_pass tests/unit/test_cli.py::test_ci_cli_02_machine_compatibility_golden -q`を実行し、2件pass（3.93秒）。2候補のスキーマ・機械検査通過とmachine互換ゴールデン一致を確認した。
+3. A-01〜A-15: 未実施。`tests/acceptance/records/`に存在するのは公開済み`v1.0.0.md`だけで、R3-08およびACC-01に従いコードレビュー収束後の最終コミット候補で実LLMを用いて再実施する。
+4. タグ付きリリース: 未実施。`git tag --list 'v1.0.*'`は公開済み`v1.0.0`だけであり、A-01〜A-15合格後にannotated tag `v1.0.1`を作成する。
+5. 更新手順: 未実施。`v1.0.1`候補のコミット・push後、クリーンな更新環境で`git pull --ff-only`から`doctor.py`成功までを確認する。
+
+補助確認として、R21-01の指摘4反例・未知抽出1反例・同形正常系を含むCI-R-03メタ回帰はpassし、`tests/unit/test_fixtures.py`全11件もpass（3.10秒）した。R21-02のfake `Popen`回帰は両ラッパー2件pass（0.07秒）し、準備完了同期付き実プロセスタイムアウト回帰も最終全体試験内でClaude/Codex両件passした。`.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、`.venv/bin/python scripts/build_normalized.py --diff`はlexicon 7,988件・grammar 501件、追加・削除・レベル変更0件、`written=[]`だった。
+
+### M8 DoD再確認（2026-08-22、R20対応後）
+
+1. 第1層・第2層: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit tests/replay -q`をR20対応後の最終状態で実行し、255件全てpass（698.53秒）。`.venv/bin/python -m py_compile scripts/*.py .claude/*.py .claude/hooks/*.py .codex/*.py tests/unit/*.py tests/replay/*.py tests/generate_assets.py`、`jq empty .claude/settings.json tests/fixtures/cli/index.json tests/fixtures/cli/finalize_success.json tests/fixtures/cli/validate_set_success.json`、`git diff --check b3c61b13d6e5b1a768831e4a93339f5d26f91702`も終了コード0。
+2. ゴールデン候補: `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/unit/test_fixtures.py::test_ci_fix_01_golden_cases_machine_pass tests/unit/test_cli.py::test_ci_cli_02_machine_compatibility_golden -q`を実行し、2件pass（3.92秒）。2候補のスキーマ・機械検査通過とmachine互換ゴールデン一致を確認した。
+3. A-01〜A-15: 未実施。R3-08およびACC-01に従い、コードレビュー収束後の最終コミット候補で実LLMを用いて全項目を再実施する。
+4. タグ付きリリース: 未実施。`v1.0.0`は公開済みのため保持し、A-01〜A-15合格後に`v1.0.1`を作成する。
+5. 更新手順: 未実施。`v1.0.1`候補のコミット・push後、クリーンな更新環境で`git pull --ff-only`から`doctor.py`成功までを確認する。
+
+補助確認としてR20-01の5反例と検証済みローカルwrapper正常系を含むCI-R-03対象メタ回帰2件（0.39秒）と`tests/unit/test_fixtures.py`全11件（3.58秒）は全てpassした。`.venv/bin/python scripts/doctor.py`は12 pass / 0 fail、`.venv/bin/python scripts/build_normalized.py --diff`はlexicon 7,988件・grammar 501件、追加・削除・レベル変更0件、`written=[]`だった。
+
 ## 2026-08-20 — M8 テスト・受け入れ・v1.0.0リリース
 
 ### 実装

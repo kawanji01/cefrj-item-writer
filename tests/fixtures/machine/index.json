@@ -8,6 +8,16 @@
         "CI-MCH-12",
         "CI-SCH-02"
       ]
+    },
+    {
+      "expected": "verdict failかつV-SET違反",
+      "file": "set_check_failure.json",
+      "purpose": "製品build_set_reportが生成したset scope失敗レポート",
+      "test_ids": [
+        "CI-R-03",
+        "CI-SET-01",
+        "CI-SET-02"
+      ]
     }
   ]
 }

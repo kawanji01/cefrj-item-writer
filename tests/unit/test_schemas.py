@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator
 
-from tests.support import FIXTURES, GOLDEN, ROOT, load_json, run_cli, stderr_json
+from tests.support import FIXTURES, GOLDEN, OFFICIAL_FORMATS, ROOT, load_json, run_cli, stderr_json
 
 
 SCHEMA_NAMES = (
@@ -39,7 +39,7 @@ def test_ci_sch_02_valid_examples(name: str) -> None:
     """CI-SCH-02: 9スキーマの妥当例をvalidate CLIが受理する。"""
 
     if name == "set":
-        paths = sorted((GOLDEN / "sets").glob("*.set.json"))
+        paths = [GOLDEN / "sets" / f"{fmt}.set.json" for fmt in OFFICIAL_FORMATS]
     else:
         paths = [FIXTURES / "schemas" / "valid" / name / "valid.json"]
     assert paths
@@ -84,7 +84,8 @@ def test_ci_sch_03_invalid_examples(case: dict[str, object]) -> None:
 def test_ci_sch_04_format_union() -> None:
     """CI-SCH-04: candidateの9形式共用体を受理しformat/body不整合を拒否する。"""
 
-    for path in sorted((FIXTURES / "candidates").glob("official_*.json")):
+    for fmt in OFFICIAL_FORMATS:
+        path = FIXTURES / "candidates" / f"official_{fmt}.json"
         completed = run_cli(
             "scripts/validate.py",
             "--schema",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M7D-12の一時ファイル操作を固定名・固定コマンドへ限定する。"""
+"""一時ファイル操作を限定し、CCW-11の内部state読取りを拒否する。"""
 
 from __future__ import annotations
 
@@ -14,6 +14,15 @@ RELATIVE_STAGING_RE = re.compile(
     r"output/[0-9]{8}-[0-9]{6}-[a-z0-9]{4}/\.staging/"
     r"q(?:0[1-9]|1[0-9]|20)\.gen[123]\."
     r"(?P<kind>candidate\.raw[12]|request\.raw)\.json"
+)
+RELATIVE_FLOW_STATE_RE = re.compile(
+    r"output/[0-9]{8}-[0-9]{6}-[a-z0-9]{4}/\.staging/flow-state\.json"
+)
+RELATIVE_SET_DIR_RE = re.compile(
+    r"output/[0-9]{8}-[0-9]{6}-[a-z0-9]{4}"
+)
+RELATIVE_STAGING_DIR_RE = re.compile(
+    r"output/[0-9]{8}-[0-9]{6}-[a-z0-9]{4}/\.staging"
 )
 CANDIDATE_VALIDATE_RE = re.compile(
     r"python scripts/validate\.py --schema candidate --file "
@@ -30,6 +39,12 @@ CLEANUP_RE = re.compile(
     r"(?P<path>output/[0-9]{8}-[0-9]{6}-[a-z0-9]{4}/\.staging/"
     r"q(?:0[1-9]|1[0-9]|20)\.gen[123]\."
     r"(?:candidate\.raw[12]|request\.raw)\.json)"
+)
+FLOW_CANDIDATE_RE = re.compile(
+    r"python scripts/flow_control\.py candidate --set-dir "
+    r"(?P<set_dir>output/(?P<set_id>[0-9]{8}-[0-9]{6}-[a-z0-9]{4})) --file "
+    r"(?P<path>output/(?P=set_id)/\.staging/"
+    r"q(?:0[1-9]|1[0-9]|20)\.gen[123]\.candidate\.raw[12]\.json)"
 )
 
 
@@ -56,13 +71,72 @@ def repo_relative(raw_path: str, repo_root: Path) -> str | None:
     path = Path(raw_path)
     if path.is_absolute():
         try:
-            return path.relative_to(repo_root).as_posix()
+            raw_relative = path.relative_to(repo_root).as_posix()
         except ValueError:
             return None
-    normalized = os.path.normpath(raw_path)
+    else:
+        raw_relative = raw_path
+    normalized = os.path.normpath(raw_relative)
     if normalized.startswith("../") or normalized == "..":
         return None
     return Path(normalized).as_posix()
+
+
+def guard_read(event: dict[str, object], repo_root: Path) -> None:
+    tool_input = event.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return
+    raw_path = tool_input.get("file_path")
+    if not isinstance(raw_path, str):
+        return
+    relative = repo_relative(raw_path, repo_root)
+    if (
+        relative is not None
+        and RELATIVE_FLOW_STATE_RE.fullmatch(relative) is not None
+    ):
+        deny(
+            "CCW-11: flow-state.jsonはC12内部専用です。"
+            "python scripts/flow_control.py statusを使用してください"
+        )
+
+
+def grep_scope_contains_flow_state(raw_path: str, repo_root: Path) -> bool:
+    scope = Path(raw_path)
+    if not scope.is_absolute():
+        scope = repo_root / scope
+    try:
+        resolved_scope = scope.resolve(strict=False)
+        resolved_root = repo_root.resolve(strict=True)
+    except OSError:
+        return True
+    try:
+        relative = resolved_scope.relative_to(resolved_root).as_posix()
+    except ValueError:
+        try:
+            resolved_root.relative_to(resolved_scope)
+        except ValueError:
+            return False
+        return True
+    return (
+        relative in {".", "output"}
+        or RELATIVE_SET_DIR_RE.fullmatch(relative) is not None
+        or RELATIVE_STAGING_DIR_RE.fullmatch(relative) is not None
+        or RELATIVE_FLOW_STATE_RE.fullmatch(relative) is not None
+    )
+
+
+def guard_grep(event: dict[str, object], repo_root: Path) -> None:
+    tool_input = event.get("tool_input")
+    if not isinstance(tool_input, dict):
+        deny("CCW-11: Grepの検索範囲を確認できません")
+    raw_path = tool_input.get("path")
+    if not isinstance(raw_path, str) or grep_scope_contains_flow_state(
+        raw_path, repo_root
+    ):
+        deny(
+            "CCW-11: Grepの検索範囲にC12内部専用flow-state.jsonが含まれます。"
+            "公開済み成果物またはpython scripts/flow_control.py statusを使用してください"
+        )
 
 
 def guard_write(event: dict[str, object], repo_root: Path) -> None:
@@ -93,6 +167,7 @@ def guard_bash(event: dict[str, object], repo_root: Path) -> None:
         (CANDIDATE_VALIDATE_RE, "固定candidate一時ファイルの受理検証"),
         (REQUEST_VALIDATE_RE, "固定review_request一時ファイルの受理検証"),
         (CLEANUP_RE, "固定一時ファイルの専用削除"),
+        (FLOW_CANDIDATE_RE, "固定candidate一時ファイルのフロー制御入力"),
     ):
         match = command_re.fullmatch(command)
         if match is None:
@@ -115,7 +190,11 @@ def main() -> None:
 
     repo_root = Path(__file__).resolve().parents[2]
     tool_name = event.get("tool_name")
-    if tool_name in {"Write", "Edit"}:
+    if tool_name == "Read":
+        guard_read(event, repo_root)
+    elif tool_name == "Grep":
+        guard_grep(event, repo_root)
+    elif tool_name in {"Write", "Edit"}:
         guard_write(event, repo_root)
     elif tool_name == "Bash":
         guard_bash(event, repo_root)

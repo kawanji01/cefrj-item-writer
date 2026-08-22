@@ -25,6 +25,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 if str(ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(ROOT / "scripts"))
+from flow_control import (  # noqa: E402
+    build_review_request,
+    build_session_from_candidate,
+    chk03_candidate_texts,
+    expected_not_applicable_reason,
+    grammar_intro_level_max,
+    process_failure,
+)
+from build_normalized import CliFailure  # noqa: E402
+from finalize_set import cleanup_published_temp  # noqa: E402
+from set_support import build_set_report, contract_failure  # noqa: E402
 FORMATS = (
     "vocab_mcq_en2ja",
     "vocab_mcq_ja2en",
@@ -189,22 +200,220 @@ def run_machine(
     return value
 
 
+PASS_GRAMMAR_SPANS: dict[str, tuple[tuple[str, str], ...]] = {
+    "She decided to accept the new job.": (
+        ("the", "gp:14"),
+        ("decided", "gp:65"),
+        ("to accept", "gp:88"),
+        ("decided to accept", "gp:101"),
+    ),
+    "He has the ability to speak three languages.": (
+        ("the", "gp:14"),
+        ("to speak", "gp:88"),
+        ("He has the ability to speak three languages.", "gp:196"),
+    ),
+    "They had to abandon their car in the heavy snow.": (
+        ("their", "gp:6"),
+        ("the", "gp:14"),
+        ("in the heavy snow", "gp:21"),
+        ("to abandon", "gp:88"),
+        ("had to abandon", "gp:127"),
+        ("They had to abandon their car in the heavy snow.", "gp:196"),
+    ),
+    "My sister wants to study abroad next year.": (
+        ("My", "gp:6"),
+        ("wants", "gp:60"),
+        ("to study", "gp:88"),
+        ("wants to study", "gp:101"),
+    ),
+    "My brother is a student.": (
+        ("My", "gp:6"),
+        ("a", "gp:13"),
+        ("is", "gp:58"),
+    ),
+    "I am very happy today.": (
+        ("I am", "gp:1"),
+        ("very happy", "gp:33"),
+        ("am", "gp:58"),
+    ),
+    "Look at that big tree.": (
+        ("that big tree", "gp:11"),
+        ("at that big tree", "gp:21"),
+        ("Look at that big tree.", "gp:117"),
+    ),
+    "You should have finished the report by Friday.": (
+        ("the", "gp:14"),
+        ("by Friday", "gp:21"),
+        ("should have", "gp:139"),
+        ("should have finished", "gp:145"),
+        ("You should have finished the report by Friday.", "gp:196"),
+    ),
+    "The report should have been finished by Friday.": (
+        ("The", "gp:14"),
+        ("by Friday", "gp:21"),
+        ("should have", "gp:139"),
+        ("should have been", "gp:145"),
+        ("should have been finished", "gp:84"),
+    ),
+    "They left early so as to avoid the heavy traffic.": (
+        ("the", "gp:14"),
+        ("left", "gp:65"),
+        ("to avoid", "gp:88"),
+        ("so as to avoid", "gp:97"),
+        ("They left early so as to avoid the heavy traffic.", "gp:194"),
+    ),
+    "I will accept your plan today.": (
+        ("your", "gp:6"),
+        ("will accept", "gp:69"),
+        ("will accept", "gp:141"),
+        ("I will accept your plan today.", "gp:196"),
+    ),
+    "She has the ability to help us.": (
+        ("us", "gp:7"),
+        ("the", "gp:14"),
+        ("to help", "gp:88"),
+        ("She has the ability to help us.", "gp:196"),
+    ),
+    "My sister will study abroad next year.": (
+        ("My", "gp:6"),
+        ("will study", "gp:69"),
+        ("will study", "gp:141"),
+        ("My sister will study abroad next year.", "gp:194"),
+    ),
+    "I will invite my friend to dinner.": (
+        ("my", "gp:6"),
+        ("to dinner", "gp:21"),
+        ("will invite", "gp:69"),
+        ("will invite", "gp:141"),
+        ("I will invite my friend to dinner.", "gp:196"),
+    ),
+    "We can achieve our goal this year.": (
+        ("our", "gp:6"),
+        ("can achieve", "gp:123"),
+        ("We can achieve our goal this year.", "gp:196"),
+    ),
+    "They advise students at this school.": (
+        ("this school", "gp:11"),
+        ("at this school", "gp:21"),
+        ("advise", "gp:59"),
+        ("They advise students at this school.", "gp:196"),
+    ),
+    "I accept your ability.": (
+        ("your", "gp:6"),
+        ("accept", "gp:59"),
+        ("I accept your ability.", "gp:196"),
+    ),
+    "I abandon this book.": (
+        ("this book", "gp:11"),
+        ("abandon", "gp:59"),
+        ("I abandon this book.", "gp:196"),
+    ),
+}
+
+PASS_GRAMMAR_ESTIMATES: dict[
+    str, tuple[tuple[str, str, str, str], ...]
+] = {
+    "He has the ability to speak three languages.": (
+        (
+            "has",
+            "時制・相(現在)(主動詞have・3人称単数)",
+            "A1.1",
+            "reviewer_estimate: 主動詞haveの3人称単数現在形hasは、"
+            "基本的な所有・状態を表す現在時制として導入レベルをA1.1と推定しました。",
+        ),
+    ),
+    "She has the ability to help us.": (
+        (
+            "has",
+            "時制・相(現在)(主動詞have・3人称単数)",
+            "A1.1",
+            "reviewer_estimate: 主動詞haveの3人称単数現在形hasは、"
+            "基本的な所有・状態を表す現在時制として導入レベルをA1.1と推定しました。",
+        ),
+    ),
+}
+
+
+def pass_grammar_inventory(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    """固定候補の全文法構造を教員版粒度・正規化grammar根拠で列挙する。"""
+
+    texts = [text for _field, text in chk03_candidate_texts(candidate)]
+    span_items: list[tuple[str, str]] = []
+    for text in texts:
+        try:
+            span_items.extend(PASS_GRAMMAR_SPANS[text])
+        except KeyError as exc:
+            raise RuntimeError(f"pass fixtureの文法構造目録が未定義です: {text}") from exc
+    grammar = load_json(ROOT / "data" / "normalized" / "grammar.json")
+    grammar_index = {item["id"]: item for item in grammar["entries"]}
+    inventory: list[dict[str, Any]] = []
+    for span, grammar_item_id in span_items:
+        entry = grammar_index[grammar_item_id]
+        level_raw = entry["kyoinban"]["level_raw"]
+        structure = entry["kyoinban"]["name_ja"]
+        if not isinstance(level_raw, str) or not isinstance(structure, str):
+            raise RuntimeError(
+                f"pass fixtureの教員版根拠を解決できません: {grammar_item_id}"
+            )
+        if not any(span in text for text in texts):
+            raise RuntimeError(f"pass fixtureのspanが候補に存在しません: {span}")
+        inventory.append(
+            {
+                "evidence": f"教員版 {grammar_item_id} のレベル {level_raw} を引用しました。",
+                "grammar_item_id": grammar_item_id,
+                "level": level_raw,
+                "level_source": "kyoinban",
+                "span": span,
+                "structure": structure,
+            }
+        )
+    for text in texts:
+        for span, structure, level, evidence in PASS_GRAMMAR_ESTIMATES.get(text, ()):
+            if not any(span in candidate_text for candidate_text in texts):
+                raise RuntimeError(f"pass fixtureの推定spanが候補に存在しません: {span}")
+            inventory.append(
+                {
+                    "evidence": evidence,
+                    "grammar_item_id": None,
+                    "level": level,
+                    "level_source": "reviewer_estimate",
+                    "span": span,
+                    "structure": structure,
+                }
+            )
+    return inventory
+
+
 def pass_review(
     question_id: str = "q01",
     generation: str = "gen1",
     *,
     set_id: str = SET_ID,
+    candidate: dict[str, Any] | None = None,
+    topic: str | None = None,
 ) -> dict[str, Any]:
+    if candidate is None:
+        candidate = load_json(
+            TESTS / "fixtures" / "candidates" / f"replay_{question_id}_pass.json"
+        )
+    checks = []
+    for index in range(1, 20):
+        check_id = f"CHK-{index:02d}"
+        reason = expected_not_applicable_reason(check_id, candidate, topic)
+        checks.append(
+            {
+                "check_id": check_id,
+                "note": reason or "テスト用記録で適用項目を確認しました。",
+                "result": "not_applicable" if reason else "pass",
+            }
+        )
     value = {
-        "checks": [
-            {"check_id": f"CHK-{index:02d}", "note": "テスト用記録で適用項目を確認しました。", "result": "pass"}
-            for index in range(1, 20)
-        ],
+        "checks": checks,
         "generation": generation,
         "machine_check_disputes": [],
         "question_id": question_id,
         "schema_version": "1.0.0",
-        "sentence_grammar_inventory": [],
+        "sentence_grammar_inventory": pass_grammar_inventory(candidate),
         "set_id": set_id,
         "verdict": "pass",
         "violations": [],
@@ -218,74 +427,43 @@ def fail_review(
     generation: str = "gen1",
     *,
     set_id: str = SET_ID,
+    candidate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    value = pass_review(question_id, generation, set_id=set_id)
+    if candidate is None:
+        candidate = load_json(
+            TESTS / "fixtures" / "candidates" / f"replay_{question_id}_pass.json"
+        )
+    value = pass_review(
+        question_id, generation, set_id=set_id, candidate=candidate
+    )
     value["verdict"] = "fail"
     value["checks"][2] = {
         "check_id": "CHK-03",
         "note": "指定レベルを超える文法構造を検出しました。",
         "result": "fail",
     }
+    span = candidate["body"]["example"]["en"]
+    value["sentence_grammar_inventory"].append(
+        {
+            "evidence": "reviewer_estimate: リプレイ用の上限超過構造をB1.1と推定しました。",
+            "grammar_item_id": None,
+            "level": "B1.1",
+            "level_source": "reviewer_estimate",
+            "span": span,
+            "structure": "リプレイ用上限超過構造",
+        }
+    )
     value["violations"] = [
         {
-            "actual_level": "A2.1",
+            "actual_level": "B1.1",
             "code": "CHK-03",
-            "evidence": "テスト用の構造化レビュー指摘です。",
-            "expected_level": "A1.3",
-            "location": "body.example.en のテスト対象構造",
-            "suggestion": "指定レベル内の文へ置き換えてください。",
+            "evidence": "reviewer_estimate: リプレイ用の上限超過構造をB1.1と推定しました。",
+            "expected_level": grammar_intro_level_max(candidate),
+            "location": f'body.example.en: "{span}"',
+            "suggestion": "I use the target word in a short sentence. に差し替えてください。",
         }
     ]
     validate("review_result", value)
-    return value
-
-
-def review_request(
-    candidate: dict[str, Any],
-    machine: dict[str, Any],
-    *,
-    set_id: str = SET_ID,
-    generation: str = "gen1",
-) -> dict[str, Any]:
-    limits = load_json(ROOT / "data" / "config" / "limits.json")
-    proper = load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"]
-    band = candidate["level"]["value"].split(".")[0]
-    grammar_max = (
-        {"A1": "A1.3", "A2": "A2.2", "B1": "B1.2", "B2": "B2.2"}[band]
-        if candidate["format"].startswith("vocab_")
-        else candidate["level"]["value"]
-    )
-    value = {
-        "candidate": candidate,
-        "constraints_snapshot": {
-            "limits": {
-                "explanation_char_limit": None if candidate["format"].startswith("vocab_") else limits["explanation_char_limits"][candidate["explanation"]["type"]],
-                "sentence_word_limit": limits["sentence_word_limits"][band],
-            },
-            "proper_nouns": proper,
-            "topic": None,
-        },
-        "format": candidate["format"],
-        "generation": generation,
-        "level": candidate["level"],
-        "level_limits": {"grammar_intro_level_max": grammar_max, "vocabulary_level_max": band},
-        "machine_report": machine,
-        "question_id": candidate["question_id"],
-        "readable_resources": [
-            "data/normalized/lexicon.json",
-            "data/normalized/grammar.json",
-            "data/normalized/meta.json",
-            "data/config/limits.json",
-            "data/config/proper_nouns.json",
-            "docs/cefrj-validation-spec.md",
-            "docs/subagent-review-spec.md",
-            "agent/reviewer-core.md",
-        ],
-        "schema_version": "1.0.0",
-        "set_id": set_id,
-        "target_ref": candidate["target"]["ref"],
-    }
-    validate("review_request", value)
     return value
 
 
@@ -305,112 +483,67 @@ def run_cli(
 
 
 def build_golden_set(candidate: dict[str, Any], index: int) -> Path:
-    """正式な決定的CLI列を通して1問セットを確定し、そのset.jsonを返す。"""
+    """製品flow_control.pyを通して1問セットを確定し、そのset.jsonを返す。"""
 
     set_id = f"20260819-1200{index:02d}-g{index:03d}"
     set_dir = ROOT / "output" / set_id
     if set_dir.exists() or set_dir.is_symlink():
         raise RuntimeError(f"golden生成用パスが既に存在します: {set_dir}")
-    review_dir = set_dir / "review"
     created = False
     try:
-        review_dir.mkdir(parents=True)
+        session = build_session_from_candidate(
+            candidate,
+            set_id,
+            1,
+            created_at=f"2026-08-19T12:00:{index:02d}+09:00",
+            mode="proposal",
+            model="m8-fixture",
+            tool="codex",
+        )
+        initialized = run_cli(
+            [
+                "scripts/flow_control.py",
+                "init",
+                "--set-dir",
+                str(set_dir.relative_to(ROOT)),
+                "--file",
+                "-",
+            ],
+            stdin=canonical_bytes(session),
+        )
         created = True
-        candidate_path = review_dir / "q01.gen1.candidate.json"
-        write_json(candidate_path, candidate)
-        run_cli(
+        if json.loads(initialized.stdout)["action"] != "generate_candidate":
+            raise RuntimeError("golden生成フローがcandidate生成要求を返しません")
+        candidate_input = set_dir / ".staging" / "q01.gen1.candidate.raw1.json"
+        write_json(candidate_input, candidate)
+        candidate_action = run_cli(
             [
-                "scripts/validate.py",
-                "--schema",
+                "scripts/flow_control.py",
                 "candidate",
+                "--set-dir",
+                str(set_dir.relative_to(ROOT)),
                 "--file",
-                str(candidate_path.relative_to(ROOT)),
+                str(candidate_input.relative_to(ROOT)),
             ]
         )
-
-        machine = run_machine(
-            candidate_path,
-            expected_format=candidate["format"],
-            expected_level=candidate["level"]["value"],
-            set_id=set_id,
-        )
-        if machine["verdict"] != "pass":
-            raise RuntimeError(f"公式候補のmachine_checkがfailです: {candidate['format']}")
-        write_json(review_dir / "q01.gen1.machine.json", machine)
-        request = review_request(candidate, machine, set_id=set_id)
-        write_json(review_dir / "q01.gen1.request.json", request)
-        write_json(review_dir / "q01.gen1.review.json", pass_review(set_id=set_id))
-
-        incremental = run_cli(
+        if json.loads(candidate_action.stdout)["action"] != "run_review":
+            raise RuntimeError(f"公式候補がレビューへ進みません: {candidate['format']}")
+        completed = run_cli(
             [
-                "scripts/set_check.py",
+                "scripts/flow_control.py",
+                "review",
                 "--set-dir",
                 str(set_dir.relative_to(ROOT)),
-                "--target",
-                "q01",
-            ]
+                "--file",
+                "-",
+            ],
+            stdin=canonical_bytes(
+                pass_review(set_id=set_id, candidate=candidate)
+            ),
         )
-        incremental_value = json.loads(incremental.stdout)
-        validate("machine_report", incremental_value)
-        if incremental_value["verdict"] != "pass":
-            raise RuntimeError(f"公式候補の増分set_checkがfailです: {candidate['format']}")
-        (review_dir / "set_check.q01.gen1.json").write_bytes(incremental.stdout)
-        write_json(
-            review_dir / "slot.q01.outcome.json",
-            {
-                "accepted_question_id": "q01",
-                "attempted_question_ids": ["q01"],
-                "set_id": set_id,
-                "slot_question_id": "q01",
-                "status": "accepted",
-                "teacher_decision": None,
-            },
-        )
-
-        final_check = run_cli(
-            [
-                "scripts/set_check.py",
-                "--set-dir",
-                str(set_dir.relative_to(ROOT)),
-            ]
-        )
-        final_value = json.loads(final_check.stdout)
-        validate("machine_report", final_value)
-        if final_value["verdict"] != "pass":
-            raise RuntimeError(f"公式候補の最終set_checkがfailです: {candidate['format']}")
-        (review_dir / "set_check.final.json").write_bytes(final_check.stdout)
-
-        metadata = {
-            "config_snapshot": {
-                "limits": load_json(ROOT / "data" / "config" / "limits.json"),
-                "proper_nouns": load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"],
-            },
-            "created_at": f"2026-08-19T12:00:{index:02d}+09:00",
-            "final_question_ids": ["q01"],
-            "format": candidate["format"],
-            "level": candidate["level"],
-            "mode": "proposal",
-            "model": "m8-fixture",
-            "preferred_proper_nouns": [],
-            "requested_count": 1,
-            "set_id": set_id,
-            "tool": "codex",
-            "topic": None,
-        }
-        run_cli(
-            ["scripts/finalize_set.py", "--set-dir", str(set_dir.relative_to(ROOT))],
-            stdin=canonical_bytes(metadata),
-        )
+        if json.loads(completed.stdout)["action"] != "completed":
+            raise RuntimeError(f"公式候補のフローが完了しません: {candidate['format']}")
         set_path = set_dir / "set.json"
-        run_cli(
-            [
-                "scripts/validate.py",
-                "--schema",
-                "set",
-                "--file",
-                str(set_path.relative_to(ROOT)),
-            ]
-        )
         run_cli(
             ["scripts/validate.py", "--set-dir", str(set_dir.relative_to(ROOT))]
         )
@@ -441,7 +574,7 @@ def write_huge_integer_candidate(path: Path, candidate: dict[str, Any], digits: 
     if not base.endswith("}\n"):
         raise RuntimeError("candidateの正準JSON終端が不正です")
     integer = "1" + ("0" * (digits - 1))
-    write_text(path, f'{base[:-2]},\n  "unexpected_m8_integer": {integer}\n}}\n')
+    write_text(path, f'{base[:-3]},\n  "unexpected_m8_integer": {integer}\n}}\n')
 
 
 def make_machine_candidates(official: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -569,9 +702,9 @@ def make_machine_candidates(official: dict[str, dict[str, Any]]) -> list[dict[st
         ("q01", "accept", "verb", "〜を受け入れる", "I will accept your plan today.", "私は今日あなたの計画を受け入れます。"),
         ("q02", "ability", "noun", "能力", "She has the ability to help us.", "彼女には私たちを助ける能力があります。"),
         ("q03", "abroad", "adverb", "外国で、外国へ", "My sister will study abroad next year.", "姉は来年外国で勉強します。"),
-        ("q04", "collect", "verb", "〜を集める", "We collect old books at school.", "私たちは学校で古い本を集めます。"),
-        ("q05", "invite", "verb", "〜を招待する", "I will invite my friend to dinner.", "私は友達を夕食に招待します。"),
-        ("q06", "borrow", "verb", "〜を借りる", "Can I borrow your pen today?", "今日あなたのペンを借りてもよいですか。"),
+        ("q04", "invite", "verb", "〜を招待する", "I will invite my friend to dinner.", "私は友達を夕食に招待します。"),
+        ("q05", "achieve", "verb", "〜を達成する", "We can achieve our goal this year.", "私たちは今年目標を達成できます。"),
+        ("q06", "advise", "verb", "〜に助言する", "They advise students at this school.", "彼らはこの学校で生徒に助言します。"),
     ]
     for qid, headword, pos, gloss, en, ja in replay_values:
         value = flash_candidate(qid, headword, pos, gloss, en, ja)
@@ -661,10 +794,52 @@ def make_reviews() -> None:
         for gen in range(1, 4):
             qid = f"q{qnum:02d}"
             generation = f"gen{gen}"
+            candidate = load_json(
+                TESTS / "fixtures" / "candidates" / f"replay_{qid}_pass.json"
+            )
             for verdict, factory in (("pass", pass_review), ("fail", fail_review)):
                 name = f"{verdict}_{qid}_{generation}.json"
-                write_json(TESTS / "fixtures" / "reviews" / name, factory(qid, generation))
+                write_json(
+                    TESTS / "fixtures" / "reviews" / name,
+                    factory(qid, generation, candidate=candidate),
+                )
                 cases.append({"expected": verdict, "file": name, "purpose": f"{qid} {generation}の{verdict}レビュー", "test_ids": ["RPL-01", "RPL-02", "RPL-03", "RPL-04", "RPL-07", "RPL-08", "RPL-10"]})
+    machine_fail_candidate = load_json(
+        TESTS / "fixtures" / "candidates" / "mch_06_high_level_abandon.json"
+    )
+    for gen in range(1, 4):
+        generation = f"gen{gen}"
+        name = f"pass_machine_fail_q01_{generation}.json"
+        write_json(
+            TESTS / "fixtures" / "reviews" / name,
+            pass_review("q01", generation, candidate=machine_fail_candidate),
+        )
+        cases.append(
+            {
+                "expected": "pass",
+                "file": name,
+                "purpose": f"machine fail専用候補q01 {generation}のpassレビュー",
+                "test_ids": ["RPL-07"],
+            }
+        )
+    for qnum in (1, 2):
+        qid = f"q{qnum:02d}"
+        candidate = load_json(
+            TESTS / "fixtures" / "candidates" / f"replay_{qid}_conflict.json"
+        )
+        name = f"pass_conflict_{qid}_gen1.json"
+        write_json(
+            TESTS / "fixtures" / "reviews" / name,
+            pass_review(qid, "gen1", candidate=candidate),
+        )
+        cases.append(
+            {
+                "expected": "pass",
+                "file": name,
+                "purpose": f"set conflict専用候補{qid} gen1のpassレビュー",
+                "test_ids": ["RPL-08"],
+            }
+        )
     invalid_values = {
         "invalid_json.json": "{\n",
         "invalid_schema.json": "{}\n",
@@ -674,6 +849,122 @@ def make_reviews() -> None:
         write_text(TESTS / "fixtures" / "reviews" / name, text)
         cases.append({"expected": "review_result受理失敗", "file": name, "purpose": "意図したレビュー不正入力", "test_ids": ["RPL-05"]})
     write_json(TESTS / "fixtures" / "reviews" / "index.json", {"cases": sorted(cases, key=lambda item: item["file"])})
+
+
+def make_cli_contract_fixtures() -> None:
+    directory = TESTS / "fixtures" / "cli"
+    data_version = load_json(
+        ROOT / "data" / "normalized" / "meta.json"
+    )["data_version"]
+    documents = {
+        "audit_process_failure_empty.json": process_failure(None, b""),
+        "finalize_success.json": {
+            "data_version": data_version,
+            "question_count": 1,
+            "schema_version": "1.0.0",
+            "set_id": SET_ID,
+            "set_json_path": f"output/{SET_ID}/set.json",
+        },
+        "cli05_e_contract_01.json": contract_failure(
+            "E-CONTRACT-01", ["テスト用の内部契約違反です"]
+        ).as_dict(),
+        "cli05_e_contract_03.json": contract_failure(
+            "E-CONTRACT-03", ["テスト用の監査契約違反です"]
+        ).as_dict(),
+        "cli05_e_contract_04.json": contract_failure(
+            "E-CONTRACT-04", ["テスト用の確定条件違反です"]
+        ).as_dict(),
+        "cli05_e_data_08.json": CliFailure(
+            "E-DATA-08",
+            "E-DATA-08 セッション設定スナップショットと現在の設定が一致しません",
+            detail={"differences": {"data/config/limits.json": "テスト用差分"}},
+            remedy=(
+                "進行中セットの監査を保持したまま中止し、python scripts/doctor.py を実行して"
+                "新しいset_idで最初から作成してください。"
+            ),
+        ).as_dict(),
+        "cli05_e_env_04.json": CliFailure(
+            "E-ENV-04",
+            "E-ENV-04 スキーマファイルを読み取れません",
+            detail={"path": "schemas/review_result.schema.json"},
+            remedy="git statusで欠落ファイルを確認してください。",
+        ).as_dict(),
+        "cli05_e_input_03.json": CliFailure(
+            "E-INPUT-03",
+            "E-INPUT-03 provider入力がstrict UTF-8の標準JSONではありません",
+            detail={"source": "-"},
+            remedy="入力をstrict UTF-8の標準JSONへ修正してください。",
+        ).as_dict(),
+        "invalid_cli05_code_type.json": {
+            "detail": {},
+            "error_code": ["E-DATA-08"],
+            "message": "コード型が不正です",
+            "remedy": "再実行してください。",
+        },
+        "invalid_cli05_missing.json": {
+            "error_code": "E-DATA-08",
+            "message": "必須フィールドが欠落しています",
+        },
+        "invalid_cli05_unknown_code.json": {
+            "detail": {},
+            "error_code": "E-UNKNOWN-99",
+            "message": "未定義コードです",
+            "remedy": "再実行してください。",
+        },
+        "machine_dispute_measurement.json": {
+            "claim": "正しくはabandonが許容されるはずです。",
+            "dispute_type": "measurement",
+            "evidence": "テスト用根拠です。",
+            "location": "body.example.en token 2: \"abandon\"",
+            "machine_violation_code": "V-LEX-02",
+            "suggested_correction": "測定規則を確認してください。",
+        },
+        "machine_dispute_pos_tagging.json": {
+            "claim": "正しくはabandonが指定レベル内として照合されるはずです。",
+            "dispute_type": "pos_tagging",
+            "evidence": "対象語は原本でlex:abandon:verbです。",
+            "location": "body.example.en token 2: \"abandon\"",
+            "machine_violation_code": "V-LEX-02",
+            "suggested_correction": "品詞照合規則を確認してください。",
+        },
+        "validate_set_success.json": {
+            "set_dir": f"output/{SET_ID}",
+            "set_json_path": f"output/{SET_ID}/set.json",
+            "status": "complete",
+            "validation": {
+                "errors": [],
+                "schema": "set",
+                "schema_version": "1.0.0",
+                "valid": True,
+            },
+        },
+    }
+    set_dir = ROOT / "output" / SET_ID
+    set_dir_created = not set_dir.exists()
+    set_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = set_dir / ".set.json.tmp.1234.0123456789abcdef0123456789abcdef"
+    temp_path.mkdir()
+    try:
+        warning = cleanup_published_temp(ROOT, temp_path)
+    finally:
+        temp_path.rmdir()
+        if set_dir_created:
+            set_dir.rmdir()
+    if warning is None:
+        raise RuntimeError("W-CLEANUP-01 fixtureを生成できません")
+    documents["cleanup_warning.json"] = warning
+    cases = []
+    for name, value in documents.items():
+        write_json(directory / name, value)
+        cases.append(
+            {
+                "expected": "契約JSONの厳密な受理または拒否",
+                "file": name,
+                "purpose": "子CLI境界の正準・不当JSON fixture",
+                "test_ids": ["CI-R-03"],
+            }
+        )
+    write_json(directory / "index.json", {"cases": sorted(cases, key=lambda item: item["file"])})
 
 
 def scenario_step(
@@ -741,13 +1032,20 @@ def make_scenarios() -> None:
         set_questions: list[str],
         slots: list[str],
         regeneration_codes: list[str],
+        *,
+        teacher_decisions: list[dict[str, Any]] | None = None,
+        executed_step_count: int | None = None,
     ) -> None:
+        executed_count = len(steps) if executed_step_count is None else executed_step_count
+        executed_steps = steps[:executed_count]
         scenarios.append(
             {
                 "description": description,
                 "expected": {
-                    "attempts_total": len(steps),
-                    "audit_files": expected_audits(steps, terminals, slots, outcome == "completed"),
+                    "attempts_total": executed_count,
+                    "audit_files": expected_audits(
+                        executed_steps, terminals, slots, outcome == "completed"
+                    ),
                     "outcome": outcome,
                     "regeneration_payload_checks": regeneration_codes,
                     "set_questions": set_questions,
@@ -755,6 +1053,7 @@ def make_scenarios() -> None:
                 "request": request,
                 "scenario_id": scenario_id,
                 "steps": steps,
+                "teacher_decisions": teacher_decisions or [],
             }
         )
 
@@ -774,8 +1073,31 @@ def make_scenarios() -> None:
     rpl03_steps = [
         scenario_step("q01", f"gen{generation}", "replay_q01_pass.json", f"fail_q01_gen{generation}.json")
         for generation in range(1, 4)
-    ] + [scenario_step("q02", "gen1", "replay_q02_pass.json", "pass_q02_gen1.json")]
-    add("rpl_03_proposal_replacement", "提案モードで3世代fail後にq02を自動補充する", base_request, rpl03_steps, ["review_fail"] * 3 + ["accepted"], "completed", ["q02"], ["q01"], ["CHK-03"])
+    ] + [
+        scenario_step("q04", "gen1", "replay_q04_pass.json", "pass_q04_gen1.json"),
+        scenario_step("q02", "gen1", "replay_q02_pass.json", "pass_q02_gen1.json"),
+        scenario_step("q03", "gen1", "replay_q03_pass.json", "pass_q03_gen1.json"),
+    ]
+    request3_with_supplement = {
+        **request3,
+        "targets": [
+            "lex:accept:verb",
+            "lex:ability:noun",
+            "lex:abroad:adverb",
+            "lex:invite:verb",
+        ],
+    }
+    add(
+        "rpl_03_proposal_replacement",
+        "N=3でq01の3世代fail後に補充q04を未処理q02より先に処理する",
+        request3_with_supplement,
+        rpl03_steps,
+        ["review_fail"] * 3 + ["accepted"] * 3,
+        "completed",
+        ["q02", "q03", "q04"],
+        ["q01", "q02", "q03"],
+        ["CHK-03"],
+    )
 
     rpl04_steps = [
         scenario_step("q01", f"gen{generation}", "replay_q01_pass.json", f"fail_q01_gen{generation}.json")
@@ -805,12 +1127,24 @@ def make_scenarios() -> None:
     add("rpl_06_candidate_invalid", "候補受理を同一世代で1回再指示してから世代消費する", base_request, rpl06_steps, ["candidate_invalid", "accepted"], "completed", ["q01"], ["q01"], [])
 
     machine_fail_request = {**base_request, "level": "A1", "targets": ["lex:book:noun"]}
-    rpl07_steps = [scenario_step("q01", "gen1", "mch_06_high_level_abandon.json", "pass_q01_gen1.json")]
-    add("rpl_07_machine_fail_review_pass", "machine failをreview passが上書きしない", machine_fail_request, rpl07_steps, ["machine_fail"], "teacher_consult", [], [], [])
+    rpl07_steps = [
+        scenario_step(
+            "q01",
+            f"gen{generation}",
+            "mch_06_high_level_abandon.json",
+            f"pass_machine_fail_q01_gen{generation}.json",
+        )
+        for generation in range(1, 4)
+    ]
+    add("rpl_07_machine_fail_review_pass", "machine failをreview passが上書きしない", machine_fail_request, rpl07_steps, ["machine_fail"] * 3, "teacher_consult", [], [], ["V-LEX-02"])
 
     rpl08_steps = [
-        scenario_step("q01", "gen1", "replay_q01_conflict.json", "pass_q01_gen1.json"),
-        scenario_step("q02", "gen1", "replay_q02_conflict.json", "pass_q02_gen1.json"),
+        scenario_step(
+            "q01", "gen1", "replay_q01_conflict.json", "pass_conflict_q01_gen1.json"
+        ),
+        scenario_step(
+            "q02", "gen1", "replay_q02_conflict.json", "pass_conflict_q02_gen1.json"
+        ),
         scenario_step("q02", "gen2", "replay_q02_pass.json", "pass_q02_gen2.json"),
     ]
     request2 = {**base_request, "question_count": 2, "targets": ["lex:accept:verb", "lex:ability:noun"]}
@@ -818,13 +1152,43 @@ def make_scenarios() -> None:
 
     add("rpl_09_audit_integrity", "完成セットの監査参照と正本自立性を確認する", request3, rpl01_steps, ["accepted"] * 3, "completed", ["q01", "q02", "q03"], ["q01", "q02", "q03"], [])
 
-    rpl10_steps = [
+    rpl10_executed_steps = [
         scenario_step(f"q{number:02d}", f"gen{generation}", f"replay_q{number:02d}_pass.json", f"fail_q{number:02d}_gen{generation}.json")
-        for number in range(1, 7)
+        for number in (1, 4, 5, 6, 2, 3)
         for generation in range(1, 4)
     ]
-    request_worst = {**base_request, "question_count": 3, "targets": [f"lex:test-{number}" for number in range(1, 7)]}
-    add("rpl_10_worst_case_bound", "N=3の提案モードで2N対象×3世代で停止する", request_worst, rpl10_steps, ["review_fail"] * 18, "teacher_consult", [], [], ["CHK-03", "V-TGT-03"])
+    rpl10_steps = [
+        *rpl10_executed_steps,
+        scenario_step("q07", "gen1", "replay_q06_pass.json", "fail_q06_gen1.json"),
+    ]
+    request_worst = {
+        **base_request,
+        "question_count": 3,
+        "targets": [
+            "lex:accept:verb",
+            "lex:ability:noun",
+            "lex:abroad:adverb",
+            "lex:invite:verb",
+            "lex:achieve:verb",
+            "lex:advise:verb",
+        ],
+    }
+    add(
+        "rpl_10_worst_case_bound",
+        "N=3で補充枯渇後に減数し全6対象・18世代試行で停止する",
+        request_worst,
+        rpl10_steps,
+        ["review_fail"] * 18,
+        "teacher_consult",
+        [],
+        ["q01", "q02"],
+        ["CHK-03"],
+        teacher_decisions=[
+            {"decision": "reduce", "slot_question_id": "q01", "target_ref": None},
+            {"decision": "reduce", "slot_question_id": "q02", "target_ref": None},
+        ],
+        executed_step_count=len(rpl10_executed_steps),
+    )
 
     for scenario in scenarios:
         write_json(TESTS / "fixtures" / "scenarios" / f"{scenario['scenario_id']}.json", scenario)
@@ -856,9 +1220,67 @@ def make_golden_and_schema_assets(official: dict[str, dict[str, Any]]) -> None:
     machine = run_machine(compat_path, expected_format="grammar_cloze", expected_level="A1.2")
     write_json(TESTS / "golden" / "machine" / "grammar_cloze.machine.json", machine)
     write_json(TESTS / "fixtures" / "machine" / "valid_question.json", machine)
-    write_json(TESTS / "fixtures" / "machine" / "index.json", {"cases": [{"expected": "machine_reportスキーマ合格", "file": "valid_question.json", "purpose": "妥当なquestion scopeレポート", "test_ids": ["CI-MCH-12", "CI-SCH-02"]}]})
+    conflict_candidates = [
+        load_json(TESTS / "fixtures" / "candidates" / f"replay_q0{number}_conflict.json")
+        for number in (1, 2)
+    ]
+    conflict_machines = [
+        run_machine(
+            TESTS / "fixtures" / "candidates" / f"replay_q0{number}_conflict.json",
+            expected_format="vocab_flashcard_en2ja",
+            expected_level="A2",
+            requested_count=2,
+        )
+        for number in (1, 2)
+    ]
+    selected = [
+        {
+            "candidate": candidate,
+            "machine": report,
+            "question_id": candidate["question_id"],
+        }
+        for candidate, report in zip(conflict_candidates, conflict_machines, strict=True)
+    ]
+    set_check_failure = build_set_report(
+        selected,
+        SET_ID,
+        load_json(ROOT / "data" / "normalized" / "meta.json")["data_version"],
+        "1.0.0",
+        load_json(ROOT / "data" / "config" / "limits.json")["distractor_reuse_max"],
+        None,
+    )
+    set_check_failure["generated_at"] = "2099-01-01T00:00:00Z"
+    validate("machine_report", set_check_failure)
+    write_json(TESTS / "fixtures" / "machine" / "set_check_failure.json", set_check_failure)
+    write_json(
+        TESTS / "fixtures" / "machine" / "index.json",
+        {
+            "cases": [
+                {
+                    "expected": "machine_reportスキーマ合格",
+                    "file": "valid_question.json",
+                    "purpose": "妥当なquestion scopeレポート",
+                    "test_ids": ["CI-MCH-12", "CI-SCH-02"],
+                },
+                {
+                    "expected": "verdict failかつV-SET違反",
+                    "file": "set_check_failure.json",
+                    "purpose": "製品build_set_reportが生成したset scope失敗レポート",
+                    "test_ids": ["CI-R-03", "CI-SET-01", "CI-SET-02"],
+                },
+            ]
+        },
+    )
 
-    request = review_request(official["grammar_cloze"], machine)
+    request = build_review_request(
+        official["grammar_cloze"],
+        machine,
+        SET_ID,
+        "gen1",
+        limits=load_json(ROOT / "data" / "config" / "limits.json"),
+        proper_nouns=load_json(ROOT / "data" / "config" / "proper_nouns.json")["words"],
+        topic=None,
+    )
     valid_docs = {
         "candidate": official["grammar_cloze"],
         "config_limits": load_json(ROOT / "data" / "config" / "limits.json"),
@@ -867,7 +1289,7 @@ def make_golden_and_schema_assets(official: dict[str, dict[str, Any]]) -> None:
         "normalized_grammar": load_json(ROOT / "data" / "normalized" / "grammar.json"),
         "normalized_lexicon": load_json(ROOT / "data" / "normalized" / "lexicon.json"),
         "review_request": request,
-        "review_result": pass_review(),
+        "review_result": pass_review(candidate=official["grammar_cloze"]),
         "set": load_json(TESTS / "golden" / "sets" / "grammar_cloze.set.json"),
     }
     invalid_index: list[dict[str, Any]] = []
@@ -959,6 +1381,7 @@ def main() -> int:
     make_reviews()
     make_scenarios()
     make_golden_and_schema_assets(official)
+    make_cli_contract_fixtures()
     return 0
 
 

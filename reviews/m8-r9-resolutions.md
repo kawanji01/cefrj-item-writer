@@ -1,0 +1,4 @@
+- R9-01: 固定英文の文法目録をkyoinban/reviewer_estimate両対応にし、主動詞hasの推定構造をq02のpass/fail全fixtureへ追加して41件を既知集合・製品意味検証へ照合した (`tests/generate_assets.py`, `tests/fixtures/reviews/`, `tests/unit/test_fixtures.py`)
+- R9-02: CI-R-03のAST検査をdict呼出し・段階的代入・update・merge/unpackへ拡張し、各回避構文の自己負ケースを追加した (`tests/unit/test_fixtures.py`)
+- R9-03: timeout試験の偽レビュアーをPOSIX shellへ変更して起動競合を除去し、3秒期限でTERM/KILLと生stderr drainを安定検査するようにした (`tests/unit/test_flow_control.py`)
+- R9-04: ローカルCodex配線と一時スライド作業ディレクトリを削除せずGit追跡対象外へ限定した (`.gitignore`)

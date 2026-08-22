@@ -542,6 +542,7 @@ QT-40b: 1〜{set_question_max} の整数で}回答してください。
 ## 6. 生成・検証実行と進捗表示（S80）
 
 - **IF-40** S80のループ本体（生成→`machine_check.py`→独立レビュー→再生成、世代管理、補充）は `docs/subagent-review-spec.md` を正とする。本節はエージェントが教師に見せる進捗表示のみを定める。
+- **IF-40a** S80の決定的遷移は `scripts/flow_control.py` が返すactionを唯一の実行状態とする。ホストは`generate_candidate`と`run_review`の2境界を実行し、`teacher_consult`の構造化値を本節の固定文言へ展開するだけとする。ホストが世代数、補充対象、確定数、試行数、全世代理由を会話履歴から再集計してはならない(MUST NOT)（M8D-09）。
 - **IF-41** S80開始時に次を表示しなければならない。
 
 **FMT-80a 開始宣言**

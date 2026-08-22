@@ -1,0 +1,1 @@
+- R15-01: CI-R-03のscope別symbol tableでimport済みsource・loader・sinkの名前・属性・分割/条件分岐を含む再束縛を失効させ、静的`getattr`・tuple/list/dictのsubscript calleeを完全identityへ解決し、解決不能な敏感calleeをfail-closedに拒否するR15反例・正常例を追加した (`tests/unit/test_fixtures.py`)

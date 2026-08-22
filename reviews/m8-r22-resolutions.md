@@ -1,0 +1,2 @@
+- R22-01: sensitive callableコンテナの名前反復、`keys()`・`values()`・`items()` view、ネストした`next(iter(...))`、関数ローカル変数経由の戻り値へ要素identityを伝播し、指摘4反例と追加派生1反例および同形の正準fixture由来正常例を回帰化した (tests/unit/test_fixtures.py)
+- R22-02: Claude Codeのstagingガードを`Read`へ配線し、相対・正規化相対・リポジトリ内絶対パスのC12専用`flow-state.json`だけを拒否しつつ仕様・監査・通常staging読取りを維持するCLI回帰を追加した (.claude/hooks/guard_staging.py, .claude/settings.json, tests/unit/test_flow_control.py, tests/unit/test_fixtures.py)

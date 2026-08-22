@@ -1,0 +1,8 @@
+{
+  "claim": "正しくはabandonが許容されるはずです。",
+  "dispute_type": "measurement",
+  "evidence": "テスト用根拠です。",
+  "location": "body.example.en token 2: \"abandon\"",
+  "machine_violation_code": "V-LEX-02",
+  "suggested_correction": "測定規則を確認してください。"
+}

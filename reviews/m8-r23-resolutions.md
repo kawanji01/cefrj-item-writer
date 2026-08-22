@@ -1,0 +1,2 @@
+- R23-01: callableコンテナにsequence/mapping/keys/values/itemsの種別を保持して名前束縛後のviewアンパックへidentityを伝播し、ローカル関数のIf/Try/Match/loop別container状態を解析・合流して同一sensitive戻り値を確定、合流不能をfail-closed化し、指摘2反例・派生制御構造3例と同形の正準fixture由来正常例を回帰化した (tests/unit/test_fixtures.py)
+- R23-02: Claude Codeのstagingガードを`Grep`へ配線し、flow-state自身、`.staging`、set-dir、`output/`、リポジトリルートとその絶対祖先を検索範囲に含む場合および既定ルート検索を拒否し、通常の仕様・監査・candidate検索を維持するCLI回帰を追加した (.claude/hooks/guard_staging.py, .claude/settings.json, tests/unit/test_flow_control.py, tests/unit/test_fixtures.py)

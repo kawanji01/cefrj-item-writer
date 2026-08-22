@@ -278,6 +278,46 @@
     },
     {
       "expected": "pass",
+      "file": "pass_conflict_q01_gen1.json",
+      "purpose": "set conflict専用候補q01 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-08"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_conflict_q02_gen1.json",
+      "purpose": "set conflict専用候補q02 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-08"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_machine_fail_q01_gen1.json",
+      "purpose": "machine fail専用候補q01 gen1のpassレビュー",
+      "test_ids": [
+        "RPL-07"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_machine_fail_q01_gen2.json",
+      "purpose": "machine fail専用候補q01 gen2のpassレビュー",
+      "test_ids": [
+        "RPL-07"
+      ]
+    },
+    {
+      "expected": "pass",
+      "file": "pass_machine_fail_q01_gen3.json",
+      "purpose": "machine fail専用候補q01 gen3のpassレビュー",
+      "test_ids": [
+        "RPL-07"
+      ]
+    },
+    {
+      "expected": "pass",
       "file": "pass_q01_gen1.json",
       "purpose": "q01 gen1のpassレビュー",
       "test_ids": [

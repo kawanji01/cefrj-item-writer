@@ -154,7 +154,7 @@ Claude CodeとCodexで同一性を保証するのは、手順、契約、決定�
 codex --sandbox workspace-write --ask-for-approval on-request
 ```
 
-独立レビューのたびに、`AGENTS.md`記載の`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`という固定ラッパー呼出しを親サンドボックス外で実行する承認が求められます。requestパス以外の追加引数、環境変数代入、リダイレクト、パイプ、複合コマンドがないことを確認し、その1回の固定呼出しだけを承認してください。ラッパーは専用`CODEX_HOME`、全コンテキスト無効化引数、`--ephemeral`、`--sandbox read-only`、モデル無指定の固定`codex exec`を構築し、設定済み壁時計期限を超えた子プロセスグループを停止します。作問側Codex全体を`danger-full-access`で起動したり、作問側`~/.codex`を子へ渡したりしないでください。
+独立レビューのたびに、`AGENTS.md`記載の`python .codex/run_reviewer.py --request output/<set_id>/review/<question_id>.<gen>.request.json`という固定ラッパー呼出しを親サンドボックス外で実行する承認が求められます。requestパス以外の追加引数、環境変数代入、リダイレクト、パイプ、複合コマンドがないことを確認し、その1回の固定呼出しだけを承認してください。ラッパーは専用`CODEX_HOME`、全コンテキスト無効化引数、`--ephemeral`、`--sandbox read-only`、モデル無指定の固定`codex exec`を構築し、設定済み壁時計期限を超えた子プロセスグループを停止します。子の最終メッセージまたは失敗stderrはシェルへ展開せず、固定argvの`flow_control.py review`へバイト列のまま直接渡され、ラッパーはC12のactionまたはCLIエラーを返します。作問側Codex全体を`danger-full-access`で起動したり、作問側`~/.codex`を子へ渡したりしないでください。
 
 次のように作問開始を依頼します。
 
